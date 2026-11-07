@@ -1,0 +1,6 @@
+---
+description: Hướng dẫn chung khi làm việc trong IntraCampus L1
+alwaysApply: true
+---
+
+Đọc và áp dụng `AGENTS.md` ở gốc repo trước khi sửa code. Với frontend, đọc thêm `frontend/AGENTS.md`.

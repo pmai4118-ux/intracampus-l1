@@ -43,7 +43,9 @@ forge build
 forge test
 ```
 
-GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Khi phát triển, tạo nhánh theo mã task trên bảng sprint (ví dụ `feat/U01-student-shell`) và ghi mã task trong PR. Dùng file `.env.example` để chia sẻ tên biến môi trường; để khóa ký, API key và dữ liệu định danh thật ngoài repo.
+GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Xem [bảng sprint của nhóm](https://intracampus-l1-sprint.mphung2532.chatgpt.site) để chọn task và đọc tiêu chí nghiệm thu. Đặt mã task trong tiêu đề PR, ví dụ `[U01] Dựng khung Student và POS`. Thành viên đã đăng ký trên bảng sẽ thấy PR trong chi tiết task.
+
+Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm thu, ví dụ “Làm U01 theo AGENTS.md, giới hạn ở frontend và chạy build”. Quy tắc làm việc và lệnh kiểm tra nằm trong [AGENTS.md](AGENTS.md).
 
 ## Việc triển khai tiếp theo
 
