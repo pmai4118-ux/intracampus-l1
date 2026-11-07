@@ -1,0 +1,28 @@
+# Local dependencies and build outputs
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+frontend/next-env.d.ts
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Local configuration, validator state, and credentials
+.env
+.env.*
+!.env.example
+!.env.local.example
+.npmrc
+.avalanche-cli/
+.avalanchego/
+*.pem
+*.key
+*.p12
+*.log
+
+# The sprint board is a separate project in this workspace.
+/sites/
+.DS_Store
+Thumbs.db
