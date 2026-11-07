@@ -1,4 +1,4 @@
-import { probeNetwork } from "./network.ts";
+import { probeNetwork } from "./modules/network/network.service.ts";
 
 const result = await probeNetwork(process.env.INTRACAMPUS_RPC_URL);
 console.log(JSON.stringify(result, null, 2));

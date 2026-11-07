@@ -11,3 +11,7 @@ Thêm một mục khi đổi giao kèo dùng chung, cấu hình chain, dependenc
 Workflow `Sprint board PR sync` dùng quyền đọc PR của GitHub Actions để gửi số PR, mã task và trạng thái sang Sites sau khi PR vào `main` thay đổi. Sites xác minh token OIDC gắn với workflow trên `main`. Chỉ thành viên đã đăng ký trên bảng xem được feed. Quyền mở nội dung PR do GitHub kiểm soát.
 
 Lần chạy đầu gửi danh sách hiện có. Có thể chọn **Run workflow** trên `main` để đồng bộ lại. Nhật ký Actions báo số PR có mã đã gửi. Bảng lưu bản đồng bộ gần nhất và hiển thị thời điểm nhận dữ liệu.
+
+## D003 · Chia backend theo nghiệp vụ · 2026-11-08
+
+Backend MVP dùng một ứng dụng Express với router và service theo module. Hóa đơn và xác minh receipt nằm cùng module `invoices` vì đều cập nhật vòng đời của một hóa đơn. Cách này giúp nhóm triển khai API trong một tiến trình và xác định rõ nơi sửa khi làm các task POS. Xem [kiến trúc backend](../backend/README.md) để tra đường dẫn theo mã task.
