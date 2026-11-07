@@ -20,6 +20,8 @@
 | `backend/` | Tạo hóa đơn POS, chuẩn bị chữ ký merchant và đọc receipt/event theo giao kèo đã thống nhất |
 | `frontend/` | Hiển thị hóa đơn và trạng thái, yêu cầu ví của sinh viên ký giao dịch |
 
+Trong backend, đặt route và service theo module nghiệp vụ dưới `backend/src/modules/`. Xem [kiến trúc backend](backend/README.md) để đối chiếu đường dẫn với mã task.
+
 Khi sửa ABI, event, kiểu EIP-712, API công khai hoặc cấu hình chain, đối chiếu các bên gọi và nêu phần ảnh hưởng trong PR. Ghi quyết định dùng chung vào [docs/decisions.md](docs/decisions.md). Dùng lại kiểu và hàm sẵn có. Thống nhất giao kèo trước khi hai module phát triển song song.
 
 ## Thanh toán và AI

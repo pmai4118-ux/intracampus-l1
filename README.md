@@ -5,7 +5,7 @@ Dự án UniHack 2026 cho thanh toán và định danh trong khuôn viên trư�
 | Thư mục | Vai trò |
 | --- | --- |
 | `frontend/` | Next.js App Router + TypeScript; trang sinh viên, POS và trạng thái mạng |
-| `backend/` | Express + TypeScript; API nền cho POS và lệnh kiểm tra JSON-RPC |
+| [`backend/`](backend/README.md) | Express + TypeScript, một ứng dụng chia theo module nghiệp vụ. API nền cho POS và lệnh kiểm tra JSON-RPC |
 | `contracts/` | Foundry + Solidity; cấu hình compiler, alias RPC và test kiểm tra môi trường |
 | `packages/network/` | Cấu hình chain và kiểu phản hồi API dùng chung |
 | `infra/` | Hướng dẫn nối L1 của nhóm và xác minh chain ID |
