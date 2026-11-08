@@ -6,6 +6,7 @@ solc_version = "0.8.24"
 evm_version = "paris"
 optimizer = true
 optimizer_runs = 200
+fs_permissions = [{ access = "read", path = "../docs/fixtures" }]
 
 [rpc_endpoints]
 intracampus = "${INTRACAMPUS_RPC_URL}"

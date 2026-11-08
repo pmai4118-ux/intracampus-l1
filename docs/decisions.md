@@ -45,3 +45,7 @@ Tạo [giao kèo hóa đơn EIP-712 và QR](invoice-contract.md) cùng [giao kè
 - Chốt ABI sự kiện `InvoicePaid`, quy tắc làm tròn xuống theo đơn vị `wei` cho mức giảm SBT `10%`, vòng đời trạng thái `pending` / `paid` / `expired` / `rpc-error` và bảng mã lỗi tiếng Việt dùng chung giữa `contracts/`, `backend/` và `frontend/`.
 
 - Sau review P02, bổ sung getter `CampusPaymentRegistry.posSigner()` vào ABI đề xuất: đây là signer chung mà `payInvoice`, backend `B01` và frontend `U03` cùng đối chiếu. Địa chỉ verifier/signer tin cậy lấy từ bản triển khai `L06` hoặc getter trên đúng chain; lỗi tra cứu phải chặn mở ví. Thay đổi này bổ sung ABI đọc, giữ nguyên kiểu EIP-712, digest fixture và sự kiện `InvoicePaid`.
+
+- Sau review toàn bộ P02, preflight bắt buộc kiểm tra invoice đã trả, thời gian chain và mô phỏng giao dịch trước yêu cầu ví; đồng hồ điện thoại chỉ phục vụ countdown. Backend chuẩn hóa tier và từ chối mọi tier ngoài 0/1.
+- GET dùng thêm `transaction` để phân biệt vòng đời invoice với hash chưa xác minh. Chốt response union 200/503/422, `lastKnownStatus`, receipt-null, ưu tiên receipt đúng và cập nhật expired → paid khi đối chiếu muộn. Lookup hết hạn trả 200, không dùng 410.
+- Thêm `docs/fixtures/invoice-v1.json`, kiểm tra Node trong `pnpm test:p02` (được gọi từ `pnpm test`) và Foundry đọc cùng fixture. `ethers@6.15.0` chỉ là dev dependency gốc cho vector/ABI, không thêm dependency runtime frontend/backend. Đây là fixture tham chiếu cho các task tích hợp, không thay thế test implementation L04/B01/B02/U03/U04 hoặc bằng chứng L1.

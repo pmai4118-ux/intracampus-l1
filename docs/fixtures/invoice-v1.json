@@ -1,0 +1,724 @@
+{
+  "schemaVersion": 1,
+  "note": "Public demo vectors and normative scenario fixtures; not live receipts or production service implementation.",
+  "envelope": {
+    "schemaVersion": 1,
+    "domain": {
+      "name": "IntraCampusPayment",
+      "version": "1",
+      "chainId": 20261,
+      "verifyingContract": "0x0000000000000000000000000000000000020261"
+    },
+    "invoice": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+      "amount": "3000000000000000000000",
+      "expiresAt": 1794142800
+    },
+    "meta": {
+      "invoiceCode": "INV-20261108-PARKING-0001",
+      "merchantId": "parking-demo",
+      "merchantName": "Bãi xe demo",
+      "serviceId": "parking-single",
+      "serviceName": "Một lượt gửi xe demo",
+      "categoryCode": "PARKING",
+      "issuedAt": 1794142500
+    },
+    "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+  },
+  "types": {
+    "Invoice": [
+      {
+        "name": "invoiceId",
+        "type": "bytes32"
+      },
+      {
+        "name": "merchant",
+        "type": "address"
+      },
+      {
+        "name": "category",
+        "type": "bytes32"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64"
+      }
+    ]
+  },
+  "vectors": [
+    {
+      "name": "valid",
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 20261,
+        "verifyingContract": "0x0000000000000000000000000000000000020261"
+      },
+      "invoice": {
+        "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "3000000000000000000000",
+        "expiresAt": 1794142800
+      },
+      "expected": {
+        "domainSeparator": "0xd5847794aab6c04d4c28223f4b441499b286ad162e4bea62daff93d2b50b5ef0",
+        "structHash": "0xcb2e4e84302b0edf3e9351b1751c9c95468e6c2b988a60cc090f11c71c3c6940",
+        "digest": "0x277c37ec95f4baa53fabeff6de7933b8a24197a3d9a8abb69667d18a30f965c7",
+        "recoveredSigner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "validSignature": true
+      }
+    },
+    {
+      "name": "modified amount",
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 20261,
+        "verifyingContract": "0x0000000000000000000000000000000000020261"
+      },
+      "invoice": {
+        "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "2700000000000000000000",
+        "expiresAt": 1794142800
+      },
+      "expected": {
+        "domainSeparator": "0xd5847794aab6c04d4c28223f4b441499b286ad162e4bea62daff93d2b50b5ef0",
+        "structHash": "0xb97c43bd3d59ddeb7781375eb2888d398a7d0d5b10d2da3ec0f8cb0aff5c6288",
+        "digest": "0x48573cceaba8f0f9e86e3f07c746e2d03205f2ee1fcf59f873785a81315fff18",
+        "recoveredSigner": "0xbfd8819F1505CBa1e81e587a1f91CC32bd932A65",
+        "validSignature": false
+      }
+    },
+    {
+      "name": "wrong chain",
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 43113,
+        "verifyingContract": "0x0000000000000000000000000000000000020261"
+      },
+      "invoice": {
+        "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "3000000000000000000000",
+        "expiresAt": 1794142800
+      },
+      "expected": {
+        "domainSeparator": "0x308d0ca075d19e274a1944c6894acf512a360649f15934e01eb30eef37d83128",
+        "structHash": "0xcb2e4e84302b0edf3e9351b1751c9c95468e6c2b988a60cc090f11c71c3c6940",
+        "digest": "0x2b057b027c69202375c6524db2bf65c560a770853ef419c52c2926f4b9ffbe5c",
+        "recoveredSigner": "0x8978c114a8EaF7DDe799831529B3D896E7e31a5F",
+        "validSignature": false
+      }
+    },
+    {
+      "name": "wrong verifier",
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 20261,
+        "verifyingContract": "0x0000000000000000000000000000000000099999"
+      },
+      "invoice": {
+        "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "3000000000000000000000",
+        "expiresAt": 1794142800
+      },
+      "expected": {
+        "domainSeparator": "0x443a8281846af8d0e3f08621d82b197525f4fcafa316199fcb6e7624c7758bb9",
+        "structHash": "0xcb2e4e84302b0edf3e9351b1751c9c95468e6c2b988a60cc090f11c71c3c6940",
+        "digest": "0x6857a10a1bdb1fdb9748cc59469ef7b8561364a23b9b13a506f50e6526bf60f2",
+        "recoveredSigner": "0x7840b8A44889CB8D866e4058eb07c44AB4f1851c",
+        "validSignature": false
+      }
+    }
+  ],
+  "pricingCases": [
+    {
+      "amount": "19",
+      "tier": 1,
+      "discountAmount": "1",
+      "paidAmount": "18"
+    },
+    {
+      "amount": "9",
+      "tier": 1,
+      "discountAmount": "0",
+      "paidAmount": "9"
+    },
+    {
+      "amount": "3000000000000000000000",
+      "tier": 1,
+      "discountAmount": "300000000000000000000",
+      "paidAmount": "2700000000000000000000"
+    }
+  ],
+  "receiptCases": [
+    {
+      "name": "standard",
+      "tier": 0,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "0",
+      "paidAmount": "3000000000000000000000",
+      "accepted": true
+    },
+    {
+      "name": "student",
+      "tier": 1,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "300000000000000000000",
+      "paidAmount": "2700000000000000000000",
+      "accepted": true
+    },
+    {
+      "name": "wrong-standard-discount",
+      "tier": 0,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "300000000000000000000",
+      "paidAmount": "2700000000000000000000",
+      "accepted": false
+    },
+    {
+      "name": "wrong-student-discount",
+      "tier": 1,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "1500000000000000000000",
+      "paidAmount": "1500000000000000000000",
+      "accepted": false
+    },
+    {
+      "name": "unsupported-tier-2",
+      "tier": 2,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "1500000000000000000000",
+      "paidAmount": "1500000000000000000000",
+      "accepted": false
+    },
+    {
+      "name": "unsupported-tier-255",
+      "tier": 255,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "1500000000000000000000",
+      "paidAmount": "1500000000000000000000",
+      "accepted": false
+    },
+    {
+      "name": "incorrect-total",
+      "tier": 1,
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "300000000000000000000",
+      "paidAmount": "3000000000000000000000",
+      "accepted": false
+    }
+  ],
+  "preflightCases": [
+    {
+      "name": "valid",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142799,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "ok",
+      "expectedCode": "OK"
+    },
+    {
+      "name": "paid-unexpired",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142799,
+      "invoicePaid": true,
+      "rpcAvailable": true,
+      "simulation": "ok",
+      "expectedCode": "INVOICE_ALREADY_PAID"
+    },
+    {
+      "name": "phone-behind-chain-expired",
+      "chainTimestamp": 1794142801,
+      "localTimestamp": 1794142740,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "ok",
+      "expectedCode": "INVOICE_EXPIRED"
+    },
+    {
+      "name": "phone-ahead-chain-valid",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142900,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "ok",
+      "expectedCode": "OK"
+    },
+    {
+      "name": "at-expiry",
+      "chainTimestamp": 1794142800,
+      "localTimestamp": 1794142800,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "ok",
+      "expectedCode": "OK"
+    },
+    {
+      "name": "rpc-unavailable",
+      "chainTimestamp": null,
+      "localTimestamp": 1794142799,
+      "invoicePaid": false,
+      "rpcAvailable": false,
+      "simulation": "ok",
+      "expectedCode": "RPC_UNAVAILABLE"
+    },
+    {
+      "name": "expires-during-preflight",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142799,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "InvoiceExpired",
+      "expectedCode": "INVOICE_EXPIRED"
+    },
+    {
+      "name": "paid-during-preflight",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142799,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "InvoiceAlreadyPaid",
+      "expectedCode": "INVOICE_ALREADY_PAID"
+    },
+    {
+      "name": "quote-changed",
+      "chainTimestamp": 1794142799,
+      "localTimestamp": 1794142799,
+      "invoicePaid": false,
+      "rpcAvailable": true,
+      "simulation": "IncorrectPaymentAmount",
+      "expectedCode": "INCORRECT_PAYMENT_AMOUNT"
+    }
+  ],
+  "lookupCases": [
+    {
+      "name": "pending",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": null,
+      "expectedHttp": 200,
+      "expectedStatus": "pending",
+      "expectedTransaction": null
+    },
+    {
+      "name": "expired",
+      "chainTimestamp": 1794142801,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": null,
+      "expectedHttp": 200,
+      "expectedStatus": "expired",
+      "expectedTransaction": null
+    },
+    {
+      "name": "receipt-null",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": "unverified",
+      "expectedHttp": 200,
+      "expectedStatus": "pending",
+      "expectedTransaction": "unverified"
+    },
+    {
+      "name": "receipt-null-after-expiry",
+      "chainTimestamp": 1794142801,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": "unverified",
+      "expectedHttp": 200,
+      "expectedStatus": "expired",
+      "expectedTransaction": "unverified"
+    },
+    {
+      "name": "rpc-error-before-hash",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": false,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": "pending",
+      "txOutcome": null,
+      "expectedHttp": 503,
+      "expectedStatus": "rpc-error",
+      "expectedTransaction": null
+    },
+    {
+      "name": "rpc-error-after-hash",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": false,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": "pending",
+      "txOutcome": "unverified",
+      "expectedHttp": 503,
+      "expectedStatus": "rpc-error",
+      "expectedTransaction": "unverified"
+    },
+    {
+      "name": "paid-discovered-after-expiry",
+      "chainTimestamp": 1794142801,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": true,
+      "lastKnownStatus": "expired",
+      "txOutcome": "reverted",
+      "expectedHttp": 200,
+      "expectedStatus": "paid",
+      "expectedTransaction": "confirmed"
+    },
+    {
+      "name": "cached-paid-during-outage",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": false,
+      "cachedPaid": true,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": "event-mismatch",
+      "expectedHttp": 200,
+      "expectedStatus": "paid",
+      "expectedTransaction": "confirmed"
+    },
+    {
+      "name": "hint-reverted",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": "reverted",
+      "expectedHttp": 422,
+      "expectedStatus": "pending",
+      "expectedTransaction": "reverted"
+    },
+    {
+      "name": "hint-event-mismatch",
+      "chainTimestamp": 1794142799,
+      "rpcAvailable": true,
+      "cachedPaid": false,
+      "canonicalPaid": false,
+      "lastKnownStatus": null,
+      "txOutcome": "event-mismatch",
+      "expectedHttp": 422,
+      "expectedStatus": "pending",
+      "expectedTransaction": "event-mismatch"
+    }
+  ],
+  "responses": {
+    "pending": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "pending",
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      },
+      "receipt": null,
+      "updatedAt": 1794142510,
+      "transaction": null
+    },
+    "paid": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "paid",
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      },
+      "receipt": {
+        "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+        "invoiceCode": "INV-20261108-PARKING-0001",
+        "chainId": 20261,
+        "contractAddress": "0x0000000000000000000000000000000000020261",
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "blockNumber": 128,
+        "logIndex": 0,
+        "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "originalAmount": "3000000000000000000000",
+        "discountAmount": "300000000000000000000",
+        "paidAmount": "2700000000000000000000",
+        "tier": 1,
+        "gasUsed": "68420",
+        "effectiveGasPrice": "25000000000",
+        "verifiedAt": 1794142525
+      },
+      "updatedAt": 1794142525,
+      "transaction": {
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "status": "confirmed"
+      }
+    },
+    "expired": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "expired",
+      "receipt": null,
+      "transaction": null,
+      "updatedAt": 1794142801,
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      }
+    },
+    "receipt-null-expired": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "expired",
+      "receipt": null,
+      "transaction": {
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "status": "unverified"
+      },
+      "updatedAt": 1794142801,
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      }
+    },
+    "rpc-error": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "rpc-error",
+      "lastKnownStatus": "pending",
+      "receipt": null,
+      "transaction": {
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "status": "unverified"
+      },
+      "updatedAt": 1794142510,
+      "error": {
+        "code": "RPC_UNAVAILABLE",
+        "message": "Chưa đủ dữ liệu RPC để xác minh thanh toán.",
+        "retryable": true,
+        "nextStep": "Giữ hash giao dịch cũ và thử tra cứu lại; không gửi lại thanh toán."
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      }
+    },
+    "reverted": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "pending",
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      },
+      "receipt": null,
+      "updatedAt": 1794142510,
+      "transaction": {
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "status": "reverted"
+      },
+      "error": {
+        "code": "TX_REVERTED",
+        "message": "Chưa xác minh thanh toán cho hóa đơn.",
+        "retryable": false,
+        "nextStep": "Đối chiếu mã giao dịch và hóa đơn; không tự gửi lại."
+      }
+    },
+    "event-mismatch": {
+      "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+      "status": "pending",
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0x0000000000000000000000000000000000020261"
+        },
+        "invoice": {
+          "invoiceId": "0x7dec24e2691f51c0bc1822acf25d4b07c5bd73ed5d641cc604f22eead02e69b1",
+          "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794142800
+        },
+        "meta": {
+          "invoiceCode": "INV-20261108-PARKING-0001",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794142500
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8a46fc98a37a6f12390c3bb91a6a02788e4e95542f99c1b3173de7070dbb222b5411461dc14d0f36c035742f31d6adb883efad686d9c85bd7c6a5a591b5b18581b"
+      },
+      "receipt": null,
+      "updatedAt": 1794142510,
+      "transaction": {
+        "txHash": "0x9b5a6c7d8e9f00112233445566778899aabbccddeeff00112233445566778899",
+        "status": "event-mismatch"
+      },
+      "error": {
+        "code": "RECEIPT_EVENT_MISMATCH",
+        "message": "Chưa xác minh thanh toán cho hóa đơn.",
+        "retryable": false,
+        "nextStep": "Đối chiếu mã giao dịch và hóa đơn; không tự gửi lại."
+      }
+    }
+  }
+}
