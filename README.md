@@ -49,6 +49,8 @@ Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm th
 
 ## Việc triển khai tiếp theo
 
+Xem [phạm vi MVP và cách làm luân phiên của nhóm](docs/scope.md) cùng [kịch bản demo hai thiết bị](docs/demo-flow.md). Đây là bản đề xuất P01 chờ cả nhóm review; các tính năng và số liệu demo trong tài liệu chưa phải kết quả đã triển khai.
+
 1. Lấy RPC từ L1 đang chạy của nhóm, xác minh `20261` và kiểm tra ví demo nhận CAMPUS.
 2. Chốt dữ liệu hóa đơn EIP-712 và biên nhận giữa ba phần: POS API, Solidity và web. Sau đó làm luồng tạo QR → ký → biên nhận trước khi thêm voucher.
 
