@@ -25,6 +25,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - uses: pnpm/action-setup@v6.1.1
+      - run: pnpm test:rpc
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test

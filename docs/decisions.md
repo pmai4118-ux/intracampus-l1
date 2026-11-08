@@ -29,3 +29,9 @@ Hai tài liệu hiện là bản đề xuất chờ cả nhóm review. Mức gi�
 Mạng thử nghiệm dùng Subnet-EVM với chain ID `20261`, đồng gốc `CAMPUS` (18 chữ số thập phân) và Proof of Authority. Cấu hình mạng dùng chung, backend và alias Foundry tiếp tục dùng cùng chain ID và RPC. [Genesis và runbook L01](../infra/README.md) ghi bộ phiên bản, cấu hình ví và cách kiểm tra phí.
 
 Genesis cấp CAMPUS thử nghiệm cho địa chỉ công khai `ewoq`. L01 chỉ cần số dư genesis và chuyển đồng gốc, nên cấu hình hiện tại chưa bật Native Minter hay Fee Manager. L02 lấy RPC của blockchain này làm đích để chuẩn bị endpoint HTTPS cho thiết bị demo.
+
+## D006 · L02: chuẩn bị gateway RPC cho tunnel HTTPS · 2026-11-08
+
+[Runbook L02](../infra/rpc.md) dùng tunnel HTTPS trỏ tới gateway loopback trên máy giữ node L01 của hwng. Gateway chỉ chuyển tiếp JSON-RPC đã cho phép đến một đường blockchain cố định, kiểm tra chain `20261` khi khởi động, chặn các route/namespace quản trị và giới hạn batch/body/timeout. `/check` là trang kiểm tra chỉ đọc cho điện thoại, không phải dashboard node. Backend/frontend/ví dùng endpoint `/rpc`; không tunnel toàn bộ cổng node.
+
+Thêm smoke script và test local để kiểm tra receipt, chain, CORS và việc chặn quản trị. Đây là phần chuẩn bị; chưa có endpoint HTTPS hoạt động hoặc kết quả từ điện thoại. Cần chủ máy chạy gateway/tunnel, ghi bằng chứng Wi-Fi/4G và endpoint dự phòng trước khi nghiệm thu. Không thay đổi genesis, ABI, schema P02 hoặc địa chỉ triển khai.
