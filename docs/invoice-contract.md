@@ -183,9 +183,9 @@ Quy tắc kiểm tra phía `/student` (`U03`) khi quét hoặc dán `qrPayload`:
 
 1. Parse JSON, kiểm tra `schemaVersion === 1`, các trường bắt buộc trong `domain`, `invoice`, `meta`, `signer`, `signature`.
 2. Kiểm tra `domain.chainId === 20261` và `domain.verifyingContract` khớp địa chỉ hợp đồng đang cấu hình trên app.
-3. Kiểm tra `keccak256(utf8Bytes(meta.invoiceCode)) === invoice.invoiceId` và `keccak256(utf8Bytes(meta.categoryCode)) === invoice.category`.
+3. Kiểm tra `keccak256(utf8Bytes(meta.invoiceCode)) === invoice.invoiceId` và `keccak256(utf8Bytes(meta.categoryCode)) === invoice.category`. Đồng thời tra cứu bộ `(invoice.merchant, invoice.category, invoice.amount, meta.merchantId, meta.serviceId)` trong danh mục điểm thu/dịch vụ tin cậy (trusted catalog cấu hình sẵn hoặc đối chiếu qua `GET /api/invoices/:invoiceId`): nếu không khớp hoặc `meta.merchantName` / `meta.serviceName` sai lệch với danh mục tin cậy thì từ chối (`UNKNOWN_SERVICE_OR_MERCHANT` / `INVALID_QR_PAYLOAD`); giao diện chỉ hiển thị tên điểm thu và dịch vụ lấy từ nguồn tin cậy đã đối chiếu với `invoice.merchant` đã ký.
 4. Kiểm tra thời hạn: `Math.floor(Date.now() / 1000) <= invoice.expiresAt`.
-5. Tính lại EIP-712 `digest` từ `domain` + `invoice`, khôi phục địa chỉ từ `signature` và kiểm tra trùng với `signer`. Nếu bất kỳ bước nào sai, chặn nút mở ví ký và hiển thị lỗi theo bảng mã lỗi tại [api-contract.md](api-contract.md).
+5. Tính lại EIP-712 `digest` từ `domain` + `invoice`, khôi phục địa chỉ từ `signature` và kiểm tra địa chỉ khôi phục trùng khớp đồng thời với cả `signer` trong payload **và địa chỉ `posSigner` được ủy quyền tin cậy** (cấu hình trên app hoặc đọc trực tiếp từ `PayRouter.posSigner()` trên chuỗi, tuyệt đối không chỉ so với trường `signer` tự khai báo trong QR). Nếu bất kỳ bước nào sai, chặn nút mở ví ký và hiển thị lỗi theo bảng mã lỗi tại [api-contract.md](api-contract.md).
 
 ## 5. Bộ Fixture đối chiếu Digest và Chữ ký (TypeScript ↔ Solidity)
 

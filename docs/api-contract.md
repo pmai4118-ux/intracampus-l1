@@ -222,7 +222,7 @@ POS (`/pos`) dùng endpoint này để poll trạng thái hóa đơn (chu kỳ �
 `receipt.service.ts` chỉ được chuyển trạng thái hóa đơn sang `"paid"` khi thỏa mãn **đồng thời tất cả** các điều kiện sau:
 
 1. **Đúng mạng:** `eth_chainId` từ RPC trả về `0x4f25` (`20261`). Nếu RPC trả sai mạng hoặc lỗi kết nối, trả mã lỗi `WRONG_CHAIN` hoặc `RPC_UNAVAILABLE`.
-2. **Giao dịch thành công:** `receipt.status === "0x1"`. Nếu `receipt.status === "0x0"` (revert), giữ hóa đơn ở trạng thái `"pending"` (nếu còn hạn) hoặc `"expired"` (nếu đã hết hạn) và báo `TX_REVERTED` khi truy vấn theo `txHash` đó.
+2. **Giao dịch thành công:** `receipt.status === "0x1"`. Nếu `receipt.status === "0x0"` (revert), giữ hóa đơn ở trạng thái `"pending"` (nếu còn hạn) hoặc `"expired"` (nếu đã hết hạn) và báo `TX_REVERTED` khi truy vấn theo `txHash` đó. Nếu `receipt.status === "0x1"` nhưng log không chứa sự kiện `InvoicePaid` hợp lệ của hóa đơn này (bước 3–5 bên dưới), giữ nguyên hóa đơn ở trạng thái `"pending"` (hoặc `"expired"` nếu đã quá hạn) và trả mã lỗi `RECEIPT_EVENT_MISMATCH` (`422`), không báo nhầm thành `TX_REVERTED`.
 3. **Đúng hợp đồng phát sự kiện:** `log.address` (so sánh không phân biệt hoa thường) phải khớp với `envelope.domain.verifyingContract`. Sự kiện phát ra từ hợp đồng giả mạo bị bỏ qua hoàn toàn.
 4. **Đúng chữ ký sự kiện (`topic0`):**
    - `keccak256("InvoicePaid(bytes32,address,address,bytes32,uint256,uint256,uint256,uint8)")`
@@ -263,6 +263,7 @@ Mọi phản hồi lỗi HTTP từ Backend (và trạng thái lỗi tương ứn
 | `INVOICE_ALREADY_PAID` | `409` | Hóa đơn đã có biên nhận hợp lệ hoặc revert `InvoiceAlreadyPaid` trên contract | Hóa đơn này đã được thanh toán trước đó. | Không gửi lại giao dịch; đối chiếu biên nhận đã có trên màn hình POS. |
 | `INVOICE_EXPIRED` | `410` | `now > expiresAt` hoặc revert `InvoiceExpired` trên contract | Hóa đơn đã quá thời hạn thanh toán (300 giây). | Tạo hóa đơn mới trên màn hình POS và quét lại mã QR. |
 | `INCORRECT_PAYMENT_AMOUNT` | `422` | `msg.value` khác `paidAmount` (`IncorrectPaymentAmount` trên contract) | Số tiền gửi lên hợp đồng không khớp mức cần thanh toán. | Tải lại bản xem trước hóa đơn để cập nhật đúng mức ưu đãi SBT trước khi ký. |
-| `TX_REVERTED` | `422` | `receipt.status === "0x0"` hoặc không có event `InvoicePaid` hợp lệ | Giao dịch trên chuỗi bị từ chối (revert), chưa thanh toán. | Kiểm tra số dư CAMPUS, hạn hóa đơn và thử lại nếu hóa đơn còn hạn. |
+| `TX_REVERTED` | `422` | `receipt.status === "0x0"` (giao dịch bị revert trên chuỗi) | Giao dịch trên chuỗi bị từ chối (revert), chưa thanh toán. | Kiểm tra số dư CAMPUS, hạn hóa đơn và thử lại nếu hóa đơn còn hạn. |
+| `RECEIPT_EVENT_MISMATCH` | `422` | `receipt.status === "0x1"` nhưng không có sự kiện `InvoicePaid` từ `verifyingContract` khớp `invoiceId`, `merchant` và số tiền | Giao dịch đã thực thi nhưng không chứa biên nhận thanh toán hợp lệ cho hóa đơn này. | Giữ hóa đơn ở trạng thái chờ; kiểm tra lại đúng mã giao dịch (`txHash`) của lần thanh toán hóa đơn này. |
 | `WRONG_CHAIN` | `400` / `503` | Ví sinh viên hoặc RPC backend không ở trên chain `20261` | Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261). | Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại. |
 | `RPC_UNAVAILABLE` | `503` | Không kết nối được RPC hoặc quá thời gian chờ (`timeout`) | Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu. | Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại. |
