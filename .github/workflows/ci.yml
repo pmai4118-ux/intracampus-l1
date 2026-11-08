@@ -25,6 +25,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - uses: pnpm/action-setup@v6.1.1
+      - run: pnpm test:rpc
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
@@ -41,9 +42,21 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: v1.7.1
+      - name: Install Forge v1.7.1
+        shell: bash
+        run: |
+          install_dir="$(mktemp -d "$RUNNER_TEMP/forge.XXXXXX")"
+          archive="$install_dir/foundry.tar.gz"
+          # Official foundry_v1.7.1_linux_amd64.tar.gz release asset.
+          curl --fail --location --silent --show-error --retry 3 \
+            --retry-max-time 120 --connect-timeout 10 --max-time 60 \
+            --header 'Accept: application/octet-stream' --output "$archive" \
+            https://api.github.com/repos/foundry-rs/foundry/releases/assets/415095756
+          printf '%s  %s\n' 'cf7e688ed0c4c48adffca788b496076e31060b67ac5afe1e43dbb5499c20c88b' "$archive" \
+            | sha256sum --check --strict
+          tar -xzf "$archive" -C "$install_dir" forge
+          "$install_dir/forge" --version
+          printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
       - run: forge fmt --check
       - run: forge build
       - run: forge test

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IntraCampus · Kiểm tra RPC L02</title>
+<style>
+  body { margin: 2rem auto; padding: 0 1rem; max-width: 44rem; font-family: system-ui, sans-serif; line-height: 1.6; color: #102820; }
+  label { display: block; margin-top: 1rem; }
+  input, select, button { box-sizing: border-box; width: 100%; padding: .8rem; font: inherit; }
+  button { margin-top: 1rem; cursor: pointer; }
+  pre { padding: 1rem; background: #f1f5f2; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<h1>Kiểm tra RPC L02</h1>
+<p>Chạy lần lượt bằng Wi-Fi và bằng 4G/5G sau khi tắt Wi-Fi. Trang chỉ đọc chain ID và biên nhận, không kết nối ví hoặc gửi giao dịch.</p>
+<form id="check">
+  <label for="network">Mạng bạn đang dùng (tự xác nhận)</label>
+  <select id="network" required>
+    <option value="">Chọn mạng đang dùng</option>
+    <option value="Wi-Fi">Wi-Fi</option>
+    <option value="4G/5G, đã tắt Wi-Fi">4G/5G, đã tắt Wi-Fi</option>
+  </select>
+  <label for="hash">Hash giao dịch thành công trên L1 hiện tại</label>
+  <input id="hash" required pattern="0x[0-9a-fA-F]{64}" autocomplete="off" spellcheck="false" placeholder="0x…">
+  <button id="run">Kiểm tra</button>
+</form>
+<pre id="result" aria-live="polite">Chưa chạy kiểm tra.</pre>
+<script type="module">
+  const form = document.querySelector('#check');
+  const output = document.querySelector('#result');
+  const button = document.querySelector('#run');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    button.disabled = true;
+    output.textContent = 'Đang đọc RPC…';
+    const txHash = document.querySelector('#hash').value.trim();
+    const context = { checkedAt: new Date().toISOString(), endpoint: `${location.origin}/rpc`, networkDeclared: document.querySelector('#network').value };
+    const require = (condition, message) => { if (!condition) throw new Error(message); };
+    async function rpc(id, method, params) {
+      const response = await fetch('/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }), signal: AbortSignal.timeout(10000) });
+      require(response.ok, `HTTP ${response.status}`);
+      const body = await response.json();
+      require(body.jsonrpc === '2.0' && body.id === id && !body.error, 'Phản hồi RPC không hợp lệ');
+      return body.result;
+    }
+    try {
+      require(location.protocol === 'https:', 'Bằng chứng L02 cần mở trang qua HTTPS');
+      const chain = await rpc(1, 'eth_chainId', []);
+      require(typeof chain === 'string' && /^0x[0-9a-f]+$/i.test(chain), 'Chain ID không hợp lệ');
+      require(BigInt(chain) === 20261n, 'Sai mạng, cần chain 20261');
+      const receipt = await rpc(2, 'eth_getTransactionReceipt', [txHash]);
+      require(receipt && receipt.transactionHash?.toLowerCase() === txHash.toLowerCase(), 'Không có receipt khớp hash trên mạng hiện tại');
+      require(receipt.status === '0x1', 'Giao dịch không thành công');
+      require(/^0x[0-9a-f]{64}$/i.test(receipt.blockHash ?? ''), 'Thiếu block hash');
+      for (const field of ['blockNumber', 'gasUsed', 'effectiveGasPrice']) require(/^0x[0-9a-f]+$/i.test(receipt[field] ?? ''), `Thiếu ${field}`);
+      output.textContent = JSON.stringify({ result: 'PASS', ...context, chainId: 20261,
+        receipt: { transactionHash: receipt.transactionHash, status: receipt.status, blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed, effectiveGasPrice: receipt.effectiveGasPrice } }, null, 2);
+    } catch (error) {
+      output.textContent = JSON.stringify({ result: 'FAIL', ...context, error: error.message }, null, 2);
+    } finally { button.disabled = false; }
+  });
+</script>
+</html>
