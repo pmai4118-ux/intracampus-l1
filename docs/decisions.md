@@ -35,3 +35,17 @@ Genesis cấp CAMPUS thử nghiệm cho địa chỉ công khai `ewoq`. L01 ch�
 [Runbook L02](../infra/rpc.md) dùng tunnel HTTPS trỏ tới gateway loopback trên máy giữ node L01 của hwng. Gateway chỉ chuyển tiếp JSON-RPC đã cho phép đến một đường blockchain cố định, kiểm tra chain `20261` khi khởi động, chặn các route/namespace quản trị và giới hạn batch/body/timeout. `/check` là trang kiểm tra chỉ đọc cho điện thoại, không phải dashboard node. Backend/frontend/ví dùng endpoint `/rpc`; không tunnel toàn bộ cổng node.
 
 Thêm smoke script và test local để kiểm tra receipt, chain, CORS và việc chặn quản trị. Đây là phần chuẩn bị; chưa có endpoint HTTPS hoạt động hoặc kết quả từ điện thoại. Cần chủ máy chạy gateway/tunnel, ghi bằng chứng Wi-Fi/4G và endpoint dự phòng trước khi nghiệm thu. Không thay đổi genesis, ABI, schema P02 hoặc địa chỉ triển khai.
+
+## D007 · P02: giao kèo hóa đơn EIP-712, payload QR tự chứa và mã lỗi API · 2026-11-08
+
+Tạo [giao kèo hóa đơn EIP-712 và QR](invoice-contract.md) cùng [giao kèo HTTP API và mã lỗi](api-contract.md) để khóa dữ liệu dùng chung cho `L04`, `B01`, `B02`, `B04`, `U03`, `U04`:
+
+- Miền EIP-712 dùng `name = "IntraCampusPayment"`, `version = "1"`, `chainId = 20261` và `verifyingContract` là địa chỉ `CampusPaymentRegistry`. Kiểu chính `Invoice(bytes32 invoiceId,address merchant,bytes32 category,uint256 amount,uint64 expiresAt)` có fixture đối chiếu `domainSeparator`, `structHash`, `digest`, chữ ký `ecrecover` và 3 mẫu sửa `amount`/`chainId`/`verifyingContract`.
+- Chọn phương án QR tự chứa (`SignedInvoiceEnvelope` dạng JSON thu gọn trong `qrPayload`) để thiết bị sinh viên (`/student`) kiểm tra hạn, miền ký và chữ ký ngay sau khi quét hoặc dán mã mà không cần gọi thêm một vòng API về backend trước bước xem trước.
+- Chốt ABI sự kiện `InvoicePaid`, quy tắc làm tròn xuống theo đơn vị `wei` cho mức giảm SBT `10%`, vòng đời trạng thái `pending` / `paid` / `expired` / `rpc-error` và bảng mã lỗi tiếng Việt dùng chung giữa `contracts/`, `backend/` và `frontend/`.
+
+- Sau review P02, bổ sung getter `CampusPaymentRegistry.posSigner()` vào ABI đề xuất: đây là signer chung mà `payInvoice`, backend `B01` và frontend `U03` cùng đối chiếu. Địa chỉ verifier/signer tin cậy lấy từ bản triển khai `L06` hoặc getter trên đúng chain; lỗi tra cứu phải chặn mở ví. Thay đổi này bổ sung ABI đọc, giữ nguyên kiểu EIP-712, digest fixture và sự kiện `InvoicePaid`.
+
+- Sau review toàn bộ P02, preflight bắt buộc kiểm tra invoice đã trả, thời gian chain và mô phỏng giao dịch trước yêu cầu ví; đồng hồ điện thoại chỉ phục vụ countdown. Backend chuẩn hóa tier và từ chối mọi tier ngoài 0/1.
+- GET dùng thêm `transaction` để phân biệt vòng đời invoice với hash chưa xác minh. Chốt response union 200/503/422, `lastKnownStatus`, receipt-null, ưu tiên receipt đúng và cập nhật expired → paid khi đối chiếu muộn. Lookup hết hạn trả 200, không dùng 410.
+- Thêm `docs/fixtures/invoice-v1.json`, kiểm tra Node trong `pnpm test:p02` (được gọi từ `pnpm test`) và Foundry đọc cùng fixture. `ethers@6.15.0` chỉ là dev dependency gốc cho vector/ABI, không thêm dependency runtime frontend/backend. Đây là fixture tham chiếu cho các task tích hợp, không thay thế test implementation L04/B01/B02/U03/U04 hoặc bằng chứng L1.

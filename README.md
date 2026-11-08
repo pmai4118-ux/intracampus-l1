@@ -43,6 +43,8 @@ forge build
 forge test
 ```
 
+P02 có thêm `pnpm test:p02` (đã nằm trong `pnpm test`) để kiểm tra giao kèo JSON/QR, chữ ký và các tình huống tham chiếu. Foundry kiểm tra cùng [fixture P02](docs/fixtures/invoice-v1.json) bằng Solidity; xem [giao kèo invoice](docs/invoice-contract.md#6-fixture-chạy-được-và-kiểm-tra-giao-kèo). Đây là test fixture/local, chưa phải kết quả L1.
+
 GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Xem [bảng sprint của nhóm](https://intracampus-l1-sprint.mphung2532.chatgpt.site) để chọn task và đọc tiêu chí nghiệm thu. Đặt mã task trong tiêu đề PR, ví dụ `[U01] Dựng khung Student và POS`. Thành viên đã đăng ký trên bảng sẽ thấy PR trong chi tiết task.
 
 Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm thu, ví dụ “Làm U01 theo AGENTS.md, giới hạn ở frontend và chạy build”. Quy tắc làm việc và lệnh kiểm tra nằm trong [AGENTS.md](AGENTS.md).
@@ -52,6 +54,6 @@ Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm th
 Xem [phạm vi MVP và cách làm luân phiên của nhóm](docs/scope.md) cùng [kịch bản demo hai thiết bị](docs/demo-flow.md). Đây là bản đề xuất P01 chờ cả nhóm review; các tính năng và số liệu demo trong tài liệu chưa phải kết quả đã triển khai.
 
 1. Lấy RPC từ L1 đang chạy của nhóm, xác minh `20261` và kiểm tra ví demo nhận CAMPUS.
-2. Chốt dữ liệu hóa đơn EIP-712 và biên nhận giữa ba phần: POS API, Solidity và web. Sau đó làm luồng tạo QR → ký → biên nhận trước khi thêm voucher.
+2. Xem [giao kèo hóa đơn EIP-712 và QR](docs/invoice-contract.md) cùng [giao kèo HTTP API và mã lỗi](docs/api-contract.md) (P02) để triển khai song song `L04`, `B01`, `B02` và `U03`. Sau đó làm luồng tạo QR → ký → biên nhận trước khi thêm voucher.
 
 Tham khảo: [Avalanche Starter Kit](https://github.com/ava-labs/avalanche-starter-kit) cho Foundry và cách nối RPC Avalanche L1; [Vercel App Router Playground](https://github.com/vercel/next-app-router-playground) cho tổ chức giao diện theo route; [chính sách hỗ trợ Next.js](https://nextjs.org/support-policy) cho lựa chọn phiên bản.
