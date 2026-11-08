@@ -23,3 +23,9 @@ Tạo [phạm vi MVP](scope.md) và [kịch bản hai thiết bị](demo-flow.md
 Người giao việc xác nhận nhóm ba người có thể luân phiên giữa các mảng. Mỗi task cần một người làm và một reviewer khác; tên người phụ trách được nhận trên sprint theo từng lượt, không cố định theo module. P01 không nhận task hoặc đổi trạng thái sprint thay cho nhóm.
 
 Hai tài liệu hiện là bản đề xuất chờ cả nhóm review. Mức giảm, thời hạn invoice và dữ liệu seed là đề xuất cần chốt với P02 và người nhận task contract/backend; mục này không xác nhận nhóm đã duyệt, không chốt ABI/API, và không ghi nhận đã chạy L1.
+
+## D005 · L01: Genesis và mạng Avalanche local · 2026-11-08
+
+Mạng thử nghiệm dùng Subnet-EVM với chain ID `20261`, đồng gốc `CAMPUS` (18 chữ số thập phân) và Proof of Authority. Cấu hình mạng dùng chung, backend và alias Foundry tiếp tục dùng cùng chain ID và RPC. [Genesis và runbook L01](../infra/README.md) ghi bộ phiên bản, cấu hình ví và cách kiểm tra phí.
+
+Genesis cấp CAMPUS thử nghiệm cho địa chỉ công khai `ewoq`. L01 chỉ cần số dư genesis và chuyển đồng gốc, nên cấu hình hiện tại chưa bật Native Minter hay Fee Manager. L02 lấy RPC của blockchain này làm đích để chuẩn bị endpoint HTTPS cho thiết bị demo.
