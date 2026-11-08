@@ -1,5 +1,7 @@
 # L01 · IntraCampus L1 local
 
+RPC HTTPS cho thiết bị khác tiếp tục ở [runbook L02](rpc.md), gồm gateway chỉ mở RPC cần dùng, script kiểm tra và checklist Wi-Fi/4G. Tunnel phải chạy trên máy đang giữ node L01.
+
 | Thông số | Giá trị |
 | --- | --- |
 | Mạng | IntraCampus L1 |

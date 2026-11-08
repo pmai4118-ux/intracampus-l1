@@ -80,7 +80,7 @@ bytes32 digest = keccak256(
 );
 ```
 
-Chữ ký `signature` dài `65` byte theo thứ tự chuẩn `r (32 byte) || s (32 byte) || v (1 byte, giá trị 27 hoặc 28)`, biểu diễn ở dạng chuỗi hex có tiền tố `0x` (132 ký tự bao gồm `0x`). Hợp đồng chỉ chấp nhận chữ ký có `s` ở nửa dưới đường cong secp256k1 (EIP-2 malleable signature check, có sẵn trong OpenZeppelin `ECDSA.recover`) và địa chỉ khôi phục được phải trùng với `authorizedSigner` của merchant/hệ thống.
+Chữ ký `signature` dài `65` byte theo thứ tự chuẩn `r (32 byte) || s (32 byte) || v (1 byte, giá trị 27 hoặc 28)`, biểu diễn ở dạng chuỗi hex có tiền tố `0x` (132 ký tự bao gồm `0x`). Hợp đồng chỉ chấp nhận chữ ký có `s` ở nửa dưới đường cong secp256k1 (EIP-2 malleable signature check, có sẵn trong OpenZeppelin `ECDSA.recover`) và địa chỉ khôi phục được phải trùng với `CampusPaymentRegistry.posSigner()`, signer POS chung của hệ thống trong MVP.
 
 ## 3. Quy tắc tính giá cuối theo thẻ SBT và ABI hợp đồng (`L04`)
 
@@ -134,6 +134,8 @@ interface ICampusPaymentRegistry {
     error IncorrectPaymentAmount(uint256 sentValue, uint256 requiredAmount);
     error MerchantTransferFailed(address merchant, uint256 amount);
 
+    function posSigner() external view returns (address);
+
     function quoteInvoice(Invoice calldata invoice, address payer)
         external
         view
@@ -144,6 +146,8 @@ interface ICampusPaymentRegistry {
     function isInvoicePaid(bytes32 invoiceId) external view returns (bool);
 }
 ```
+
+`posSigner()` trả về địa chỉ khác `address(0)` mà chính `payInvoice` dùng để xác minh chữ ký và làm `expectedSigner` trong lỗi `InvalidSignature`. `L04` phải cung cấp getter này trên `CampusPaymentRegistry`; `L06` ghi địa chỉ verifier và signer công khai tương ứng trong `deployments/intracampus.json`. `B01` đối chiếu địa chỉ suy ra từ khóa ký backend với getter trước khi phát hành hóa đơn; `U03` dùng cùng getter để kiểm tra trước khi mở ví. Getter là hàm đọc, không yêu cầu sinh viên ký giao dịch.
 
 ## 4. Định dạng Payload QR tự chứa (Phương án A)
 
@@ -185,7 +189,7 @@ Quy tắc kiểm tra phía `/student` (`U03`) khi quét hoặc dán `qrPayload`:
 2. Kiểm tra `domain.chainId === 20261` và `domain.verifyingContract` khớp địa chỉ hợp đồng đang cấu hình trên app.
 3. Kiểm tra `keccak256(utf8Bytes(meta.invoiceCode)) === invoice.invoiceId` và `keccak256(utf8Bytes(meta.categoryCode)) === invoice.category`. Đồng thời tra cứu bộ `(invoice.merchant, invoice.category, invoice.amount, meta.merchantId, meta.serviceId)` trong danh mục điểm thu/dịch vụ tin cậy (trusted catalog cấu hình sẵn hoặc đối chiếu qua `GET /api/invoices/:invoiceId`): nếu không khớp hoặc `meta.merchantName` / `meta.serviceName` sai lệch với danh mục tin cậy thì từ chối (`UNKNOWN_SERVICE_OR_MERCHANT` / `INVALID_QR_PAYLOAD`); giao diện chỉ hiển thị tên điểm thu và dịch vụ lấy từ nguồn tin cậy đã đối chiếu với `invoice.merchant` đã ký.
 4. Kiểm tra thời hạn: `Math.floor(Date.now() / 1000) <= invoice.expiresAt`.
-5. Tính lại EIP-712 `digest` từ `domain` + `invoice`, khôi phục địa chỉ từ `signature` và kiểm tra địa chỉ khôi phục trùng khớp đồng thời với cả `signer` trong payload **và địa chỉ `posSigner` được ủy quyền tin cậy** (cấu hình trên app hoặc đọc trực tiếp từ `PayRouter.posSigner()` trên chuỗi, tuyệt đối không chỉ so với trường `signer` tự khai báo trong QR). Nếu bất kỳ bước nào sai, chặn nút mở ví ký và hiển thị lỗi theo bảng mã lỗi tại [api-contract.md](api-contract.md).
+5. Tính lại EIP-712 `digest` từ `domain` + `invoice`, khôi phục địa chỉ từ `signature` và kiểm tra địa chỉ khôi phục trùng khớp đồng thời với cả `signer` trong payload **và địa chỉ `posSigner` được ủy quyền tin cậy**. Nguồn on-chain là `CampusPaymentRegistry.posSigner()` qua RPC đã kiểm tra chain `20261`, tại địa chỉ verifier cấu hình trên app ở bước 2. Nếu dùng signer cấu hình sẵn, giá trị phải đến từ bản triển khai tin cậy của `L06` gắn với cùng chain và verifier. So sánh địa chỉ sau khi chuẩn hóa; không lấy địa chỉ verifier hoặc signer tin cậy từ QR. Signer bằng địa chỉ zero hoặc không khớp trả `INVALID_SIGNATURE`; lỗi RPC/sai chain khi đọc getter trả `RPC_UNAVAILABLE` / `WRONG_CHAIN`, chặn mở ví và yêu cầu kiểm tra lại, không dùng `signer` trong QR làm giá trị dự phòng. Nếu bất kỳ bước nào sai, chặn nút mở ví ký và hiển thị lỗi theo bảng mã lỗi tại [api-contract.md](api-contract.md).
 
 ## 5. Bộ Fixture đối chiếu Digest và Chữ ký (TypeScript ↔ Solidity)
 

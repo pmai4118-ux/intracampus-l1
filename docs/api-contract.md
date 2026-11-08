@@ -15,6 +15,7 @@ Nguyên tắc bắt buộc:
 
 - **Client không được quyết định giá:** Request tạo hóa đơn chỉ truyền mã merchant và mã dịch vụ (`merchantId`, `serviceId`). Nếu client gửi kèm `amount`, backend bỏ qua hoặc từ chối request.
 - **Khóa ký chỉ nằm ở backend:** Private key của POS signer đọc từ biến môi trường (`POS_SIGNER_PRIVATE_KEY` trong `backend/.env`), tuyệt đối không xuất hiện trong phản hồi API, mã QR hay log.
+- **Signer phải khớp verifier:** Trước khi phát hành hóa đơn, `B01` kiểm tra RPC đúng chain `20261` và địa chỉ suy ra từ `POS_SIGNER_PRIVATE_KEY` khớp `CampusPaymentRegistry.posSigner()` tại verifier cấu hình từ `L06` (xem [ABI P02](invoice-contract.md#32-giao-kèo-abi-của-campuspaymentregistry-l04)). Nếu signer bằng địa chỉ zero hoặc không khớp, từ chối tạo hóa đơn với `INVALID_SIGNATURE`; lỗi đọc RPC/sai chain trả `RPC_UNAVAILABLE` / `WRONG_CHAIN`. Chỉ địa chỉ signer công khai được đưa vào `envelope.signer`.
 - **Chuỗi số nguyên cho tiền tệ:** Mọi trường số tiền (`amount`, `originalAmount`, `discountAmount`, `paidAmount`) trong JSON đều là chuỗi số nguyên ở đơn vị `wei`.
 - **Chỉ báo đã thanh toán khi có receipt và event hợp lệ:** Một `txHash` đang chờ hoặc giao dịch bị revert không bao giờ được trả trạng thái `"paid"`.
 
@@ -258,7 +259,7 @@ Mọi phản hồi lỗi HTTP từ Backend (và trạng thái lỗi tương ứn
 | `INVALID_REQUEST` | `400` | Request thiếu trường bắt buộc hoặc sai kiểu dữ liệu | Dữ liệu yêu cầu không hợp lệ hoặc bị thiếu. | Kiểm tra lại thông tin dịch vụ và thử lại. |
 | `UNKNOWN_SERVICE_OR_MERCHANT` | `400` | `merchantId`/`serviceId` ngoài danh mục demo; hoặc `InvalidMerchantOrCategory` trên contract | Điểm thu hoặc dịch vụ không nằm trong danh sách được phép. | Chọn dịch vụ hợp lệ từ menu demo trên POS. |
 | `INVALID_QR_PAYLOAD` | `400` | Chuỗi QR không phải JSON hợp lệ, sai `schemaVersion` hoặc thiếu trường | Mã QR không đúng định dạng hóa đơn IntraCampus. | Quét lại mã QR trên màn hình POS hoặc sao chép nguyên văn chuỗi QR. |
-| `INVALID_SIGNATURE` | `400` | Chữ ký EIP-712 không khớp `signer`, hoặc `amount`/`domain` bị sửa (`InvalidSignature`) | Chữ ký hóa đơn không hợp lệ hoặc dữ liệu đã bị thay đổi. | Không ký giao dịch; yêu cầu POS tạo hóa đơn mới. |
+| `INVALID_SIGNATURE` | `400` | Địa chỉ khôi phục không khớp đồng thời `envelope.signer` và signer tin cậy `CampusPaymentRegistry.posSigner()`; signer bằng địa chỉ zero; khóa ký backend sai signer; hoặc `amount`/`domain` bị sửa (`InvalidSignature`) | Chữ ký hóa đơn không hợp lệ hoặc dữ liệu đã bị thay đổi. | Không ký giao dịch; yêu cầu POS kiểm tra cấu hình signer và tạo hóa đơn mới. |
 | `INVOICE_NOT_FOUND` | `404` | `invoiceId` không tồn tại trên POS API | Không tìm thấy hóa đơn cần tra cứu. | Kiểm tra lại mã hóa đơn hoặc tạo hóa đơn mới trên POS. |
 | `INVOICE_ALREADY_PAID` | `409` | Hóa đơn đã có biên nhận hợp lệ hoặc revert `InvoiceAlreadyPaid` trên contract | Hóa đơn này đã được thanh toán trước đó. | Không gửi lại giao dịch; đối chiếu biên nhận đã có trên màn hình POS. |
 | `INVOICE_EXPIRED` | `410` | `now > expiresAt` hoặc revert `InvoiceExpired` trên contract | Hóa đơn đã quá thời hạn thanh toán (300 giây). | Tạo hóa đơn mới trên màn hình POS và quét lại mã QR. |
