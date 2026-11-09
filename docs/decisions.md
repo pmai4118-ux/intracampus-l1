@@ -49,3 +49,13 @@ Tạo [giao kèo hóa đơn EIP-712 và QR](invoice-contract.md) cùng [giao kè
 - Sau review toàn bộ P02, preflight bắt buộc kiểm tra invoice đã trả, thời gian chain và mô phỏng giao dịch trước yêu cầu ví; đồng hồ điện thoại chỉ phục vụ countdown. Backend chuẩn hóa tier và từ chối mọi tier ngoài 0/1.
 - GET dùng thêm `transaction` để phân biệt vòng đời invoice với hash chưa xác minh. Chốt response union 200/503/422, `lastKnownStatus`, receipt-null, ưu tiên receipt đúng và cập nhật expired → paid khi đối chiếu muộn. Lookup hết hạn trả 200, không dùng 410.
 - Thêm `docs/fixtures/invoice-v1.json`, kiểm tra Node trong `pnpm test:p02` (được gọi từ `pnpm test`) và Foundry đọc cùng fixture. `ethers@6.15.0` chỉ là dev dependency gốc cho vector/ABI, không thêm dependency runtime frontend/backend. Đây là fixture tham chiếu cho các task tích hợp, không thay thế test implementation L04/B01/B02/U03/U04 hoặc bằng chứng L1.
+
+## D008 · L03: thẻ sinh viên và tier hiệu lực · 2026-11-09
+
+[`StudentSBTIdentity`](../contracts/src/StudentSBTIdentity.sol) dùng một issuer cố định, truyền vào constructor khi L06 triển khai. Chỉ issuer gọi `mint(address wallet, uint64 expiresAt)` và `revoke(uint256 tokenId)`. Mỗi ví giữ tối đa một thẻ. Hạn cấp mới phải ở tương lai. Muốn cấp lại, issuer thu hồi thẻ cũ trước, kể cả thẻ đã hết hạn. Thu hồi đốt token và xóa bản ghi hiện tại. Lần cấp sau dùng token ID mới, nên gọi lại `revoke` với ID cũ sẽ revert.
+
+Thẻ khóa ngay khi cấp theo ERC-5192, phát `Transfer` và `Locked`. Mọi hàm chuyển nhượng và cấp quyền đều revert. Thẻ hết hạn vẫn thuộc ví và vẫn khóa cho tới khi issuer thu hồi. Hợp đồng chỉ lưu địa chỉ ví, token ID và hạn Unix tính bằng giây. B03 dùng địa chỉ demo khi cấp thẻ.
+
+L04 dùng `tierOf(address payer) → uint8` để tính giá theo P02. Hàm trả `1` tới hết giây `expiresAt`, và trả `0` cho ví chưa có thẻ, đã quá hạn hoặc đã bị thu hồi. U02 dùng cùng hàm để hiển thị tier. `credentials(address)` trả `(uint256 tokenId, uint64 expiresAt)` để đọc thẻ hiện tại. `balanceOf` biểu thị quyền sở hữu thẻ, còn `tierOf` biểu thị quyền ưu đãi.
+
+L04 có thể dùng lại [`StudentSBTFixture`](../contracts/test/fixtures/StudentSBTFixture.sol) trên Foundry để tạo ba ví đối chứng thường, ưu đãi và quá hạn. Việc cấp thẻ demo trên Avalanche L1 và bàn giao địa chỉ/ABI thuộc B03 và L06.
