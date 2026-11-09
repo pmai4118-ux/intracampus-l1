@@ -5,21 +5,27 @@ import "./styles.css";
 
 export const metadata: Metadata = {
   title: "IntraCampus L1",
-  description: "Nền tảng thử nghiệm thanh toán và định danh trong khuôn viên trường.",
+  description:
+    "Nền tảng thử nghiệm thanh toán và định danh trong khuôn viên trường.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="vi">
       <body>
+        <a className="skip-link" href="#main-content">
+          Bỏ qua điều hướng
+        </a>
         <header>
           <nav aria-label="Điều hướng chính">
-            <Link href="/" className="brand">IntraCampus L1</Link>
+            <Link href="/" className="brand">
+              IntraCampus L1
+            </Link>
             <Link href="/student">Sinh viên</Link>
             <Link href="/pos">Điểm thu</Link>
           </nav>
         </header>
-        <main>{children}</main>
+        <main id="main-content">{children}</main>
       </body>
     </html>
   );

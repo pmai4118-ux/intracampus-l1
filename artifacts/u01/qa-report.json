@@ -1,0 +1,14 @@
+{
+  "browser": "Microsoft Edge / Chromium",
+  "result": "PASS",
+  "checks": [
+    "Six states, five viewport widths (320–1440 px), no horizontal overflow",
+    "Student CTA visible in initial 390×844 viewport",
+    "Signing rejection/retry, pending, sample receipt; receipt blocks payment",
+    "Standard 3,000 / SBT 2,700 CAMPUS",
+    "Invalid or modified payload blocks signing; reordered fixture accepted",
+    "Same Student/POS invoice",
+    "Clipboard failure and success paths",
+    "No browser errors"
+  ]
+}
