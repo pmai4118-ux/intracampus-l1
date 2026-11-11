@@ -6,6 +6,14 @@ import {StudentSBTIdentity} from "../src/StudentSBTIdentity.sol";
 import {StudentSBTFixture} from "./fixtures/StudentSBTFixture.sol";
 
 interface PaymentVm {
+    struct Log {
+        bytes32[] topics;
+        bytes data;
+        address emitter;
+    }
+
+    function recordLogs() external;
+    function getRecordedLogs() external returns (Log[] memory);
     function expectPartialRevert(bytes4 selector) external;
     function addr(uint256 privateKey) external pure returns (address);
     function sign(uint256 privateKey, bytes32 digest) external pure returns (uint8, bytes32, bytes32);
@@ -30,20 +38,25 @@ contract ReenteringMerchant {
     CampusPaymentRegistry private registry;
     CampusPaymentRegistry.Invoice private invoice;
     bytes private signature;
+    bytes32 private observedInvoiceId;
     bool public observedPaid;
     bool public reentrySucceeded;
     bytes4 public reentryError;
 
-    function configure(CampusPaymentRegistry registry_, CampusPaymentRegistry.Invoice memory invoice_, bytes memory sig)
-        external
-    {
+    function configure(
+        CampusPaymentRegistry registry_,
+        CampusPaymentRegistry.Invoice memory invoice_,
+        bytes memory sig,
+        bytes32 observedId
+    ) external {
         registry = registry_;
         invoice = invoice_;
         signature = sig;
+        observedInvoiceId = observedId;
     }
 
     receive() external payable {
-        observedPaid = registry.isInvoicePaid(invoice.invoiceId);
+        observedPaid = registry.isInvoicePaid(observedInvoiceId);
         bytes memory result;
         (reentrySucceeded, result) = address(registry).call{value: msg.value}(
             abi.encodeCall(CampusPaymentRegistry.payInvoice, (invoice, signature))
@@ -100,12 +113,11 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
             );
     }
 
-    function _signatureFor(
-        CampusPaymentRegistry.Invoice memory invoice,
-        uint256 chainId_,
-        address verifier,
-        uint256 key
-    ) private pure returns (bytes memory) {
+    function _digestFor(CampusPaymentRegistry.Invoice memory invoice, uint256 chainId_, address verifier)
+        private
+        pure
+        returns (bytes32)
+    {
         bytes32 domain = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
@@ -127,7 +139,16 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
                 invoice.expiresAt
             )
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, keccak256(abi.encodePacked(hex"1901", domain, structHash)));
+        return keccak256(abi.encodePacked(hex"1901", domain, structHash));
+    }
+
+    function _signatureFor(
+        CampusPaymentRegistry.Invoice memory invoice,
+        uint256 chainId_,
+        address verifier,
+        uint256 key
+    ) private pure returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, _digestFor(invoice, chainId_, verifier));
         return abi.encodePacked(r, s, v);
     }
 
@@ -209,6 +230,65 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
 
     function testStudentInvoiceSettlementAndEvent() public {
         _assertSettlement(STUDENT_WALLET, 1, 300 ether, 2700 ether);
+    }
+
+    function testEventMatchesP02RawLogAbi() public {
+        CampusPaymentRegistry.Invoice memory invoice = _invoice();
+        vm.recordLogs();
+        _pay(invoice, _signature(invoice), REGULAR_WALLET, invoice.amount);
+        PaymentVm.Log[] memory logs = vm.getRecordedLogs();
+        require(logs.length == 1 && logs[0].emitter == address(registry), "one registry payment event");
+        require(logs[0].topics.length == 4, "P02 indexed fields");
+        require(
+            logs[0].topics[0]
+                == keccak256("InvoicePaid(bytes32,address,address,bytes32,uint256,uint256,uint256,uint8)"),
+            "P02 event signature"
+        );
+        require(logs[0].topics[1] == invoice.invoiceId, "indexed invoice");
+        require(logs[0].topics[2] == bytes32(uint256(uint160(REGULAR_WALLET))), "indexed payer");
+        require(logs[0].topics[3] == bytes32(uint256(uint160(MERCHANT))), "indexed merchant");
+        (bytes32 category, uint256 original, uint256 discount, uint256 paid, uint8 tier) =
+            abi.decode(logs[0].data, (bytes32, uint256, uint256, uint256, uint8));
+        require(category == PARKING && original == invoice.amount, "P02 category/original");
+        require(discount == 0 && paid == invoice.amount && tier == 0, "P02 decoded pricing");
+    }
+
+    function testConsecutiveInvoicesAndCategoryDisableAreIsolated() public {
+        _allow(registry, MERCHANT, CANTEEN, true);
+        CampusPaymentRegistry.Invoice memory first = _invoice();
+        _pay(first, _signature(first), REGULAR_WALLET, first.amount);
+        _allow(registry, MERCHANT, PARKING, false);
+        CampusPaymentRegistry.Invoice memory second = _invoice();
+        second.invoiceId = keccak256("second-invoice");
+        second.category = CANTEEN;
+        (,, uint256 paid) = registry.quoteInvoice(second, STUDENT_WALLET);
+        _pay(second, _signature(second), STUDENT_WALLET, paid);
+        require(
+            registry.isInvoicePaid(first.invoiceId) && registry.isInvoicePaid(second.invoiceId),
+            "independent paid flags"
+        );
+        require(MERCHANT.balance == 5700 ether && address(registry).balance == 0, "consecutive transfers");
+        require(!registry.allowedMerchantCategories(MERCHANT, PARKING), "parking disabled");
+        require(registry.allowedMerchantCategories(MERCHANT, CANTEEN), "canteen still allowed");
+    }
+
+    function testRevocationAfterQuoteRejectsStaleValueAndAllowsFreshQuote() public {
+        CampusPaymentRegistry.Invoice memory invoice = _invoice();
+        bytes memory sig = _signature(invoice);
+        (,, uint256 staleValue) = registry.quoteInvoice(invoice, STUDENT_WALLET);
+        (uint256 tokenId,) = identity.credentials(STUDENT_WALLET);
+        sbtVm.prank(SBT_ISSUER);
+        identity.revoke(tokenId);
+        sbtVm.expectRevert(
+            abi.encodeWithSelector(CampusPaymentRegistry.IncorrectPaymentAmount.selector, staleValue, 3000 ether)
+        );
+        _pay(invoice, sig, STUDENT_WALLET, staleValue);
+        require(!registry.isInvoicePaid(invoice.invoiceId) && MERCHANT.balance == 0, "stale quote cannot settle");
+        require(STUDENT_WALLET.balance == 10000 ether, "stale quote value refunded");
+        (uint8 tier, uint256 discount, uint256 paid) = registry.quoteInvoice(invoice, STUDENT_WALLET);
+        require(tier == 0 && discount == 0 && paid == 3000 ether, "fresh quote after revocation");
+        _pay(invoice, sig, STUDENT_WALLET, paid);
+        require(registry.isInvoicePaid(invoice.invoiceId) && MERCHANT.balance == paid, "fresh quote settles");
     }
 
     function testExpiredSbtPaysFullPrice() public {
@@ -382,6 +462,30 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
         require(!registry.isInvoicePaid(invoice.invoiceId), "bad signature consumed invoice");
     }
 
+    function testValidMalleableCompactAndOverlongSignaturesAreRejected() public {
+        CampusPaymentRegistry.Invoice memory invoice = _invoice();
+        bytes32 digest = _digestFor(invoice, block.chainid, address(registry));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(SIGNER_KEY, digest);
+        bytes memory valid = abi.encodePacked(r, s, v);
+        uint256 curveOrder = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+        bytes32 highS = bytes32(curveOrder - uint256(s));
+        uint8 flippedV = v == 27 ? 28 : 27;
+        require(ecrecover(digest, flippedV, r, highS) == signer, "high-s really recovers authorized signer");
+        bytes[] memory rejected = new bytes[](3);
+        rejected[0] = abi.encodePacked(r, highS, flippedV);
+        rejected[1] = abi.encodePacked(r, bytes32(uint256(s) | (uint256(v - 27) << 255)));
+        rejected[2] = bytes.concat(valid, hex"00");
+        for (uint256 i; i < rejected.length; ++i) {
+            sbtVm.expectRevert(
+                abi.encodeWithSelector(CampusPaymentRegistry.InvalidSignature.selector, address(0), signer)
+            );
+            _pay(invoice, rejected[i], REGULAR_WALLET, invoice.amount);
+            require(!registry.isInvoicePaid(invoice.invoiceId), "noncanonical signature consumed invoice");
+        }
+        _pay(invoice, valid, REGULAR_WALLET, invoice.amount);
+        require(registry.isInvoicePaid(invoice.invoiceId), "canonical signature can retry");
+    }
+
     function testMerchantTransferFailureRollsBackAndAllowsRetry() public {
         RejectingMerchant merchant = new RejectingMerchant();
         _allow(registry, address(merchant), PARKING, true);
@@ -410,12 +514,34 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
         CampusPaymentRegistry.Invoice memory invoice = _invoice();
         invoice.merchant = address(merchant);
         bytes memory sig = _signature(invoice);
-        merchant.configure(registry, invoice, sig);
+        merchant.configure(registry, invoice, sig, invoice.invoiceId);
         _pay(invoice, sig, REGULAR_WALLET, invoice.amount);
         require(merchant.observedPaid(), "CEI ordering");
         require(!merchant.reentrySucceeded(), "reentry succeeded");
         require(merchant.reentryError() == CampusPaymentRegistry.ReentrantPayment.selector, "reentry guard");
         require(address(merchant).balance == invoice.amount && address(registry).balance == 0, "reentry balance");
+    }
+
+    function testCrossInvoiceReentryCannotConsumeAnotherValidInvoice() public {
+        ReenteringMerchant merchant = new ReenteringMerchant();
+        _allow(registry, address(merchant), PARKING, true);
+        CampusPaymentRegistry.Invoice memory first = _invoice();
+        first.merchant = address(merchant);
+        CampusPaymentRegistry.Invoice memory second = _invoice();
+        second.merchant = address(merchant);
+        second.invoiceId = keccak256("reentrant-second-invoice");
+        bytes memory secondSig = _signature(second);
+        merchant.configure(registry, second, secondSig, first.invoiceId);
+        _pay(first, _signature(first), REGULAR_WALLET, first.amount);
+        require(merchant.observedPaid() && !merchant.reentrySucceeded(), "cross-invoice reentry blocked");
+        require(merchant.reentryError() == CampusPaymentRegistry.ReentrantPayment.selector, "cross-invoice guard");
+        require(
+            registry.isInvoicePaid(first.invoiceId) && !registry.isInvoicePaid(second.invoiceId),
+            "second remains unpaid"
+        );
+        _pay(second, secondSig, REGULAR_WALLET, second.amount);
+        require(registry.isInvoicePaid(second.invoiceId), "second can settle after outer call");
+        require(address(merchant).balance == 6000 ether && address(registry).balance == 0, "cross-invoice balances");
     }
 
     function testUnsupportedOrFailingSbtCannotSettle() public {
@@ -442,6 +568,14 @@ contract CampusPaymentRegistryTest is StudentSBTFixture {
         require(tier == 1 && discount == amount / 10 && paid + discount == amount, "student price invariant");
         (tier, discount, paid) = registry.quoteInvoice(invoice, REGULAR_WALLET);
         require(tier == 0 && discount == 0 && paid == amount, "standard price invariant");
+    }
+
+    function testMaximumUint256AmountQuoteDoesNotOverflow() public view {
+        CampusPaymentRegistry.Invoice memory invoice = _invoice();
+        invoice.amount = type(uint256).max;
+        (uint8 tier, uint256 discount, uint256 paid) = registry.quoteInvoice(invoice, STUDENT_WALLET);
+        require(tier == 1 && discount == type(uint256).max / 10, "maximum amount discount");
+        require(paid + discount == type(uint256).max, "maximum amount conservation");
     }
 
     function testFuzzSettlementConservesFunds(uint128 rawAmount, bool student) public {

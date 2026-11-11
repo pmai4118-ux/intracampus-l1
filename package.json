@@ -8,11 +8,12 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @intracampus/backend --filter @intracampus/frontend dev",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @intracampus/backend test && pnpm test:p02",
+    "test": "pnpm --filter @intracampus/backend test && pnpm test:p02 && pnpm test:l04",
     "test:rpc": "node --test infra/test/rpc.test.mjs",
     "build": "pnpm --filter @intracampus/frontend build",
     "rpc:check": "pnpm --filter @intracampus/backend rpc:check",
-    "test:p02": "node --test docs/test/invoice-contract.test.mjs"
+    "test:p02": "node --test docs/test/invoice-contract.test.mjs",
+    "test:l04": "node --test contracts/test/load-verified-artifact.test.mjs"
   },
   "devDependencies": {
     "ethers": "6.15.0"

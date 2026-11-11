@@ -8,10 +8,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ContractFactory, Interface, JsonRpcProvider, id } from "ethers";
+import { loadVerifiedArtifact } from "./load-verified-artifact.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const fixture = JSON.parse(await readFile(join(root, "docs/fixtures/invoice-v1.json"), "utf8"));
-const artifact = async (name) => JSON.parse(await readFile(join(root, `contracts/out/${name}.sol/${name}.json`), "utf8"));
+const artifact = (name) => loadVerifiedArtifact(join(root, "contracts"), name);
 const paymentArtifact = await artifact("CampusPaymentRegistry");
 const identityArtifact = await artifact("StudentSBTIdentity");
 const actualAbi = new Interface(paymentArtifact.abi);

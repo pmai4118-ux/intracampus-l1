@@ -91,13 +91,16 @@ Từ gốc repo, sau `pnpm install --frozen-lockfile` và `forge build`:
 
 ```sh
 pnpm test:p02
+pnpm test:l04
 node contracts/script/smoke-payment.mjs
 ```
 
 Smoke script tự mở Anvil trên loopback với cổng trống, chain 20261; dùng tài
 khoản test unlocked, deploy SBT/registry, đăng ký merchant, cấp thẻ và ký typed
 data bằng signer demo. Có thể đặt `ANVIL_BIN` tới binary v1.7.1 nếu chưa có
-trong PATH. Script so ABI artifact với P02, kiểm tra hai receipt/event, số dư
+trong PATH. Trước khi mở Anvil, script đối chiếu keccak256 của từng source
+(kể cả dependency) với metadata compiler trong artifact; nếu source đã đổi,
+phải chạy lại `forge build`. Script so ABI artifact với P02, kiểm tra hai receipt/event, số dư
 merchant, paid flag và replay, rồi dừng tiến trình Anvil do nó tạo.
 
 Mặc định evidence ghi vào thư mục temp. Truyền đường dẫn output để lưu bản mới:
@@ -108,11 +111,18 @@ node contracts/script/smoke-payment.mjs docs/fixtures/l04-local-receipts.json
 
 Bằng chứng của bản bàn giao:
 
-- [Log Foundry](evidence/l04-foundry.txt): 39 test qua, gồm 28 test L04;
+- [Log Foundry](evidence/l04-foundry.txt): 45 test qua, gồm 34 test L04;
   mỗi fuzz test chạy 256 trường hợp.
 - [Hai receipt local EVM](fixtures/l04-local-receipts.json): giá thường
   3.000 CAMPUS, tier 1 trả 2.700 CAMPUS, ABI/event đã đối chiếu.
 - `pnpm test:p02`: 35 test qua.
+- `pnpm test:l04`: 5 regression test của kiểm tra artifact; đã nằm trong
+  `pnpm test` nên chạy trong CI.
+
+Các ca bổ sung sau review bao gồm chữ ký high-s vẫn recover đúng signer,
+chữ ký compact/overlong, thu hồi SBT sau quote, thanh toán liên tiếp, tắt
+category độc lập, reentrancy sang invoice khác, giá uint256 tối đa và giải mã
+raw log theo ABI P02. [Báo cáo review](evidence/l04-review.md) ghi lỗi và phạm vi.
 
 Evidence lưu hash source theo UTF-8/LF để đối chiếu giữa Windows và Linux.
 Các BigInt của event decoder được ghi thành chuỗi trong JSON evidence; file
