@@ -86,7 +86,7 @@ L06 có thể cung cấp ABI/address/runtime hash tin cậy; B03 cũng chạy đ
 với địa chỉ SBT L03. Xem [runbook seed](demo-accounts.md). Test Anvil là bằng
 chứng local; số dư/receipt L1 thực tế còn cần máy giữ node.
 
-## D011 · L05: học bổng native theo danh mục merchant · 2026-11-11
+## D012 · L05: học bổng native theo danh mục merchant · 2026-11-11
 
 `PurposeBoundGrantVault(issuer, registry)` giữ CAMPUS bảo chứng cho ngân sách
 `balances(beneficiary, category)`. Issuer cấp bằng `grant` payable; chỉ chính
