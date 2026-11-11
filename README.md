@@ -47,6 +47,12 @@ P02 có thêm `pnpm test:p02` (đã nằm trong `pnpm test`) để kiểm tra gi
 
 L04 có [hướng dẫn contract thanh toán và bàn giao tích hợp](docs/l04-payment.md), log Foundry và hai receipt Anvil local. Smoke script kiểm tra ABI thực tế theo P02 và luồng thanh toán thường/ưu đãi; địa chỉ triển khai Avalanche L1 thuộc L06.
 
+B03/L05/L06 có [bàn giao và kết quả kiểm thử](docs/b03-l05-l06-handoff.md),
+[seed ví/thẻ](docs/demo-accounts.md), [vault học bổng](docs/l05-grants.md) và
+[deploy/xuất ABI](docs/deployment.md). Manifest L1 hiện chưa cấu hình; bằng chứng
+đi kèm là EVM local. Dùng `pnpm smoke:l06` sau `forge build --force` để tái hiện
+deploy → seed hai lần → chi học bổng trên Anvil.
+
 GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Xem [bảng sprint của nhóm](https://intracampus-l1-sprint.mphung2532.chatgpt.site) để chọn task và đọc tiêu chí nghiệm thu. Đặt mã task trong tiêu đề PR, ví dụ `[U01] Dựng khung Student và POS`. Thành viên đã đăng ký trên bảng sẽ thấy PR trong chi tiết task.
 
 Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm thu, ví dụ “Làm U01 theo AGENTS.md, giới hạn ở frontend và chạy build”. Quy tắc làm việc và lệnh kiểm tra nằm trong [AGENTS.md](AGENTS.md).
