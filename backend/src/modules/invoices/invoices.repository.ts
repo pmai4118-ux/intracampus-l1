@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { InvoiceTransaction, SignedInvoiceEnvelope, VerifiedInvoiceReceipt } from "@intracampus/network";
-import { assertEnvelope } from "./invoices.schema.ts";
+import { assertEnvelope, object, same } from "./invoices.schema.ts";
 
 export type InvoiceRecord = {
   envelope: SignedInvoiceEnvelope;
@@ -39,7 +39,14 @@ export class SqliteInvoiceRepository implements InvoiceRepository {
   }
   get(invoiceId: string): InvoiceRecord | undefined {
     const row = this.db.prepare("SELECT record_json FROM invoices WHERE invoice_id = ?").get(invoiceId.toLowerCase());
-    return row ? JSON.parse(row.record_json as string) as InvoiceRecord : undefined;
+    if (!row) return undefined;
+    const parsed = object(JSON.parse(row.record_json as string));
+    const envelope = parsed.envelope;
+    // Revalidate persisted data too: rows written by an older version must not
+    // expose unexpected envelope fields after an upgrade.
+    assertEnvelope(envelope);
+    if (!same(envelope.invoice.invoiceId, invoiceId)) throw new Error("Invoice record ID mismatch");
+    return { ...parsed, envelope } as unknown as InvoiceRecord;
   }
   save(invoiceId: string, record: InvoiceRecord): InvoiceRecord {
     if (record.receipt) throw new Error("Use confirm to store a receipt");

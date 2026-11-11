@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test, type TestContext } from "node:test";
 import { SqliteInvoiceRepository } from "../src/modules/invoices/invoices.repository.ts";
 import { ReceiptService } from "../src/modules/invoices/receipt.service.ts";
@@ -33,6 +34,18 @@ test("repository validates the B01 envelope boundary and raw fixture stays repro
   assert.throws(() => repository.create({ ...envelope, posSignerPrivateKey: "must-never-reach-api" } as unknown as typeof envelope));
   assert.throws(() => repository.create({ ...envelope, meta: { ...envelope.meta, signingKey: "must-never-reach-api" } } as unknown as typeof envelope));
   assert.deepEqual(repository.get(invoiceId)?.envelope, envelope);
+});
+
+test("repository rejects persisted legacy envelopes with unexpected secret fields", (t) => {
+  const { repository } = setup(t);
+  const record = repository.get(invoiceId)!;
+  const legacyRecord = { ...record, envelope: {
+    ...envelope, meta: { ...envelope.meta, posSignerPrivateKey: "must-never-reach-api" },
+  } };
+  const db = (repository as unknown as { db: DatabaseSync }).db;
+  db.prepare("UPDATE invoices SET record_json = ? WHERE invoice_id = ?")
+    .run(JSON.stringify(legacyRecord), invoiceId.toLowerCase());
+  assert.throws(() => repository.get(invoiceId), /Invalid invoice envelope/);
 });
 
 for (const row of fixture.receiptCases) {
