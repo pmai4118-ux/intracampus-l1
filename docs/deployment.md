@@ -94,7 +94,11 @@ không đưa toàn bộ thư mục broadcast chứa raw transaction vào Git.
 Hai client bundle cùng JSON, vì vậy **build và khởi động lại cả backend và
 frontend** sau khi cập nhật deployment. Đối chiếu hai URL `/api/deployment`
 và `posSigner()` trên đúng chain, rồi dùng B03 cấp ví/thẻ. B02 lấy
-`contracts.CampusPaymentRegistry.blockNumber` làm mốc bắt đầu quét event.
+`contracts.CampusPaymentRegistry.blockNumber` làm mốc bắt đầu quét event,
+verifier và ABI cũng được đọc trực tiếp từ cùng manifest khi đã cấu hình.
+Nếu còn đặt `CAMPUS_PAYMENT_REGISTRY_ADDRESS` / `CAMPUS_PAYMENT_DEPLOYMENT_BLOCK`
+trong backend thì chúng phải khớp manifest; giá trị khác làm backend từ chối
+khởi động. Có thể bỏ hai biến này sau khi đã xuất deployment thật.
 Nhóm lưu receipt L1 tương ứng và reviewer chạy lại các bước đọc cấu hình
 trước khi đánh dấu L06 hoàn tất trên bảng.
 

@@ -97,7 +97,7 @@ thất bại hoàn tác toàn bộ số dư. `GrantIssued`/`GrantSpent` ghi số
 dư còn lại cho backend B05; xem [ABI và giới hạn quyền](l05-grants.md).
 Không tự ràng buộc grant với ngày hết hạn SBT; issuer chọn ví được cấp.
 
-## D012 · L06: manifest triển khai chung và kiểm chứng receipt · 2026-11-11
+## D013 · L06: manifest triển khai chung và kiểm chứng receipt · 2026-11-11
 
 `Deploy.s.sol` kiểm tra chain 20261 trước broadcast, dùng keystore bên ngoài,
 triển khai SBT → registry → vault và đăng ký PARKING/FOOD. Exporter kiểm tra
@@ -112,3 +112,8 @@ Manifest trong Git còn `unconfigured` vì chưa có receipt Avalanche L1 thật
 Evidence Anvil riêng có nhãn `local-anvil`, không kích hoạt endpoint production.
 CI chạy luồng deploy/export, B03 seed hai lần và L05 grant với registry thật.
 Không sửa giao kèo Invoice/InvoicePaid P02 hoặc genesis L01.
+
+Sau khi B02 vào `main` tại `12a45f1`, receipt config lấy verifier/block từ cùng
+manifest khi đã cấu hình, ABI decoder cũng lấy ABI chung; các biến môi trường
+B02 nếu còn đặt phải khớp hoàn toàn hoặc backend từ chối khởi động. Khi chưa
+deploy vẫn hỗ trợ codec P02/biến cấu hình B02 cho fixture và phát triển.

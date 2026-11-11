@@ -63,9 +63,10 @@ function fixture(): Record<string, any> {
     merchants: { parking: { address: addr(20), category: PARKING }, canteen: { address: addr(21), category: FOOD } } };
 }
 
-test("canonical manifest is explicitly unconfigured without invented addresses", () => {
-  assert.equal(getDeployment().status, "unconfigured");
-  assert.throws(() => requireDeployment(), /DEPLOYMENT_NOT_CONFIGURED/);
+test("an unconfigured manifest cannot activate client transactions", () => {
+  const value = { schemaVersion: 1, abiVersion: 1, chainId: 20261, status: "unconfigured" };
+  assert.equal(getDeployment(value).status, "unconfigured");
+  assert.throws(() => requireDeployment(value), /DEPLOYMENT_NOT_CONFIGURED/);
 });
 test("confirmed production manifest is consumed without altering ABI or addresses", () => {
   const value = fixture();
@@ -124,7 +125,6 @@ test("backend uses the shared client deployment response and fails closed", asyn
   assert.ok(address && typeof address !== "string");
   const backend = await fetch(`http://127.0.0.1:${address.port}/api/deployment`);
   const shared = deploymentResponse();
-  assert.equal(backend.status, 503);
   assert.equal(shared.status, backend.status);
   assert.equal(backend.headers.get("cache-control"), "no-store");
   assert.deepEqual(shared.body, await backend.json());

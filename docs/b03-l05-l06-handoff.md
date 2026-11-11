@@ -1,7 +1,7 @@
 # B03, L05, L06 · Bàn giao
 
 Đã đối chiếu bảng sprint và `main` sau khi merge L04 PR #8
-(`06f2877`). Mỗi task có PR riêng. Code và kiểm thử local đã hoàn thành;
+(`06f2877`), và cập nhật B02 vừa merge tại `12a45f1`. Mỗi task có PR riêng. Code và kiểm thử local đã hoàn thành;
 nghiệm thu L1 còn cần máy giữ node của hwng.
 
 | Task | Kết quả | Hướng dẫn |
@@ -15,7 +15,7 @@ nghiệm thu L1 còn cần máy giữ node của hwng.
 Node 24.22.2, pnpm 11.25.0, Foundry 1.7.1, Solidity 0.8.24 / EVM Paris:
 
 - `pnpm typecheck`, `pnpm build`: đạt.
-- `pnpm test`: 143 test đạt khi bật test Anvil B03; mặc định CI app có 142
+- `pnpm test`: 196 test đạt khi bật test Anvil B03; mặc định CI app có 195
   đạt và 1 skip vì không có artifact/Anvil trong job app.
 - `pnpm test:rpc`: 18 test đạt.
 - Trong `contracts/`: `forge fmt --check`, `forge build`, `forge test`: đạt,
@@ -39,7 +39,7 @@ PR được xếp để mỗi diff chỉ chứa task tương ứng:
 1. [B03 #10](https://github.com/pmai4118-ux/intracampus-l1/pull/10) vào `main`.
 2. [L05 #11](https://github.com/pmai4118-ux/intracampus-l1/pull/11) đang dùng
    base B03; sau bước 1, đổi base sang `main` rồi review/merge.
-3. PR L06 đang dùng base L05; sau bước 2 đổi base sang `main`.
+3. [L06 #12](https://github.com/pmai4118-ux/intracampus-l1/pull/12) đang dùng base L05; sau bước 2 đổi base sang `main`.
    L06 còn draft cho đến khi có receipt và cấu hình L1 thật.
 
 Trên máy node: xác minh RPC 20261, chọn ví demo/keystore, chạy mô phỏng và
