@@ -1,0 +1,59 @@
+Local EVM only | Foundry v1.7.1 | Solidity 0.8.24 | EVM Paris
+forge fmt --check: PASS
+forge build: PASS
+Command: forge test -vv
+
+No files changed, compilation skipped
+
+Ran 1 test for test/ToolchainSmoke.t.sol:ToolchainSmokeTest
+[PASS] testNativeValueReachesDeployedContract() (gas: 53249)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 554.20µs (167.60µs CPU time)
+
+Ran 8 tests for test/StudentSBTIdentity.t.sol:StudentSBTIdentityTest
+[PASS] testDuplicateMintRequiresRevocationEvenAfterExpiry() (gas: 17357)
+[PASS] testERC165AndInvalidQueries() (gas: 22704)
+[PASS] testIssuerMintsLockedCredential() (gas: 100216)
+[PASS] testMintRejectsZeroWalletAndNonFutureExpiry() (gas: 75895)
+[PASS] testOnlyIssuerCanMintOrRevoke() (gas: 21516)
+[PASS] testRevokeBurnsCredentialAndAllowsReissue() (gas: 68628)
+[PASS] testTierFixtureAndInclusiveExpiry() (gas: 32561)
+[PASS] testTransfersAndApprovalsRevert() (gas: 27077)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 5.31ms (19.23ms CPU time)
+
+Ran 2 tests for test/InvoiceVectors.t.sol:InvoiceVectorsTest
+[PASS] testAllSharedTypedDataVectors() (gas: 2603478)
+[PASS] testSharedIntegerRoundingCases() (gas: 573109)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 21.53ms (30.00ms CPU time)
+
+Ran 28 tests for test/CampusPaymentRegistry.t.sol:CampusPaymentRegistryTest
+[PASS] testDeploymentConfiguration() (gas: 18071)
+[PASS] testDeploymentRejectsInvalidConfiguration() (gas: 147583)
+[PASS] testExpiredInvoiceRejectedInQuoteAndPay() (gas: 56155)
+[PASS] testExpiredSbtPaysFullPrice() (gas: 109548)
+[PASS] testFuzzPricingDoesNotOverflow(uint256) (runs: 256, μ: 25736, ~: 25736)
+[PASS] testFuzzSettlementConservesFunds(uint128,bool) (runs: 256, μ: 98678, ~: 99738)
+[PASS] testIncorrectValueRejectedWithoutConsumingInvoice() (gas: 240042)
+[PASS] testInvoiceValidAtExactExpiry() (gas: 110142)
+[PASS] testMalformedSignaturesMapToP02Error() (gas: 215801)
+[PASS] testMarksPaidBeforeMerchantCallAndBlocksReentry() (gas: 763648)
+[PASS] testMerchantAndCategoryMustBeAllowedAsOnePair() (gas: 110295)
+[PASS] testMerchantDisabledAfterSigning() (gas: 56798)
+[PASS] testMerchantTransferFailureRollsBackAndAllowsRetry() (gas: 229341)
+[PASS] testOnlyAdminCanChangeMerchantCategory() (gas: 25008)
+[PASS] testRegistryRejectsInvalidPairs() (gas: 13385)
+[PASS] testReplayRejectedAcrossPayersAndSignedPayloads() (gas: 129624)
+[PASS] testRevokedSbtPaysFullPrice() (gas: 113267)
+[PASS] testSbtTierChangesAfterInclusiveExpiry() (gas: 142963)
+[PASS] testSharedP02FixtureSettlesStandard() (gas: 1362767)
+[PASS] testSharedP02FixtureSettlesStudent() (gas: 1368904)
+[PASS] testSharedP02NegativeFixturesRejectedByImplementation() (gas: 1434198)
+[PASS] testSharedP02RoundingCasesQuoteImplementation() (gas: 596721)
+[PASS] testStandardInvoiceSettlementAndEvent() (gas: 107261)
+[PASS] testStudentInvoiceSettlementAndEvent() (gas: 109598)
+[PASS] testUnsupportedOrFailingSbtCannotSettle() (gas: 1751622)
+[PASS] testWrongChainAndVerifierRejected() (gas: 137732)
+[PASS] testWrongSignerAndTamperedSignedFieldsRejected() (gas: 309495)
+[PASS] testZeroAmountAndIdRejected() (gas: 41415)
+Suite result: ok. 28 passed; 0 failed; 0 skipped; finished in 26.19ms (129.83ms CPU time)
+
+Ran 4 test suites in 28.04ms (53.58ms CPU time): 39 tests passed, 0 failed, 0 skipped (39 total tests)

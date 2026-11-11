@@ -59,3 +59,11 @@ Thẻ khóa ngay khi cấp theo ERC-5192, phát `Transfer` và `Locked`. Mọi h
 L04 dùng `tierOf(address payer) → uint8` để tính giá theo P02. Hàm trả `1` tới hết giây `expiresAt`, và trả `0` cho ví chưa có thẻ, đã quá hạn hoặc đã bị thu hồi. U02 dùng cùng hàm để hiển thị tier. `credentials(address)` trả `(uint256 tokenId, uint64 expiresAt)` để đọc thẻ hiện tại. `balanceOf` biểu thị quyền sở hữu thẻ, còn `tierOf` biểu thị quyền ưu đãi.
 
 L04 có thể dùng lại [`StudentSBTFixture`](../contracts/test/fixtures/StudentSBTFixture.sol) trên Foundry để tạo ba ví đối chứng thường, ưu đãi và quá hạn. Việc cấp thẻ demo trên Avalanche L1 và bàn giao địa chỉ/ABI thuộc B03 và L06.
+
+## D009 · L04: registry merchant và thanh toán native CAMPUS · 2026-11-11
+
+[`CampusPaymentRegistry`](../contracts/src/CampusPaymentRegistry.sol) giữ nguyên kiểu Invoice, domain, ABI thanh toán, lỗi và event P02. Constructor nhận admin, POS signer và contract SBT đã triển khai; cả ba cố định trong MVP. Admin dùng `setMerchantCategory(merchant, category, allowed)` để quản lý từng cặp merchant/category, phát `MerchantCategoryUpdated`. Getter `allowedMerchantCategories` là điểm đọc chung cho cấu hình và L05. Registry ban đầu không cho phép cặp nào; tắt một cặp chặn cả invoice đã ký chưa trả. Thay signer/admin/SBT cần deploy mới và cập nhật các bên gọi qua L06.
+
+`quoteInvoice` kiểm tra hạn, paid flag, invoiceId/amount và allowlist trước khi đọc tier; không xác minh chữ ký. `payInvoice` dùng chữ ký EOA low-s 65 byte, tính giá từ tier của msg.sender, thu đúng msg.value, đánh dấu đã trả trước external call và chặn reentrancy. Tier 1 giảm floor(amount / 10) wei, tương đương 1000 bps và không overflow; chỉ tier 0/1 được chấp nhận. Không đọc được SBT hoặc merchant không nhận tiền thì revert toàn bộ. Thư viện ECDSA OpenZeppelin v5.0.2 được vendor nguyên bản kèm giấy phép và checksum để CI không cần tải dependency.
+
+ABI InvoicePaid và getter posSigner giữ nguyên cho B01/B02/B04/U03/U04; các hàm quản trị và lỗi cấu hình được ghi trong [bàn giao L04](l04-payment.md). Log Foundry và hai receipt đi cùng tài liệu là bằng chứng EVM local, không xác nhận đã deploy lên Avalanche L1. L06 sở hữu deployment/address/ABI cuối; B03 sở hữu seed ví/thẻ demo.
