@@ -1,6 +1,6 @@
 import { campusNetwork } from "@intracampus/network";
 export { campusNetwork };
-export type WalletConfig = { rpcUrl?: string; sbtAddress?: string };
+export type WalletConfig = { rpcUrl?: string; sbtAddress?: string; paymentRegistryAddress?: string; posSignerAddress?: string };
 export const campusChainHex = `0x${campusNetwork.chainId.toString(16)}`;
 export function isWalletAddress(value: unknown): value is string {
   return typeof value === "string" && /^0x[0-9a-f]{40}$/i.test(value) && !/^0x0{40}$/i.test(value);
@@ -8,18 +8,24 @@ export function isWalletAddress(value: unknown): value is string {
 export function validateWalletConfig(config: WalletConfig): WalletConfig {
   const rpcUrl = config.rpcUrl?.trim() || undefined;
   const sbtAddress = config.sbtAddress?.trim() || undefined;
+  const paymentRegistryAddress = config.paymentRegistryAddress?.trim() || undefined;
+  const posSignerAddress = config.posSignerAddress?.trim() || undefined;
   if (rpcUrl) {
     const url = new URL(rpcUrl);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.hash
       || (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) throw new Error("INVALID_WALLET_CONFIG");
   }
   if (sbtAddress && !isWalletAddress(sbtAddress)) throw new Error("INVALID_WALLET_CONFIG");
-  return { rpcUrl, sbtAddress };
+  if (paymentRegistryAddress && !isWalletAddress(paymentRegistryAddress)) throw new Error("INVALID_WALLET_CONFIG");
+  if (posSignerAddress && !isWalletAddress(posSignerAddress)) throw new Error("INVALID_WALLET_CONFIG");
+  return { rpcUrl, sbtAddress, paymentRegistryAddress, posSignerAddress };
 }
 // Only public, build-time configuration. Never expose a key or RPC secret here.
 export function browserWalletConfig(): WalletConfig {
   return validateWalletConfig({ rpcUrl: process.env.NEXT_PUBLIC_INTRACAMPUS_RPC_URL,
-    sbtAddress: process.env.NEXT_PUBLIC_STUDENT_SBT_ADDRESS });
+    sbtAddress: process.env.NEXT_PUBLIC_STUDENT_SBT_ADDRESS,
+    paymentRegistryAddress: process.env.NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS,
+    posSignerAddress: process.env.NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS });
 }
 export function walletChainParameters(config: WalletConfig) {
   const { rpcUrl } = validateWalletConfig(config);

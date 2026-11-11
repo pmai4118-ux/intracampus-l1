@@ -10,7 +10,7 @@ Dự án UniHack 2026 cho thanh toán và định danh trong khuôn viên trư�
 | `packages/network/` | Cấu hình chain và kiểu phản hồi API dùng chung |
 | `infra/` | Hướng dẫn nối L1 của nhóm và xác minh chain ID |
 
-Monorepo dùng pnpm workspace để cả nhóm chia sẻ cấu hình và chạy CI từ một chỗ. Dự án dùng Next.js 16 (App Router) thay cho Next.js 14 trong đề cương để bắt đầu trên dòng còn được hỗ trợ. Bản khởi tạo có ba trang và kiểm tra RPC; ví, thanh toán, SBT và voucher chưa được triển khai.
+Monorepo dùng pnpm workspace để cả nhóm chia sẻ cấu hình và chạy CI từ một chỗ. Dự án dùng Next.js 16 (App Router). Source hiện có hợp đồng SBT/thanh toán CAMPUS, backend tạo hóa đơn EIP-712 và lưu/đọc receipt, seed ví demo, cùng kết nối ví Core để đọc số dư và thẻ. U03 bổ sung POS phát hành QR thật và Student kiểm tra hóa đơn/giá trước bước thanh toán; việc sinh viên ký `payInvoice` vẫn phải đi qua ví Core trong U04.
 
 ## Chạy trên máy
 
@@ -24,7 +24,9 @@ pnpm dev
 - Web: <http://127.0.0.1:3000> (`/student` và `/pos`).
 - API: <http://127.0.0.1:4000/healthz> và <http://127.0.0.1:4000/api/network>.
 
-Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật, tạo `backend/.env` từ `backend/.env.example`, điền RPC rồi chạy `pnpm rpc:check`. Đọc [hướng dẫn L1](infra/README.md) trước khi lấy endpoint từ nhóm. `frontend/.env.local.example` chỉ cần dùng khi địa chỉ API khác mặc định.
+Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật, lấy RPC của IntraCampus từ nhóm, đặt chain ID `20261` và đồng gốc `CAMPUS`, rồi chạy `pnpm rpc:check`. Không dùng RPC Fuji C-Chain `43113` cho cấu hình dự án. Xem [hướng dẫn L1](infra/README.md) và [quyết định về mạng/ví](docs/decisions.md#d014--giữ-intracampus-l1-và-tách-quyền-ký-theo-người-khởi-tạo) trước khi cấu hình.
+
+Để tạo hóa đơn, backend cần cấu hình signer POS server-side theo `backend/.env.example`; khóa đó chỉ ký payload hóa đơn ngoài chain. Bản xem trước Student cần RPC, verifier và POS signer công khai đồng bộ với manifest L06; không lấy verifier tin cậy từ QR. Thanh toán do sinh viên khởi tạo phải được ví Core của sinh viên ký. `frontend/.env.local.example` chứa RPC/SBT/verifier/signer công khai và `BACKEND_URL` server-side cho Next.js proxy `/api/invoices`. Builder Hub chỉ cần khi tạo L1 hoặc lấy Data API key, không cần cho việc chạy ứng dụng với L1 đã có.
 
 ## Kiểm tra trước khi mở PR
 

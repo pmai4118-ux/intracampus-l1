@@ -211,6 +211,8 @@ test('integer formatting preserves one wei and large balances', () => {
 test('network configuration rejects unsafe or malformed public values', () => {
   for (const rpcUrl of ['http://public.example', 'https://user:secret@rpc.example', 'file:///tmp/x']) assert.throws(() => validateWalletConfig({ rpcUrl }));
   assert.throws(() => validateWalletConfig({ sbtAddress: `0x${'0'.repeat(40)}` }));
+  assert.throws(() => validateWalletConfig({ paymentRegistryAddress: '0xnot-an-address' }));
+  assert.throws(() => validateWalletConfig({ posSignerAddress: `0x${'0'.repeat(40)}` }));
   assert.throws(() => walletChainParameters({}));
   assert.equal(walletChainParameters({ rpcUrl: 'http://127.0.0.1:8545' }).chainId, '0x4f25');
 });
