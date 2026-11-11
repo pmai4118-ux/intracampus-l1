@@ -8,6 +8,7 @@ frontend/next-env.d.ts
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+backend/data/
 
 # Local configuration, validator state, and credentials
 .env

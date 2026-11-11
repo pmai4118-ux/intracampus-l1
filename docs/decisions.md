@@ -59,3 +59,11 @@ Thẻ khóa ngay khi cấp theo ERC-5192, phát `Transfer` và `Locked`. Mọi h
 L04 dùng `tierOf(address payer) → uint8` để tính giá theo P02. Hàm trả `1` tới hết giây `expiresAt`, và trả `0` cho ví chưa có thẻ, đã quá hạn hoặc đã bị thu hồi. U02 dùng cùng hàm để hiển thị tier. `credentials(address)` trả `(uint256 tokenId, uint64 expiresAt)` để đọc thẻ hiện tại. `balanceOf` biểu thị quyền sở hữu thẻ, còn `tierOf` biểu thị quyền ưu đãi.
 
 L04 có thể dùng lại [`StudentSBTFixture`](../contracts/test/fixtures/StudentSBTFixture.sol) trên Foundry để tạo ba ví đối chứng thường, ưu đãi và quá hạn. Việc cấp thẻ demo trên Avalanche L1 và bàn giao địa chỉ/ABI thuộc B03 và L06.
+
+## D009 · B02: lookup receipt bền vững và giao kèo tích hợp · 2026-11-11
+
+Module invoices dùng SQLite qua `node:sqlite` trên Node 24 để giữ envelope, snapshot, hash đang theo dõi, cursor quét và receipt qua restart. B01 gọi `InvoiceRepository.create(envelope)` trước khi trả 201; B02 cung cấp GET và commit receipt trước khi báo paid. L06 bàn giao verifier/block qua `CAMPUS_PAYMENT_REGISTRY_ADDRESS` và `CAMPUS_PAYMENT_DEPLOYMENT_BLOCK`. Cấu hình được kiểm tra riêng với verifier trong envelope; không tin địa chỉ fixture/QR như cấu hình triển khai.
+
+`ethers@6.15.0` được thêm vào dependency runtime backend để decode ABI; mở rộng quyết định D007 vốn chỉ dùng ethers cho vector dev. `@intracampus/network` export type envelope, receipt và lookup union dùng chung. API bổ sung `Retry-After` trên 503 và `INTERNAL_ERROR` 500 khi kho dữ liệu lỗi; không thay ABI, EIP-712 hoặc các response vòng đời P02. B04/U04 dùng type mới, giữ hash cũ và khử thông báo theo event key.
+
+Backend thực hiện một lookup mỗi GET với backoff khi RPC lỗi, không tạo background indexer/WebSocket. POS/B04/U04 sở hữu lịch poll. [Tài liệu B02](b02-receipts.md) ghi giới hạn một host/volume bền vững và bằng chứng fixture; chưa tuyên bố kiểm tra L1 thật.
