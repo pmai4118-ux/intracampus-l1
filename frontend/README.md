@@ -1,5 +1,7 @@
 # U01 · Khung Student và Merchant POS
 
+U02 bổ sung chế độ ví thật tại `/student`; bản U01 vẫn nằm ở **Xem bản minh họa**. Xem [cấu hình, kiểm thử hai tài khoản và bàn giao U02](../docs/u02-wallet.md). Các phần fixture bên dưới chỉ áp dụng cho bản minh họa.
+
 Hai trang dùng chung fixture ở `app/demo-fixtures.ts`. Bản xem thử dùng tông sáng, xanh lá và không cần RPC hay ví.
 
 ## Xem trên máy
