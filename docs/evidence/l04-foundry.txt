@@ -1,0 +1,65 @@
+Local EVM only | Foundry v1.7.1 | Solidity 0.8.24 | EVM Paris
+forge fmt --check: PASS
+forge build: PASS
+Command: forge test -vv
+
+No files changed, compilation skipped
+
+Ran 1 test for test/ToolchainSmoke.t.sol:ToolchainSmokeTest
+[PASS] testNativeValueReachesDeployedContract() (gas: 53249)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 820.70µs (242.00µs CPU time)
+
+Ran 8 tests for test/StudentSBTIdentity.t.sol:StudentSBTIdentityTest
+[PASS] testDuplicateMintRequiresRevocationEvenAfterExpiry() (gas: 17357)
+[PASS] testERC165AndInvalidQueries() (gas: 22704)
+[PASS] testIssuerMintsLockedCredential() (gas: 100216)
+[PASS] testMintRejectsZeroWalletAndNonFutureExpiry() (gas: 75895)
+[PASS] testOnlyIssuerCanMintOrRevoke() (gas: 21516)
+[PASS] testRevokeBurnsCredentialAndAllowsReissue() (gas: 68628)
+[PASS] testTierFixtureAndInclusiveExpiry() (gas: 32561)
+[PASS] testTransfersAndApprovalsRevert() (gas: 27077)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 1.69ms (4.34ms CPU time)
+
+Ran 2 tests for test/InvoiceVectors.t.sol:InvoiceVectorsTest
+[PASS] testAllSharedTypedDataVectors() (gas: 2603478)
+[PASS] testSharedIntegerRoundingCases() (gas: 573109)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 20.57ms (29.24ms CPU time)
+
+Ran 34 tests for test/CampusPaymentRegistry.t.sol:CampusPaymentRegistryTest
+[PASS] testConsecutiveInvoicesAndCategoryDisableAreIsolated() (gas: 187360)
+[PASS] testCrossInvoiceReentryCannotConsumeAnotherValidInvoice() (gas: 855608)
+[PASS] testDeploymentConfiguration() (gas: 18071)
+[PASS] testDeploymentRejectsInvalidConfiguration() (gas: 147539)
+[PASS] testEventMatchesP02RawLogAbi() (gas: 99759)
+[PASS] testExpiredInvoiceRejectedInQuoteAndPay() (gas: 56198)
+[PASS] testExpiredSbtPaysFullPrice() (gas: 109547)
+[PASS] testFuzzPricingDoesNotOverflow(uint256) (runs: 256, μ: 25803, ~: 25803)
+[PASS] testFuzzSettlementConservesFunds(uint128,bool) (runs: 256, μ: 98645, ~: 97523)
+[PASS] testIncorrectValueRejectedWithoutConsumingInvoice() (gas: 240130)
+[PASS] testInvoiceValidAtExactExpiry() (gas: 110140)
+[PASS] testMalformedSignaturesMapToP02Error() (gas: 215900)
+[PASS] testMarksPaidBeforeMerchantCallAndBlocksReentry() (gas: 788318)
+[PASS] testMaximumUint256AmountQuoteDoesNotOverflow() (gas: 19884)
+[PASS] testMerchantAndCategoryMustBeAllowedAsOnePair() (gas: 110403)
+[PASS] testMerchantDisabledAfterSigning() (gas: 56841)
+[PASS] testMerchantTransferFailureRollsBackAndAllowsRetry() (gas: 229340)
+[PASS] testOnlyAdminCanChangeMerchantCategory() (gas: 25008)
+[PASS] testRegistryRejectsInvalidPairs() (gas: 13451)
+[PASS] testReplayRejectedAcrossPayersAndSignedPayloads() (gas: 129710)
+[PASS] testRevocationAfterQuoteRejectsStaleValueAndAllowsFreshQuote() (gas: 149824)
+[PASS] testRevokedSbtPaysFullPrice() (gas: 113301)
+[PASS] testSbtTierChangesAfterInclusiveExpiry() (gas: 142984)
+[PASS] testSharedP02FixtureSettlesStandard() (gas: 1362917)
+[PASS] testSharedP02FixtureSettlesStudent() (gas: 1369099)
+[PASS] testSharedP02NegativeFixturesRejectedByImplementation() (gas: 1434326)
+[PASS] testSharedP02RoundingCasesQuoteImplementation() (gas: 596791)
+[PASS] testStandardInvoiceSettlementAndEvent() (gas: 107304)
+[PASS] testStudentInvoiceSettlementAndEvent() (gas: 109619)
+[PASS] testUnsupportedOrFailingSbtCannotSettle() (gas: 1751730)
+[PASS] testValidMalleableCompactAndOverlongSignaturesAreRejected() (gas: 217981)
+[PASS] testWrongChainAndVerifierRejected() (gas: 137861)
+[PASS] testWrongSignerAndTamperedSignedFieldsRejected() (gas: 309603)
+[PASS] testZeroAmountAndIdRejected() (gas: 41436)
+Suite result: ok. 34 passed; 0 failed; 0 skipped; finished in 24.92ms (132.07ms CPU time)
+
+Ran 4 test suites in 27.11ms (48.00ms CPU time): 45 tests passed, 0 failed, 0 skipped (45 total tests)
