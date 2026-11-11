@@ -1,5 +1,11 @@
 # Nhật ký quyết định
 
+## U02 · Kết nối ví và dữ liệu đọc tin cậy · 2026-11-11
+
+Student View tách phiên EIP-1193 khỏi bản minh họa U01. Dùng provider được inject bởi ví, không thêm bộ Web3/WalletConnect vào runtime. Cấu hình công khai `NEXT_PUBLIC_INTRACAMPUS_RPC_URL` và `NEXT_PUBLIC_STUDENT_SBT_ADDRESS` lấy từ L02/L06; thiếu thì trạng thái chưa xác minh. L06 đang ở PR riêng nên U02 chưa phụ thuộc loader chưa merge. Khi tích hợp manifest phải kiểm tra cùng deployment, không tự nhận địa chỉ fixture.
+
+Số dư, `tierOf` và `credentials` đọc cùng block chain 20261; thẻ hết hạn vẫn có thể thuộc ví. Controller chia sẻ trạng thái qua context cho U04/U06, chặn readiness khi sai mạng/lỗi/đang tải và loại phản hồi cũ khi đổi tài khoản. U04 vẫn phải chạy preflight P02 mới trước giao dịch. Không đổi ABI, event hoặc API thanh toán. Xem [bàn giao U02](u02-wallet.md).
+
 Thêm một mục khi đổi giao kèo dùng chung, cấu hình chain, dependency quan trọng hoặc quy trình làm việc. Mỗi mục ghi mã task nếu có, quyết định, lý do và module bị ảnh hưởng. Khi thay thế quyết định cũ, ghi rõ mục nào được thay thế.
 
 ## D001 · Quy trình làm việc với bảng sprint và AI · 2026-11-07

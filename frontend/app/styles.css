@@ -1365,3 +1365,17 @@ p {
 .skip-link:focus {
   transform: translateY(0);
 }
+
+.student-mode-switch { display: flex; gap: .5rem; flex-wrap: wrap; max-width: 52rem; margin: 0 auto 1rem; }
+.student-mode-switch [aria-pressed="true"] { background: var(--accent-emerald); color: white; border-color: var(--accent-emerald); }
+.wallet-status { font-weight: 650; margin: 1rem 0; }
+.wallet-address { display: block; overflow-wrap: anywhere; font-size: .9rem; }
+.wallet-warning { padding: .85rem; border: 1px solid var(--warning-border); border-radius: .6rem; background: var(--warning-bg); color: var(--warning-ink); }
+.wallet-balance { overflow-wrap: anywhere; font-size: clamp(1.15rem, 4vw, 1.6rem); }
+.wallet-account-picker { display: grid; gap: .4rem; margin-top: .5rem; font-size: .8rem; }
+.wallet-account-picker select { min-width: 0; max-width: 100%; width: 100%; padding: .5rem; }
+.wallet-actions { margin-top: 1.2rem; flex-wrap: wrap; }
+.wallet-payment-gate { display: grid; gap: .75rem; }
+.wallet-payment-gate h2, .wallet-payment-gate p { margin: 0; }
+.wallet-live-note { font-size: .85rem; color: var(--ink-secondary); padding: 0 .5rem; }
+.wallet-initializing { max-width: 52rem; margin: 0 auto; padding: 1rem; }
