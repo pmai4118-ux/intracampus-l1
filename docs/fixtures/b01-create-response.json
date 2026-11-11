@@ -1,0 +1,62 @@
+{
+  "environment": "synthetic-HTTP-RPC-SQLite; not Avalanche L1",
+  "request": {
+    "merchantId": "parking-demo",
+    "serviceId": "parking-single"
+  },
+  "httpStatus": 201,
+  "response": {
+    "invoiceId": "0x08cbc2ce0b07c75e383c218f998ac1353be68c3acbfd69e9aa86329d43113004",
+    "status": "pending",
+    "envelope": {
+      "schemaVersion": 1,
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 20261,
+        "verifyingContract": "0x0000000000000000000000000000000000020261"
+      },
+      "invoice": {
+        "invoiceId": "0x08cbc2ce0b07c75e383c218f998ac1353be68c3acbfd69e9aa86329d43113004",
+        "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "3000000000000000000000",
+        "expiresAt": 1794142800
+      },
+      "meta": {
+        "invoiceCode": "INV-20261108-PARKING-c31732b8-2c28-462b-8144-58d4feddc02e",
+        "merchantId": "parking-demo",
+        "merchantName": "Bãi xe demo",
+        "serviceId": "parking-single",
+        "serviceName": "Một lượt gửi xe demo",
+        "categoryCode": "PARKING",
+        "issuedAt": 1794142500
+      },
+      "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "signature": "0xdc18fcc1b387164e3297cc7fbd02c1dbf0a05f164bc013ae3a9819be6ed20216636db2d542483fc4f4b3ea757e86888880632fd2394b1515a65a181ffba6293b1b"
+    },
+    "qrPayload": "{\"schemaVersion\":1,\"domain\":{\"name\":\"IntraCampusPayment\",\"version\":\"1\",\"chainId\":20261,\"verifyingContract\":\"0x0000000000000000000000000000000000020261\"},\"invoice\":{\"invoiceId\":\"0x08cbc2ce0b07c75e383c218f998ac1353be68c3acbfd69e9aa86329d43113004\",\"merchant\":\"0x70997970c51812dc3a010c7d01b50e0d17dc79c8\",\"category\":\"0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb\",\"amount\":\"3000000000000000000000\",\"expiresAt\":1794142800},\"meta\":{\"invoiceCode\":\"INV-20261108-PARKING-c31732b8-2c28-462b-8144-58d4feddc02e\",\"merchantId\":\"parking-demo\",\"merchantName\":\"Bãi xe demo\",\"serviceId\":\"parking-single\",\"serviceName\":\"Một lượt gửi xe demo\",\"categoryCode\":\"PARKING\",\"issuedAt\":1794142500},\"signer\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"signature\":\"0xdc18fcc1b387164e3297cc7fbd02c1dbf0a05f164bc013ae3a9819be6ed20216636db2d542483fc4f4b3ea757e86888880632fd2394b1515a65a181ffba6293b1b\"}",
+    "pricingPreview": {
+      "standard": {
+        "tier": 0,
+        "discountBps": 0,
+        "discountAmount": "0",
+        "paidAmount": "3000000000000000000000"
+      },
+      "studentSbt": {
+        "tier": 1,
+        "discountBps": 1000,
+        "discountAmount": "300000000000000000000",
+        "paidAmount": "2700000000000000000000"
+      }
+    },
+    "transaction": null
+  },
+  "verification": {
+    "digest": "0x7865906a38c37fee4dc7d481d6a69c9684e4d28724d7d3d5423dfac95574a3b6",
+    "recoveredSigner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "qrRoundTrip": true,
+    "persistedBefore201": true,
+    "b02LookupStatus": "pending"
+  }
+}
