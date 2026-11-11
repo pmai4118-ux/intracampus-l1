@@ -4,6 +4,8 @@ export const campusNetwork = {
   nativeCurrency: { name: "Campus", symbol: "CAMPUS", decimals: 18 },
 } as const;
 
+export type { SignedInvoiceEnvelope, InvoiceTransaction, VerifiedInvoiceReceipt, InvoiceApiError, InvoiceLookupResponse } from "./invoices.ts";
+
 export type NetworkProbe = {
   expectedChainId: number;
 } & (

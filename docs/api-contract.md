@@ -351,6 +351,9 @@ Mọi lỗi có đối tượng `error` gồm `code`, `message`, `retryable` và
 | `RECEIPT_EVENT_MISMATCH` | `422` | `receipt.status === "0x1"` nhưng không có sự kiện `InvoicePaid` từ `verifyingContract` khớp `invoiceId`, `merchant` và số tiền | Giao dịch đã thực thi nhưng không chứa biên nhận thanh toán hợp lệ cho hóa đơn này. | Giữ trạng thái pending/expired theo chain và tiếp tục đối chiếu; kiểm tra lại đúng mã giao dịch (`txHash`) của lần thanh toán hóa đơn này. |
 | `WRONG_CHAIN` | `503` (backend), — (UI) | Ví sinh viên hoặc RPC backend không ở trên chain `20261` | Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261). | Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại. |
 | `RPC_UNAVAILABLE` | `503` | Không kết nối được RPC hoặc quá thời gian chờ (`timeout`) | Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu. | Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại. |
+| `INTERNAL_ERROR` | `500` | Không đọc/commit được kho hóa đơn (`B02`) | Không thể lưu hoặc đọc dữ liệu hóa đơn. | Giữ hash giao dịch và liên hệ người vận hành; không tự gửi lại thanh toán. |
+
+`B02` bổ sung header `Retry-After` (giây) cho lookup 503, theo backoff 2/4/8/16/30 giây. `INTERNAL_ERROR` có `retryable: false`; không xuất chi tiết lỗi DB hoặc đường dẫn nội bộ. Các trạng thái 200/422/503 giữ giao kèo ở mục 3.3.
 
 ## 6. Bộ fixture và ca bắt buộc khi tích hợp
 

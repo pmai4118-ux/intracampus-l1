@@ -17,6 +17,9 @@ importers:
       '@intracampus/network':
         specifier: workspace:*
         version: link:../packages/network
+      ethers:
+        specifier: 6.15.0
+        version: 6.15.0
       express:
         specifier: 5.3.0
         version: 5.3.0
