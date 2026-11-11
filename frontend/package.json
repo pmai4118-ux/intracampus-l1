@@ -2,11 +2,13 @@
   "name": "@intracampus/frontend",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "build": "next build"
+    "build": "next build",
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
     "@intracampus/network": "workspace:*",

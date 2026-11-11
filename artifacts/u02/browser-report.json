@@ -1,0 +1,30 @@
+{
+  "environment": "isolated Chromium; injected EIP-1193 test provider + intercepted JSON-RPC; not physical wallet/L1",
+  "viewports": [
+    "390x844",
+    "1440x1000"
+  ],
+  "passed": [
+    "no-wallet",
+    "connection-refusal",
+    "connect-tier1-balance",
+    "wrong-chain",
+    "switch-refusal",
+    "add-and-switch-4902",
+    "second-account-tier0-zero-balance",
+    "rpc-error-retry",
+    "disconnect",
+    "demo-separation",
+    "listener-cleanup",
+    "no-transaction-or-signature",
+    "no-horizontal-overflow"
+  ],
+  "pageErrors": [],
+  "productionUnconfigured": {
+    "passed": true,
+    "tier": null,
+    "balance": null,
+    "pageErrors": [],
+    "environment": "production build; injected provider, no RPC or L1"
+  }
+}
