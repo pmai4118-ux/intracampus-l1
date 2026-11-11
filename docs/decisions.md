@@ -85,3 +85,14 @@ funder/issuer nằm trong môi trường backend, không xuất ra log/JSON. Man
 L06 có thể cung cấp ABI/address/runtime hash tin cậy; B03 cũng chạy độc lập
 với địa chỉ SBT L03. Xem [runbook seed](demo-accounts.md). Test Anvil là bằng
 chứng local; số dư/receipt L1 thực tế còn cần máy giữ node.
+
+## D012 · L05: học bổng native theo danh mục merchant · 2026-11-11
+
+`PurposeBoundGrantVault(issuer, registry)` giữ CAMPUS bảo chứng cho ngân sách
+`balances(beneficiary, category)`. Issuer cấp bằng `grant` payable; chỉ chính
+beneficiary gọi `spend`. Vault đọc allowlist trực tiếp từ L04 để merchant bị
+gỡ được chặn ngay, không có danh sách lệch giữa hai contract. Ngân sách FOOD
+không thể chuyển sang PARKING. CEI và guard chung chặn reentrancy; chuyển tiền
+thất bại hoàn tác toàn bộ số dư. `GrantIssued`/`GrantSpent` ghi số tiền và số
+dư còn lại cho backend B05; xem [ABI và giới hạn quyền](l05-grants.md).
+Không tự ràng buộc grant với ngày hết hạn SBT; issuer chọn ví được cấp.
