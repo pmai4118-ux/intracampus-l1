@@ -27,11 +27,19 @@ export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid object");
   return value as Record<string, unknown>;
 }
+function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
 
 // B01 calls this at the internal persistence boundary, never from a public registration endpoint.
 export function assertEnvelope(value: unknown): asserts value is SignedInvoiceEnvelope {
   const v = object(value), domain = object(v.domain), invoice = object(v.invoice), meta = object(v.meta);
-  if (v.schemaVersion !== 1 || domain.name !== "IntraCampusPayment" || domain.version !== "1"
+  if (!exactKeys(v, ["schemaVersion", "domain", "invoice", "meta", "signer", "signature"])
+    || !exactKeys(domain, ["name", "version", "chainId", "verifyingContract"])
+    || !exactKeys(invoice, ["invoiceId", "merchant", "category", "amount", "expiresAt"])
+    || !exactKeys(meta, ["invoiceCode", "merchantId", "merchantName", "serviceId", "serviceName", "categoryCode", "issuedAt"])
+    || v.schemaVersion !== 1 || domain.name !== "IntraCampusPayment" || domain.version !== "1"
     || domain.chainId !== campusNetwork.chainId || !isAddress(domain.verifyingContract)
     || !isHash(invoice.invoiceId) || !isHash(invoice.category) || !isAddress(invoice.merchant)
     || typeof invoice.amount !== "string" || !/^[1-9][0-9]{0,77}$/.test(invoice.amount)

@@ -30,6 +30,8 @@ test("repository validates the B01 envelope boundary and raw fixture stays repro
     { ...envelope.invoice, invoiceId: otherHash },
     { ...envelope.invoice, expiresAt: Number.MAX_SAFE_INTEGER + 1 },
   ]) assert.throws(() => repository.create({ ...envelope, invoice }));
+  assert.throws(() => repository.create({ ...envelope, posSignerPrivateKey: "must-never-reach-api" } as unknown as typeof envelope));
+  assert.throws(() => repository.create({ ...envelope, meta: { ...envelope.meta, signingKey: "must-never-reach-api" } } as unknown as typeof envelope));
   assert.deepEqual(repository.get(invoiceId)?.envelope, envelope);
 });
 
