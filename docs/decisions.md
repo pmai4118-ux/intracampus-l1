@@ -89,3 +89,19 @@ không thể chuyển sang PARKING. CEI và guard chung chặn reentrancy; chuy�
 thất bại hoàn tác toàn bộ số dư. `GrantIssued`/`GrantSpent` ghi số tiền và số
 dư còn lại cho backend B05; xem [ABI và giới hạn quyền](l05-grants.md).
 Không tự ràng buộc grant với ngày hết hạn SBT; issuer chọn ví được cấp.
+
+## D012 · L06: manifest triển khai chung và kiểm chứng receipt · 2026-11-11
+
+`Deploy.s.sol` kiểm tra chain 20261 trước broadcast, dùng keystore bên ngoài,
+triển khai SBT → registry → vault và đăng ký PARKING/FOOD. Exporter kiểm tra
+nguồn compiler, creation bytecode/constructor, runtime code, receipt/block
+canonical và role/allowlist tại block `verifiedAt` trước khi xuất JSON.
+`deployments/intracampus.json` giữ ABI đầy đủ có phiên bản, địa chỉ và hash;
+không chứa RPC/khóa. Backend và frontend dùng cùng loader `@intracampus/network`
+cho `/api/deployment`, chặn cấu hình thiếu hoặc ABI sai. Sau đổi deployment
+phải build/khởi động lại hai client. Xem [runbook L06](deployment.md).
+
+Manifest trong Git còn `unconfigured` vì chưa có receipt Avalanche L1 thật.
+Evidence Anvil riêng có nhãn `local-anvil`, không kích hoạt endpoint production.
+CI chạy luồng deploy/export, B03 seed hai lần và L05 grant với registry thật.
+Không sửa giao kèo Invoice/InvoicePaid P02 hoặc genesis L01.
