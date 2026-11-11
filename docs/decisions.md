@@ -74,3 +74,14 @@ Backend thực hiện một lookup mỗi GET với backoff khi RPC lỗi, không
 `quoteInvoice` kiểm tra hạn, paid flag, invoiceId/amount và allowlist trước khi đọc tier; không xác minh chữ ký. `payInvoice` dùng chữ ký EOA low-s 65 byte, tính giá từ tier của msg.sender, thu đúng msg.value, đánh dấu đã trả trước external call và chặn reentrancy. Tier 1 giảm floor(amount / 10) wei, tương đương 1000 bps và không overflow; chỉ tier 0/1 được chấp nhận. Không đọc được SBT hoặc merchant không nhận tiền thì revert toàn bộ. Thư viện ECDSA OpenZeppelin v5.0.2 được vendor nguyên bản kèm giấy phép và checksum để CI không cần tải dependency.
 
 ABI InvoicePaid và getter posSigner giữ nguyên cho B01/B02/B04/U03/U04; các hàm quản trị và lỗi cấu hình được ghi trong [bàn giao L04](l04-payment.md). Log Foundry và hai receipt đi cùng tài liệu là bằng chứng EVM local, không xác nhận đã deploy lên Avalanche L1. L06 sở hữu deployment/address/ABI cuối; B03 sở hữu seed ví/thẻ demo.
+
+## D011 · B03: seed có kiểm tra và chạy lại được · 2026-11-11
+
+`backend/scripts/seed-demo.ts` mặc định chỉ đọc kế hoạch; `--apply` mới gửi trên
+chain 20261. Cấu hình công khai chứa ví demo, mức CAMPUS mục tiêu bằng chuỗi wei
+và hạn SBT Unix cố định. Chỉ nạp phần thiếu, giữ thẻ hợp lệ hiện có; thẻ hết
+hạn/xung đột cần operator xử lý rõ ràng, không tự revoke hoặc mint đè. Khóa
+funder/issuer nằm trong môi trường backend, không xuất ra log/JSON. Manifest
+L06 có thể cung cấp ABI/address/runtime hash tin cậy; B03 cũng chạy độc lập
+với địa chỉ SBT L03. Xem [runbook seed](demo-accounts.md). Test Anvil là bằng
+chứng local; số dư/receipt L1 thực tế còn cần máy giữ node.

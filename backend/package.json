@@ -9,6 +9,7 @@
     "rpc:check": "node --env-file-if-exists=.env src/rpc-check.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
+    "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
     "test:b02:evidence": "node test/receipt-evidence.ts"
   },
   "dependencies": {
