@@ -60,7 +60,14 @@ L04 dùng `tierOf(address payer) → uint8` để tính giá theo P02. Hàm tr�
 
 L04 có thể dùng lại [`StudentSBTFixture`](../contracts/test/fixtures/StudentSBTFixture.sol) trên Foundry để tạo ba ví đối chứng thường, ưu đãi và quá hạn. Việc cấp thẻ demo trên Avalanche L1 và bàn giao địa chỉ/ABI thuộc B03 và L06.
 
-## D009 · L04: registry merchant và thanh toán native CAMPUS · 2026-11-11
+## D009 · B02: lookup receipt bền vững và giao kèo tích hợp · 2026-11-11
+
+Module invoices dùng SQLite qua `node:sqlite` trên Node 24 để giữ envelope, snapshot, hash đang theo dõi, cursor quét và receipt qua restart. B01 gọi `InvoiceRepository.create(envelope)` trước khi trả 201; B02 cung cấp GET và commit receipt trước khi báo paid. L06 bàn giao verifier/block qua `CAMPUS_PAYMENT_REGISTRY_ADDRESS` và `CAMPUS_PAYMENT_DEPLOYMENT_BLOCK`. Cấu hình được kiểm tra riêng với verifier trong envelope; không tin địa chỉ fixture/QR như cấu hình triển khai.
+
+`ethers@6.15.0` được thêm vào dependency runtime backend để decode ABI; mở rộng quyết định D007 vốn chỉ dùng ethers cho vector dev. `@intracampus/network` export type envelope, receipt và lookup union dùng chung. API bổ sung `Retry-After` trên 503 và `INTERNAL_ERROR` 500 khi kho dữ liệu lỗi; không thay ABI, EIP-712 hoặc các response vòng đời P02. B04/U04 dùng type mới, giữ hash cũ và khử thông báo theo event key.
+
+Backend thực hiện một lookup mỗi GET với backoff khi RPC lỗi, không tạo background indexer/WebSocket. POS/B04/U04 sở hữu lịch poll. [Tài liệu B02](b02-receipts.md) ghi giới hạn một host/volume bền vững và bằng chứng fixture; chưa tuyên bố kiểm tra L1 thật.
+## D010 · L04: registry merchant và thanh toán native CAMPUS · 2026-11-11
 
 [`CampusPaymentRegistry`](../contracts/src/CampusPaymentRegistry.sol) giữ nguyên kiểu Invoice, domain, ABI thanh toán, lỗi và event P02. Constructor nhận admin, POS signer và contract SBT đã triển khai; cả ba cố định trong MVP. Admin dùng `setMerchantCategory(merchant, category, allowed)` để quản lý từng cặp merchant/category, phát `MerchantCategoryUpdated`. Getter `allowedMerchantCategories` là điểm đọc chung cho cấu hình và L05. Registry ban đầu không cho phép cặp nào; tắt một cặp chặn cả invoice đã ký chưa trả. Thay signer/admin/SBT cần deploy mới và cập nhật các bên gọi qua L06.
 
@@ -68,7 +75,7 @@ L04 có thể dùng lại [`StudentSBTFixture`](../contracts/test/fixtures/Stude
 
 ABI InvoicePaid và getter posSigner giữ nguyên cho B01/B02/B04/U03/U04; các hàm quản trị và lỗi cấu hình được ghi trong [bàn giao L04](l04-payment.md). Log Foundry và hai receipt đi cùng tài liệu là bằng chứng EVM local, không xác nhận đã deploy lên Avalanche L1. L06 sở hữu deployment/address/ABI cuối; B03 sở hữu seed ví/thẻ demo.
 
-## D010 · B03: seed có kiểm tra và chạy lại được · 2026-11-11
+## D011 · B03: seed có kiểm tra và chạy lại được · 2026-11-11
 
 `backend/scripts/seed-demo.ts` mặc định chỉ đọc kế hoạch; `--apply` mới gửi trên
 chain 20261. Cấu hình công khai chứa ví demo, mức CAMPUS mục tiêu bằng chuỗi wei

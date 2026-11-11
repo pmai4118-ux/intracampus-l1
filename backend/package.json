@@ -9,12 +9,13 @@
     "rpc:check": "node --env-file-if-exists=.env src/rpc-check.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
-    "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.ts"
+    "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
+    "test:b02:evidence": "node test/receipt-evidence.ts"
   },
   "dependencies": {
     "@intracampus/network": "workspace:*",
-    "express": "5.3.0",
-    "ethers": "6.15.0"
+    "ethers": "6.15.0",
+    "express": "5.3.0"
   },
   "devDependencies": {
     "@types/express": "5.0.6",
