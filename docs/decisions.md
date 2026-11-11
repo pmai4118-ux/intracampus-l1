@@ -1,5 +1,9 @@
 # Nhật ký quyết định
 
+## B01 · Phát hành invoice dùng chung kho B02 · 2026-11-11
+
+B01 phát triển trên PR B02 #9, dùng cùng SQLite và `InvoiceRepository.create(envelope)` trước response 201; không thêm kho độc lập. `POST /api/invoices` dùng menu server, ID băm từ mã có UUID, timestamp block cho TTL 300 giây, kiểm tra chain và `posSigner()` tại block đó trước khi ký. Giữ EIP-712/ABI/schema P02; thêm cấu hình server-only `POS_SIGNER_PRIVATE_KEY` và ví nhận công khai `PARKING_MERCHANT_ADDRESS`. U03/B04 dùng lại payload/GET hiện có. Đổi khóa signer L04 immutable cần L06 deploy registry mới và cập nhật cấu hình tin cậy đồng bộ. Chi tiết và bằng chứng ở [B01](b01-invoices.md).
+
 Thêm một mục khi đổi giao kèo dùng chung, cấu hình chain, dependency quan trọng hoặc quy trình làm việc. Mỗi mục ghi mã task nếu có, quyết định, lý do và module bị ảnh hưởng. Khi thay thế quyết định cũ, ghi rõ mục nào được thay thế.
 
 ## D001 · Quy trình làm việc với bảng sprint và AI · 2026-11-07
