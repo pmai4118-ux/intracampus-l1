@@ -14,7 +14,7 @@ test("application mounts grants and preserves unavailable deployment as a 503 re
 test("application exposes configured grant reader without adding grant or spend mutations", async (t) => {
   const { rpc, provider } = await rpcFixture(t);
   rpc.balance = 4000000000000000000000n;
-  const api = await serve(t, createApp(undefined, undefined, new GrantsService({ provider, deployment: rpc.deployment, allowLocal: true })));
+  const api = await serve(t, createApp(undefined, undefined, undefined, new GrantsService({ provider, deployment: rpc.deployment, allowLocal: true })));
   const response = await fetch(`${api}/api/grants/${beneficiary}`);
   assert.equal(response.status, 200); assert.equal((await response.json()).balanceWei, "4000000000000000000000");
   assert.equal((await fetch(`${api}/api/grants/${beneficiary}`, { method: "POST" })).status, 404);

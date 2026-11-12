@@ -1,0 +1,85 @@
+{
+  "environment": "Anvil EVM local; not Avalanche L1",
+  "chainId": 20261,
+  "contractAddress": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+  "sourceVerifiedByL04Loader": true,
+  "paidInvoice": {
+    "schemaVersion": 1,
+    "domain": {
+      "name": "IntraCampusPayment",
+      "version": "1",
+      "chainId": 20261,
+      "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+    },
+    "invoice": {
+      "invoiceId": "0x71df9526fb7556a6f36b50e6ca6bf797fb2149987129360d9fa1c18c02969499",
+      "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+      "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+      "amount": "3000000000000000000000",
+      "expiresAt": 1794408708
+    },
+    "meta": {
+      "invoiceCode": "INV-20261111-PARKING-c6eb9296-c5de-449f-99c7-011854095afd",
+      "merchantId": "parking-demo",
+      "merchantName": "Bãi xe demo",
+      "serviceId": "parking-single",
+      "serviceName": "Một lượt gửi xe demo",
+      "categoryCode": "PARKING",
+      "issuedAt": 1794408408
+    },
+    "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "signature": "0x74b917f05e3b6e3fdaba76fc89f8a768a7fb3778cbe2d194f5f65029173514e8391a7d4e0f0f7a46263a9e3cb1b8b8967dd0f48e57f94d539a6e369af8336d531b"
+  },
+  "txHash": "0xe5da1ce71e0d23c28352c8d101d42d1c8b45369561be8491d4ce6c308ccbdb7a",
+  "verifiedReceipt": {
+    "invoiceId": "0x71df9526fb7556a6f36b50e6ca6bf797fb2149987129360d9fa1c18c02969499",
+    "invoiceCode": "INV-20261111-PARKING-c6eb9296-c5de-449f-99c7-011854095afd",
+    "chainId": 20261,
+    "contractAddress": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+    "txHash": "0xe5da1ce71e0d23c28352c8d101d42d1c8b45369561be8491d4ce6c308ccbdb7a",
+    "blockNumber": 4,
+    "logIndex": 0,
+    "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+    "originalAmount": "3000000000000000000000",
+    "discountAmount": "0",
+    "paidAmount": "3000000000000000000000",
+    "tier": 0,
+    "gasUsed": "77112",
+    "effectiveGasPrice": "1679152202",
+    "verifiedAt": 1794408409
+  },
+  "expiredInvoice": {
+    "schemaVersion": 1,
+    "domain": {
+      "name": "IntraCampusPayment",
+      "version": "1",
+      "chainId": 20261,
+      "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+    },
+    "invoice": {
+      "invoiceId": "0xd86d60db3eb388a80e41691d243df4e325768ebc34afd7d1fc9f0adf3bcbabff",
+      "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+      "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+      "amount": "3000000000000000000000",
+      "expiresAt": 1794408709
+    },
+    "meta": {
+      "invoiceCode": "INV-20261111-PARKING-ddc60c1c-e257-46ff-8e3e-bbdc4d668746",
+      "merchantId": "parking-demo",
+      "merchantName": "Bãi xe demo",
+      "serviceId": "parking-single",
+      "serviceName": "Một lượt gửi xe demo",
+      "categoryCode": "PARKING",
+      "issuedAt": 1794408409
+    },
+    "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "signature": "0x0c9098a8b313e5e77b231031d63c5d1a9d3017f7f35e734286cab6121afa62d5353a36ac442d13d608bb2a29f5d0709b1d827868f932495871b3af28c60b4a571c"
+  },
+  "rejectionTimestamp": 1794408710,
+  "quoteAndPayErrors": [
+    "InvoiceExpired",
+    "InvoiceExpired"
+  ]
+}

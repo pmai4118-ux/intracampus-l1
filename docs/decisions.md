@@ -1,10 +1,18 @@
 # Nhật ký quyết định
 
-## D014 · B05: học bổng FOOD và API chỉ đọc · 2026-11-12
+## D015 · B05: học bổng FOOD và API chỉ đọc · 2026-11-12
 
 B05 dùng lại tài khoản sinh viên B03, ABI vault L05 và loader manifest L06. Một khoản FOOD 5.000 CAMPUS cho mỗi deployment/student, không nạp bù theo số dư còn lại. Intent hash/nonce lưu SQLite bền vững trước broadcast; receipt chưa rõ chặn lần gửi mới. Lịch sử cấp dùng receipt đã xác minh, và khi index log rỗng kiểm tra thêm receipt các block để tránh cấp trùng sau khi đã chi hết. Không đổi ABI hoặc P02.
 
 `GET /api/grants/:beneficiary[?txHash=...]` trả số dư nguyên wei, block canonical và allowlist hiện tại; thiếu dữ liệu trả unverified/null. Chỉ xác nhận cấp/chi với receipt/event đúng vault. U05 giữ trách nhiệm ví sinh viên ký `spend`; quyền lúc chi được chứng minh bởi vault thực thi, không suy ngược từ allowlist cuối block. [Runbook B05](b05-grants.md) ghi giao kèo, giới hạn journal một máy và nghiệm thu L1 còn thiếu. Nhánh B05 xếp trên L06 vì main hiện chưa chứa phụ thuộc; không tự merge hoặc triển khai L1.
+## B01 · Phát hành invoice dùng chung kho B02 · 2026-11-11
+
+B01 phát triển trên PR B02 #9, dùng cùng SQLite và `InvoiceRepository.create(envelope)` trước response 201; không thêm kho độc lập. `POST /api/invoices` dùng menu server, ID băm từ mã có UUID, timestamp block cho TTL 300 giây, kiểm tra chain và `posSigner()` tại block đó trước khi ký. Giữ EIP-712/ABI/schema P02; thêm cấu hình server-only `POS_SIGNER_PRIVATE_KEY` và ví nhận công khai `PARKING_MERCHANT_ADDRESS`. U03/B04 dùng lại payload/GET hiện có. Đổi khóa signer L04 immutable cần L06 deploy registry mới và cập nhật cấu hình tin cậy đồng bộ. Chi tiết và bằng chứng ở [B01](b01-invoices.md).
+## U02 · Kết nối ví và dữ liệu đọc tin cậy · 2026-11-11
+
+Student View tách phiên EIP-1193 khỏi bản minh họa U01. Dùng provider được inject bởi ví, không thêm bộ Web3/WalletConnect vào runtime. Cấu hình công khai `NEXT_PUBLIC_INTRACAMPUS_RPC_URL` và `NEXT_PUBLIC_STUDENT_SBT_ADDRESS` lấy từ L02/L06; thiếu thì trạng thái chưa xác minh. L06 đang ở PR riêng nên U02 chưa phụ thuộc loader chưa merge. Khi tích hợp manifest phải kiểm tra cùng deployment, không tự nhận địa chỉ fixture.
+
+Số dư, `tierOf` và `credentials` đọc cùng block chain 20261; thẻ hết hạn vẫn có thể thuộc ví. Controller chia sẻ trạng thái qua context cho U04/U06, chặn readiness khi sai mạng/lỗi/đang tải và loại phản hồi cũ khi đổi tài khoản. U04 vẫn phải chạy preflight P02 mới trước giao dịch. Không đổi ABI, event hoặc API thanh toán. Xem [bàn giao U02](u02-wallet.md).
 
 Thêm một mục khi đổi giao kèo dùng chung, cấu hình chain, dependency quan trọng hoặc quy trình làm việc. Mỗi mục ghi mã task nếu có, quyết định, lý do và module bị ảnh hưởng. Khi thay thế quyết định cũ, ghi rõ mục nào được thay thế.
 
@@ -123,3 +131,12 @@ Sau khi B02 vào `main` tại `12a45f1`, receipt config lấy verifier/block t�
 manifest khi đã cấu hình, ABI decoder cũng lấy ABI chung; các biến môi trường
 B02 nếu còn đặt phải khớp hoàn toàn hoặc backend từ chối khởi động. Khi chưa
 deploy vẫn hỗ trợ codec P02/biến cấu hình B02 cho fixture và phát triển.
+## D014 · Giữ IntraCampus L1 và tách quyền ký theo người khởi tạo · 2026-11-12
+
+Giữ chain ID `20261` và đồng gốc `CAMPUS` (18 decimals) cho MVP. RPC cấu hình phải là RPC của IntraCampus L1 do nhóm vận hành, được kiểm tra bằng `pnpm rpc:check`; RPC Fuji C-Chain `43113` và AVAX faucet không thay thế được mạng hay CAMPUS của dự án.
+
+Giao dịch on-chain do người dùng khởi tạo phải được chính ví Core của người dùng ký: sinh viên trả hóa đơn bằng ví sinh viên, beneficiary ký chi ngân sách của mình. Backend không ký hoặc gửi thay các hành động đó. Backend chỉ dùng signer server-side cho giao dịch on-chain do chính dịch vụ khởi tạo (ví dụ seed hoặc thao tác quản trị được giao). Riêng `POS_SIGNER_PRIVATE_KEY` của B01 ký hóa đơn EIP-712 ngoài chain; nó không phải ví trả CAMPUS thay sinh viên. Khóa server không được vào frontend, QR, log hoặc bảng sprint.
+
+Đăng nhập Builder Hub chỉ cần khi nhóm tạo L1 hoặc lấy Data API key. Chạy ứng dụng, gọi backend và dùng RPC L1 hiện có không yêu cầu Builder Hub. CAMPUS thử nghiệm phải được cấp trên L1 của nhóm; faucet Fuji chỉ cấp AVAX cho Fuji.
+
+Student U03 chỉ gọi verifier và đối chiếu POS signer từ cấu hình công khai đồng bộ với manifest L06; không dùng `verifyingContract` trong QR làm địa chỉ tin cậy. Thiếu hoặc lệch địa chỉ thì dừng preflight. Các biến verifier/signer chỉ là địa chỉ công khai, không chứa khóa ký.

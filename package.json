@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @intracampus/backend --filter @intracampus/frontend dev",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @intracampus/backend test && pnpm test:p02 && pnpm test:l04 && pnpm test:l06",
+    "test": "pnpm --filter @intracampus/backend test && pnpm --filter @intracampus/frontend test && pnpm test:p02 && pnpm test:l04 && pnpm test:l06",
     "test:rpc": "node --test infra/test/rpc.test.mjs",
     "build": "pnpm --filter @intracampus/frontend build",
     "rpc:check": "pnpm --filter @intracampus/backend rpc:check",

@@ -157,7 +157,7 @@ async function main(): Promise<void> {
       return result.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
     }
     const service = new GrantsService({ rpcUrl, deployment: manifest, allowLocal: true, provider });
-    server = createApp(rpcUrl, undefined, service).listen(0, "127.0.0.1");
+    server = createApp(rpcUrl, undefined, undefined, service).listen(0, "127.0.0.1");
     await once(server, "listening");
     const httpAddress = server.address();
     assert(httpAddress && typeof httpAddress !== "string");

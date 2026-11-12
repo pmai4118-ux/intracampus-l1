@@ -1,5 +1,7 @@
 # Kiến trúc backend
 
+Tạo invoice và QR đã ký: xem [hướng dẫn B01](../docs/b01-invoices.md) cho cấu hình, POST mẫu và điểm nối kho receipt B02.
+
 IntraCampus dùng **modular monolith** cho MVP. Mỗi nhóm nghiệp vụ có module riêng dưới `src/modules/`, và tất cả chạy trong một ứng dụng Express. Nhóm có thể phát triển theo task và vẫn chạy cả API bằng một lệnh.
 
 ```mermaid

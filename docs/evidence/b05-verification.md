@@ -29,3 +29,9 @@ Một test bị skip là integration SBT B03 tùy chọn chưa bật biến môi
 [Evidence JSON](../fixtures/b05-local-evidence.json) có hash nguồn chuẩn hóa LF, manifest và receipt/HTTP response công khai. Không chứa private key, raw signed transaction hoặc RPC operator. Các địa chỉ chỉ tồn tại trên node Anvil tạm đã dừng. Chưa có hash hay receipt Avalanche L1 của nhóm.
 
 [Runbook và giao kèo U05](../b05-grants.md) là nguồn hướng dẫn dry-run/apply, cấu hình và xử lý intent chưa rõ. Seed cần journal chung trên một máy issuer; kiểm tra lịch sử vắng có chi phí đọc block/receipt nên dùng cho chuỗi demo ngắn. Đồng đội vẫn cần review/kiểm chứng L1 sau khi L05/L06 được tích hợp vào main.
+
+## Sau giải quyết conflict với main
+
+Đã tích hợp `main` tại `3b1d136` vào riêng nhánh B05. Giữ `InvoiceCreationService` ở tham số thứ ba của `createApp`, thêm `GrantsService` ở tham số thứ tư và dùng chung invoice repository/RPC cho B01/B02. Giữ test frontend U02/U03 và test L06 trong lệnh `pnpm test`. Nhật ký B01/U02 và D014 của main được giữ; quyết định B05 đổi thành D015 để tránh trùng mã.
+
+Test tạo invoice B01 được chạy trước nối lại service và thất bại 503 thay vì 201; sau sửa, cả invoice B01 và grants B05 đạt. Kiểm tra toàn repo sau tích hợp: `pnpm typecheck`, `pnpm test` **322 pass, 0 fail, 1 skip B03**, `pnpm build` đạt. Harness Anvil B05 chạy lại đạt 5.000 → 4.000, không cấp trùng và ba giao dịch sai bị revert; output kiểm chứng bổ sung nằm local `backend/data/b05-conflict-evidence.json` (bị Git bỏ qua). Phần code contract/seed/reader không đổi so với evidence JSON công khai trước đó. Không triển khai hoặc thực hiện giao dịch trên L1.
