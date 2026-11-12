@@ -28,6 +28,8 @@ Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật
 
 Để tạo hóa đơn, backend cần cấu hình signer POS server-side theo `backend/.env.example`; khóa đó chỉ ký payload hóa đơn ngoài chain. Bản xem trước Student cần RPC, verifier và POS signer công khai đồng bộ với manifest L06; không lấy verifier tin cậy từ QR. Thanh toán do sinh viên khởi tạo phải được ví Core của sinh viên ký. `frontend/.env.local.example` chứa RPC/SBT/verifier/signer công khai và `BACKEND_URL` server-side cho Next.js proxy `/api/invoices`. Builder Hub chỉ cần khi tạo L1 hoặc lấy Data API key, không cần cho việc chạy ứng dụng với L1 đã có.
 
+Hướng dẫn chi tiết cài môi trường, điền `.env`, kiểm tra RPC và chạy luồng U03 trên Windows nằm ở [docs/run-local.md](docs/run-local.md).
+
 ## Kiểm tra trước khi mở PR
 
 ```sh
