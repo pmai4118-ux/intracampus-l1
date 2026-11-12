@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { browserWalletConfig, campusNetwork, formatWalletBalance } from "../../lib/chains";
 import { WalletController, type WalletProvider, type WalletSnapshot } from "../../lib/wallet";
+import { InvoicePreview } from "./InvoicePreview";
 
 const WalletContext = createContext<{ state: WalletSnapshot; controller: WalletController } | null>(null);
 /** U04/U06 consume this context; readiness does not replace fresh payment preflight. */
@@ -100,8 +101,8 @@ export function StudentWallet() {
     </section>
     <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title">
       <h2 id="payment-gate-title">Thanh toán bằng QR</h2>
-      <p>{state.canProceed ? "Ví và dữ liệu thẻ đã được kiểm tra. Hiện chưa có hóa đơn để thanh toán." : "Cần kết nối đúng mạng và xác minh dữ liệu trước khi tiếp tục."}</p>
-      <button type="button" className="primary-cta-btn" disabled>Chưa mở thanh toán</button>
+      <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
+      <InvoicePreview wallet={state} />
     </section>
     <p className="wallet-live-note">Dữ liệu ví thật được đọc từ mạng đã cấu hình. Phần này không ký hoặc gửi giao dịch.</p>
   </div>;

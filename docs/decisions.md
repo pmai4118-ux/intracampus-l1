@@ -94,3 +94,13 @@ funder/issuer nằm trong môi trường backend, không xuất ra log/JSON. Man
 L06 có thể cung cấp ABI/address/runtime hash tin cậy; B03 cũng chạy độc lập
 với địa chỉ SBT L03. Xem [runbook seed](demo-accounts.md). Test Anvil là bằng
 chứng local; số dư/receipt L1 thực tế còn cần máy giữ node.
+
+## D014 · Giữ IntraCampus L1 và tách quyền ký theo người khởi tạo · 2026-11-12
+
+Giữ chain ID `20261` và đồng gốc `CAMPUS` (18 decimals) cho MVP. RPC cấu hình phải là RPC của IntraCampus L1 do nhóm vận hành, được kiểm tra bằng `pnpm rpc:check`; RPC Fuji C-Chain `43113` và AVAX faucet không thay thế được mạng hay CAMPUS của dự án.
+
+Giao dịch on-chain do người dùng khởi tạo phải được chính ví Core của người dùng ký: sinh viên trả hóa đơn bằng ví sinh viên, beneficiary ký chi ngân sách của mình. Backend không ký hoặc gửi thay các hành động đó. Backend chỉ dùng signer server-side cho giao dịch on-chain do chính dịch vụ khởi tạo (ví dụ seed hoặc thao tác quản trị được giao). Riêng `POS_SIGNER_PRIVATE_KEY` của B01 ký hóa đơn EIP-712 ngoài chain; nó không phải ví trả CAMPUS thay sinh viên. Khóa server không được vào frontend, QR, log hoặc bảng sprint.
+
+Đăng nhập Builder Hub chỉ cần khi nhóm tạo L1 hoặc lấy Data API key. Chạy ứng dụng, gọi backend và dùng RPC L1 hiện có không yêu cầu Builder Hub. CAMPUS thử nghiệm phải được cấp trên L1 của nhóm; faucet Fuji chỉ cấp AVAX cho Fuji.
+
+Student U03 chỉ gọi verifier và đối chiếu POS signer từ cấu hình công khai đồng bộ với manifest L06; không dùng `verifyingContract` trong QR làm địa chỉ tin cậy. Thiếu hoặc lệch địa chỉ thì dừng preflight. Các biến verifier/signer chỉ là địa chỉ công khai, không chứa khóa ký.

@@ -3,6 +3,7 @@
 import { campusNetwork } from "@intracampus/network";
 import { useState } from "react";
 import { CopyButton, DemoControls } from "../demo-controls";
+import { InvoiceForm } from "./InvoiceForm";
 import {
   calculateInvoiceQuote,
   type DemoErrorKind,
@@ -32,7 +33,7 @@ function InvoiceQrPlaceholder() {
   );
 }
 
-export default function PointOfSalePage() {
+function PointOfSaleDemo() {
   const [uiState, setUiState] = useState<DemoUiState>("waiting");
   const [walletKind, setWalletKind] = useState<DemoWalletKind>("sbt");
   const [errorKind, setErrorKind] = useState<DemoErrorKind>("expired");
@@ -476,4 +477,15 @@ export default function PointOfSalePage() {
       </div>
     </div>
   );
+}
+
+export default function PointOfSalePage() {
+  const [mode, setMode] = useState<"live" | "demo">("live");
+  return <>
+    <div className="student-mode-switch" role="group" aria-label="Chế độ POS">
+      <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>POS thật</button>
+      <button type="button" className="secondary-btn" aria-pressed={mode === "demo"} onClick={() => setMode("demo")}>Xem bản minh họa</button>
+    </div>
+    {mode === "live" ? <InvoiceForm /> : <PointOfSaleDemo />}
+  </>;
 }
