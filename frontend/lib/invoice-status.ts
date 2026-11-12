@@ -147,6 +147,10 @@ export class InvoiceStatusController {
       check((response.status === 503) === (lookup.status === "rpc-error"));
       check(response.status !== 422 || (lookup.status !== "paid" && "error" in lookup && lookup.error
         && ["TX_REVERTED", "RECEIPT_EVENT_MISMATCH"].includes(lookup.error.code)));
+      if (this.state.lookup?.status === "paid" && lookup.status !== "paid") {
+        this.update({ message: "Giữ biên nhận đã xác minh. Phản hồi API mới chưa khớp trạng thái đã lưu; cần người vận hành đối chiếu." });
+        return;
+      }
       let announcement = this.state.announcement;
       if (lookup.status === "paid") {
         const event = receiptEventKey(lookup.receipt), key = `intracampus.pos.paid.${id}`;
@@ -174,7 +178,9 @@ export class InvoiceStatusController {
     } catch (error) {
       if (this.disposed || generation !== this.generation || request.signal.aborted) return;
       this.failures++;
-      this.update({ message: error instanceof Error ? error.message : "Chưa đọc được trạng thái hóa đơn." });
+      this.update({ message: error instanceof TypeError || error instanceof SyntaxError
+        ? "Chưa đọc được phản hồi hợp lệ từ API. Giữ invoiceId và hash cũ để thử tra cứu lại."
+        : error instanceof Error ? error.message : "Chưa đọc được trạng thái hóa đơn." });
       if (this.state.lookup?.status !== "paid") nextDelay = Math.min(30000, 2000 * 2 ** Math.min(this.failures - 1, 4));
     } finally {
       if (!this.disposed && generation === this.generation) {

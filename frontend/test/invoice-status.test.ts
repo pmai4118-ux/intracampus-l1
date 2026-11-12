@@ -141,3 +141,15 @@ test("default browser fetch keeps its global receiver", async () => {
   try { await controller.watch(envelope.invoice.invoiceId); assert.equal(controller.getSnapshot().lookup?.status, "pending"); }
   finally { controller.dispose(); globalThis.fetch = original; }
 });
+test("a previously verified receipt cannot be downgraded by a stale pending response", async () => {
+  let calls = 0;
+  const h = harness(async () => response(calls++ === 0 ? paid() : pending()));
+  await h.controller.watch(envelope.invoice.invoiceId); await h.controller.refresh();
+  assert.equal(h.controller.getSnapshot().lookup?.status, "paid"); assert.equal(h.tasks.length, 0);
+  h.controller.dispose();
+});
+test("native fetch/JSON errors do not leak raw exception details into the UI", async () => {
+  const h = harness(async () => { throw new TypeError("private transport details"); });
+  await h.controller.watch(envelope.invoice.invoiceId);
+  assert.doesNotMatch(h.controller.getSnapshot().message ?? "", /private transport details/); h.controller.dispose();
+});
