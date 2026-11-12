@@ -1518,6 +1518,26 @@ p {
   margin: 0;
 }
 
+.invoice-recovery {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1.25rem;
+}
+
+.invoice-recovery input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font: 0.85rem/1.5 ui-monospace, Consolas, monospace;
+}
+
+.invoice-recovery button { justify-self: start; }
+.invoice-form-panel + .surface-panel { margin-top: 1.25rem; }
+
 @media (max-width: 44rem) {
   .invoice-form-result {
     grid-template-columns: minmax(0, 1fr);
