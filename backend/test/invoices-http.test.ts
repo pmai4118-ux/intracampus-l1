@@ -114,12 +114,13 @@ for (const failure of ["wrong-id", "rpc-error", "missing-result", "bad-json", "h
 }
 
 test("deployment configuration accepts only a complete trusted address/block pair", () => {
-  assert.equal(readInvoiceDeployment({}), undefined);
-  assert.deepEqual(readInvoiceDeployment({ CAMPUS_PAYMENT_REGISTRY_ADDRESS: deployment.contractAddress, CAMPUS_PAYMENT_DEPLOYMENT_BLOCK: "0" }), { ...deployment, deploymentBlock: 0 });
+  const unconfigured = { schemaVersion: 1, abiVersion: 1, chainId: 20261, status: "unconfigured" };
+  assert.equal(readInvoiceDeployment({}, unconfigured), undefined);
+  assert.deepEqual(readInvoiceDeployment({ CAMPUS_PAYMENT_REGISTRY_ADDRESS: deployment.contractAddress, CAMPUS_PAYMENT_DEPLOYMENT_BLOCK: "0" }, unconfigured), { ...deployment, deploymentBlock: 0 });
   for (const config of [
     { CAMPUS_PAYMENT_REGISTRY_ADDRESS: deployment.contractAddress },
     { CAMPUS_PAYMENT_DEPLOYMENT_BLOCK: "1" },
     { CAMPUS_PAYMENT_REGISTRY_ADDRESS: deployment.contractAddress, CAMPUS_PAYMENT_DEPLOYMENT_BLOCK: "1e3" },
     { CAMPUS_PAYMENT_REGISTRY_ADDRESS: deployment.contractAddress, CAMPUS_PAYMENT_DEPLOYMENT_BLOCK: "9007199254740992" },
-  ]) assert.throws(() => readInvoiceDeployment(config));
+  ]) assert.throws(() => readInvoiceDeployment(config, unconfigured));
 });

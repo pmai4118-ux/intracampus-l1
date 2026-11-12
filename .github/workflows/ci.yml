@@ -54,9 +54,20 @@ jobs:
             https://api.github.com/repos/foundry-rs/foundry/releases/assets/415095756
           printf '%s  %s\n' 'cf7e688ed0c4c48adffca788b496076e31060b67ac5afe1e43dbb5499c20c88b' "$archive" \
             | sha256sum --check --strict
-          tar -xzf "$archive" -C "$install_dir" forge
+          tar -xzf "$archive" -C "$install_dir" forge anvil
           "$install_dir/forge" --version
           printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
       - run: forge fmt --check
       - run: forge build
       - run: forge test
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6.1.1
+      - name: Install deployment smoke dependencies
+        working-directory: .
+        run: pnpm --filter . --filter @intracampus/backend... install --frozen-lockfile
+      - name: Deploy, export, seed twice and spend a grant on local Anvil
+        working-directory: .
+        run: pnpm smoke:l06

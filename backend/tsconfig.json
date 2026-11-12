@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ES2024",
     "module": "NodeNext",
+    "resolveJsonModule": true,
     "strict": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,

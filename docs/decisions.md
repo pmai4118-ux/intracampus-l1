@@ -1,5 +1,9 @@
 # Nhật ký quyết định
 
+## D015 · B04: ghép cấu hình canonical và POS receipt · 2026-11-12
+
+B04 ghép source L05/L06 với main U02/U03/B01/B02, giữ toàn bộ test scripts. Khi manifest đã deploy, B01 lấy merchant/signer/SBT từ L06, kiểm tra getter/allowlist cùng block trước phát hành; U02/U03 dùng cùng địa chỉ public và chặn override lệch. Giữ cấu hình thủ công khi manifest unconfigured cho local/fixture; không coi đó là nghiệm thu L1. Không đổi P02, ABI hoặc quyền ký giao dịch của U04. Xem [bàn giao B04](b04-integration.md).
+
 ## B01 · Phát hành invoice dùng chung kho B02 · 2026-11-11
 
 B01 phát triển trên PR B02 #9, dùng cùng SQLite và `InvoiceRepository.create(envelope)` trước response 201; không thêm kho độc lập. `POST /api/invoices` dùng menu server, ID băm từ mã có UUID, timestamp block cho TTL 300 giây, kiểm tra chain và `posSigner()` tại block đó trước khi ký. Giữ EIP-712/ABI/schema P02; thêm cấu hình server-only `POS_SIGNER_PRIVATE_KEY` và ví nhận công khai `PARKING_MERCHANT_ADDRESS`. U03/B04 dùng lại payload/GET hiện có. Đổi khóa signer L04 immutable cần L06 deploy registry mới và cập nhật cấu hình tin cậy đồng bộ. Chi tiết và bằng chứng ở [B01](b01-invoices.md).
@@ -104,3 +108,35 @@ Giao dịch on-chain do người dùng khởi tạo phải được chính ví C
 Đăng nhập Builder Hub chỉ cần khi nhóm tạo L1 hoặc lấy Data API key. Chạy ứng dụng, gọi backend và dùng RPC L1 hiện có không yêu cầu Builder Hub. CAMPUS thử nghiệm phải được cấp trên L1 của nhóm; faucet Fuji chỉ cấp AVAX cho Fuji.
 
 Student U03 chỉ gọi verifier và đối chiếu POS signer từ cấu hình công khai đồng bộ với manifest L06; không dùng `verifyingContract` trong QR làm địa chỉ tin cậy. Thiếu hoặc lệch địa chỉ thì dừng preflight. Các biến verifier/signer chỉ là địa chỉ công khai, không chứa khóa ký.
+
+## D012 · L05: học bổng native theo danh mục merchant · 2026-11-11
+
+`PurposeBoundGrantVault(issuer, registry)` giữ CAMPUS bảo chứng cho ngân sách
+`balances(beneficiary, category)`. Issuer cấp bằng `grant` payable; chỉ chính
+beneficiary gọi `spend`. Vault đọc allowlist trực tiếp từ L04 để merchant bị
+gỡ được chặn ngay, không có danh sách lệch giữa hai contract. Ngân sách FOOD
+không thể chuyển sang PARKING. CEI và guard chung chặn reentrancy; chuyển tiền
+thất bại hoàn tác toàn bộ số dư. `GrantIssued`/`GrantSpent` ghi số tiền và số
+dư còn lại cho backend B05; xem [ABI và giới hạn quyền](l05-grants.md).
+Không tự ràng buộc grant với ngày hết hạn SBT; issuer chọn ví được cấp.
+
+## D013 · L06: manifest triển khai chung và kiểm chứng receipt · 2026-11-11
+
+`Deploy.s.sol` kiểm tra chain 20261 trước broadcast, dùng keystore bên ngoài,
+triển khai SBT → registry → vault và đăng ký PARKING/FOOD. Exporter kiểm tra
+nguồn compiler, creation bytecode/constructor, runtime code, receipt/block
+canonical và role/allowlist tại block `verifiedAt` trước khi xuất JSON.
+`deployments/intracampus.json` giữ ABI đầy đủ có phiên bản, địa chỉ và hash;
+không chứa RPC/khóa. Backend và frontend dùng cùng loader `@intracampus/network`
+cho `/api/deployment`, chặn cấu hình thiếu hoặc ABI sai. Sau đổi deployment
+phải build/khởi động lại hai client. Xem [runbook L06](deployment.md).
+
+Manifest trong Git còn `unconfigured` vì chưa có receipt Avalanche L1 thật.
+Evidence Anvil riêng có nhãn `local-anvil`, không kích hoạt endpoint production.
+CI chạy luồng deploy/export, B03 seed hai lần và L05 grant với registry thật.
+Không sửa giao kèo Invoice/InvoicePaid P02 hoặc genesis L01.
+
+Sau khi B02 vào `main` tại `12a45f1`, receipt config lấy verifier/block từ cùng
+manifest khi đã cấu hình, ABI decoder cũng lấy ABI chung; các biến môi trường
+B02 nếu còn đặt phải khớp hoàn toàn hoặc backend từ chối khởi động. Khi chưa
+deploy vẫn hỗ trợ codec P02/biến cấu hình B02 cho fixture và phát triển.
