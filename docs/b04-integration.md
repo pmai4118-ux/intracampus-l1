@@ -17,7 +17,10 @@ Manifest canonical `deployments/intracampus.json` hiện là `unconfigured`; ch�
 
 ## Trạng thái bằng chứng
 
-Đang triển khai. Chỉ cập nhật kết quả sau khi chạy kiểm tra; fixture/Anvil không phải bằng chứng Avalanche L1.
+- HTTP/SQLite: `node --test backend/test/b04-integration.test.ts` đạt: POST ký thật → GET pending → RPC 503 → reverted/mismatch 422 → paid → mở lại cùng DB → GET paid khi RPC tắt. B02 chỉ phát một `invoice_paid`.
+- Trình duyệt Chrome ở `http://127.0.0.1:3104/pos` qua Next rewrite tới backend fixture loopback: tạo QR, reload khôi phục cùng invoice, RPC offline không báo thành công, phục hồi nhận paid, restart backend + RPC offline + reload vẫn paid. Thông báo live không lặp sau reload. [Response lưu sau restart](fixtures/b04-http-evidence.json) là JSON-RPC tổng hợp, không phải giao dịch EVM/L1.
+- [Bằng chứng Anvil thực](fixtures/b04-local-evidence.json): source được loader L04 xác minh, chain 20261; tier 0 trả 3.000 CAMPUS, tier 1 trả 2.700; cả hai giữ hash khi RPC lỗi và đọc lại receipt sau mở SQLite. Hash trong file chỉ có ý nghĩa trên Anvil tạm đã dừng, không phải L1.
+- Full gates/review cuối: cập nhật sau khi hoàn tất. Các kết quả trên không xác nhận HTTPS hai thiết bị, ví Core hoặc L1 thật.
 
 ## Cấu hình canonical
 
@@ -32,3 +35,28 @@ U02/U03 lấy SBT, verifier và signer từ cùng manifest; `NEXT_PUBLIC_*` đ�
 POS chỉ gửi POST khi người vận hành bấm tạo. Nó poll GET tuần tự khoảng 2 giây, dùng Retry-After khi 503, backoff 2/4/8/16/30 giây khi mất kết nối. `pending`, `expired`, `rpc-error`, `reverted`, `event-mismatch` không tạo thông báo thành công. Dừng poll khi paid; vẫn tra cứu invoice hết hạn để nhận receipt đến muộn. Có form nhập invoiceId/txHash để đối chiếu thủ công.
 
 Trình duyệt giữ invoiceId và hash chưa có kết luận (kể cả request chưa được backend xác nhận); reload GET lại invoice đó. Chỉ receipt hợp lệ có khóa `(chainId, contractAddress, txHash, logIndex)` mới tạo thông báo lần đầu; đọc lại cùng receipt không thông báo lại. Storage bị chặn thì UI nêu rõ cần giữ invoiceId/hash để phục hồi thủ công. U04 vẫn cần lưu hash phía Student và làm mới preflight trước khi mở Core; `InvoiceStatus.tsx` của B04 không chiếm file `Receipt.tsx` đề xuất cho U04.
+
+## Dựng đường HTTPS và volume
+
+Chạy một backend Node 24 trên host có volume bền vững. Đặt `INVOICES_DB_PATH` thành absolute path trên volume (ví dụ `/var/lib/intracampus/invoices.sqlite`); giữ cả các file WAL đi kèm, không đặt DB trong filesystem tạm của serverless. B01 và B02 đã dùng chung một repository trong `server.ts`. Khi reset mạng/deploy registry khác, giữ DB cũ để đối chiếu và dùng DB mới cho deployment mới.
+
+Next.js proxy `/api/invoices` và `/api/invoices/:path*` đã có. Đặt `BACKEND_URL=https://<backend-host>` khi backend chạy riêng; backend phải listen vào interface mà reverse proxy tiếp cận được (đặt HOST theo môi trường). Nếu Next/backend cùng host, có thể dùng loopback HTTP nội bộ và terminate TLS tại reverse proxy ở web. Cấu hình origin web public `https://<app-host>` cho cả `/pos` và `/student`; browser chỉ gọi `/api/invoices` cùng origin. Không cần mở wildcard CORS cho Express. RPC public riêng phải HTTPS và cho phép origin web theo L02.
+
+Deploy backend và build frontend từ cùng source/manifest. Các biến public được bundle lúc build: đổi manifest/RPC thì rebuild frontend, restart backend. Chạy `pnpm rpc:check` phải trả ready / chainId 20261 trước khi sử dụng L1. Health check riêng không chứng minh deployment/RPC sẵn sàng.
+
+## Checklist nghiệm thu L1 còn lại
+
+- [ ] Operator L06 cung cấp manifest `status: deployed`, `environment: avalanche-l1`, địa chỉ/block/hash/ABI/role/merchant đã xác minh; RPC HTTPS truy cập được. Manifest trong repo hiện unconfigured, RPC kiểm tra hiện unreachable.
+- [ ] Triển khai web/API qua HTTPS và volume; thiết bị A mở POS, thiết bị B mở Student với Core. Xác nhận cả hai dùng cùng origin và chain 20261.
+- [ ] POS tạo invoice mới; Student/U04 xác nhận bằng Core. Lưu nguyên payload công khai, invoiceId, tx hash và receipt/event thật. Đối chiếu giá gốc/giảm/đã trả, merchant, verifier, signer, SBT và block triển khai.
+- [ ] Khi giao dịch đang chờ, ngắt RPC: POS không báo thất bại hay thành công giả; giữ hash, không trả lại. Khôi phục RPC rồi tra hash cũ.
+- [ ] Reload POS và restart backend trên cùng volume; receipt đã commit vẫn paid. Lưu ảnh receipt ở cả hai thiết bị và log lỗi đã bỏ secret. Revert/mismatch/receipt-null không được báo paid.
+- [ ] CI trên source kết hợp đạt và một thành viên khác review. Chỉ reviewer nghiệm thu mới đánh dấu Xong.
+
+## Tái tạo local
+
+Tại gốc repo: `node --test backend/test/b04-integration.test.ts` và `node --test frontend/test/invoice-status.test.ts`.
+
+EVM: `forge build` trong `contracts`, mở Anvil loopback `127.0.0.1:18547` với `--chain-id 20261 --silent`, rồi tại gốc repo chạy `node backend/test/b04-local-evidence.ts <output.json>`. Script chỉ chấp nhận Anvil loopback cố định, dùng tài khoản demo mặc định, không đọc khóa/RPC môi trường. Dừng Anvil sau khi chạy. Output ghi rõ local và không thay manifest canonical.
+
+UI fixture: chạy `node backend/test/b04-browser.ts` (port 4104), mở Next ở port 3104 với `BACKEND_URL=http://127.0.0.1:4104`; các lệnh stdin `offline`, `paid`, `restart` dùng để kiểm tra. Đây là test harness riêng dưới `backend/test`, không được expose lên mạng hay dùng như backend L1; kết thúc bằng `quit` và dừng Next.

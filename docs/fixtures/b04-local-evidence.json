@@ -1,0 +1,189 @@
+{
+  "evidence": "ACTUAL ANVIL EVM LOCAL; NOT AVALANCHE L1",
+  "chainId": 20261,
+  "sourceVerifiedByL04Loader": true,
+  "deployment": {
+    "contractAddress": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "deploymentBlock": 2,
+    "studentSbt": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "posSigner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+  },
+  "cases": [
+    {
+      "tier": 0,
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0xe2fafff9645e478a0cdbb3ac0a85f6db3b1acda324c89d964d69c570c0c963b6",
+          "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794493912
+        },
+        "meta": {
+          "invoiceCode": "INV-20261112-PARKING-ba258f4b-226d-4888-9c75-add3e673472f",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794493612
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0xdc9833205042f6c1424a0da19dc2275aefaa507da5ab04355485a32c460ac2914a8d27da1bdd3d5dd7a84b76f2a2a8e30c5f7f4edf147ba1c04deafc3c0d89411c"
+      },
+      "txHash": "0x3fecc6e01eed38ae76b9c7817a5458cfd807f9896c9ab2b2a3f3aa9b69e1474c",
+      "rawReceipt": {
+        "_type": "TransactionReceipt",
+        "blockHash": "0xf67a100affb733e25321a10c86d400f3658f8f8316dfd7ba36358038e56f86ca",
+        "blockNumber": 4,
+        "contractAddress": null,
+        "cumulativeGasUsed": "77112",
+        "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "gasPrice": "1679152202",
+        "blobGasUsed": null,
+        "blobGasPrice": "1",
+        "gasUsed": "77112",
+        "hash": "0x3fecc6e01eed38ae76b9c7817a5458cfd807f9896c9ab2b2a3f3aa9b69e1474c",
+        "index": 0,
+        "logs": [
+          {
+            "_type": "log",
+            "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+            "blockHash": "0xf67a100affb733e25321a10c86d400f3658f8f8316dfd7ba36358038e56f86ca",
+            "blockNumber": 4,
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a2a15d09519be000000000000000000000000000000000000000000000000000000000000000000000",
+            "index": 0,
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0xe2fafff9645e478a0cdbb3ac0a85f6db3b1acda324c89d964d69c570c0c963b6",
+              "0x0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+              "0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8"
+            ],
+            "transactionHash": "0x3fecc6e01eed38ae76b9c7817a5458cfd807f9896c9ab2b2a3f3aa9b69e1474c",
+            "transactionIndex": 0
+          }
+        ],
+        "logsBloom": "0x00002000000000000002000000000000000000800000000000000000000000000000000000000000000000000000000810000000000000000000000000100000000000000000000000000000010000000000000000000000000000000000000000000800000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000001000000000001000000000000800000000000000000",
+        "status": 1,
+        "to": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      },
+      "verifiedReceipt": {
+        "invoiceId": "0xe2fafff9645e478a0cdbb3ac0a85f6db3b1acda324c89d964d69c570c0c963b6",
+        "invoiceCode": "INV-20261112-PARKING-ba258f4b-226d-4888-9c75-add3e673472f",
+        "chainId": 20261,
+        "contractAddress": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "txHash": "0x3fecc6e01eed38ae76b9c7817a5458cfd807f9896c9ab2b2a3f3aa9b69e1474c",
+        "blockNumber": 4,
+        "logIndex": 0,
+        "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "originalAmount": "3000000000000000000000",
+        "discountAmount": "0",
+        "paidAmount": "3000000000000000000000",
+        "tier": 0,
+        "gasUsed": "77112",
+        "effectiveGasPrice": "1679152202",
+        "verifiedAt": 1794493643
+      },
+      "rpcOutagePreservedHash": true,
+      "sqliteReopenPaidWithRpcOffline": true
+    },
+    {
+      "tier": 1,
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x3555669068b4c8e28b24296aa94042ec68b682e49662f348afbc0fbbcf00d165",
+          "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794493912
+        },
+        "meta": {
+          "invoiceCode": "INV-20261112-PARKING-b80001c9-855d-406c-9ac0-166c252dbc8f",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794493612
+        },
+        "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "signature": "0x8c365527b346e6388600de1964e13574e525724043224e81c9f06412a4389b39731fbb2aad9a938f1b5ae96eee15c0a1652749db57888fd1a923d4d1ab33494d1b"
+      },
+      "txHash": "0x20eeb05e73fa303de2c74280485ca4127b4cf74199f5d912cd3b4022e2fd14ed",
+      "rawReceipt": {
+        "_type": "TransactionReceipt",
+        "blockHash": "0x4919bdfddfdf7fbaddf74f7688de8b6c10b904eacc4dce657598cc7f049a40d7",
+        "blockNumber": 6,
+        "contractAddress": null,
+        "cumulativeGasUsed": "78828",
+        "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+        "gasPrice": "1520838418",
+        "blobGasUsed": null,
+        "blobGasPrice": "1",
+        "gasUsed": "78828",
+        "hash": "0x20eeb05e73fa303de2c74280485ca4127b4cf74199f5d912cd3b4022e2fd14ed",
+        "index": 0,
+        "logs": [
+          {
+            "_type": "log",
+            "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+            "blockHash": "0x4919bdfddfdf7fbaddf74f7688de8b6c10b904eacc4dce657598cc7f049a40d7",
+            "blockNumber": 6,
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000001043561a88293000000000000000000000000000000000000000000000000000925e06eec972b000000000000000000000000000000000000000000000000000000000000000000001",
+            "index": 0,
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0x3555669068b4c8e28b24296aa94042ec68b682e49662f348afbc0fbbcf00d165",
+              "0x00000000000000000000000090f79bf6eb2c4f870365e785982e1f101e93b906",
+              "0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8"
+            ],
+            "transactionHash": "0x20eeb05e73fa303de2c74280485ca4127b4cf74199f5d912cd3b4022e2fd14ed",
+            "transactionIndex": 0
+          }
+        ],
+        "logsBloom": "0x00000000000000000002000000000000000000800000000000000000000000010000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000400000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000001000400000004000000000000000000000000000000000000000000011000000000001000000000000800000000000000000",
+        "status": 1,
+        "to": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      },
+      "verifiedReceipt": {
+        "invoiceId": "0x3555669068b4c8e28b24296aa94042ec68b682e49662f348afbc0fbbcf00d165",
+        "invoiceCode": "INV-20261112-PARKING-b80001c9-855d-406c-9ac0-166c252dbc8f",
+        "chainId": 20261,
+        "contractAddress": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "txHash": "0x20eeb05e73fa303de2c74280485ca4127b4cf74199f5d912cd3b4022e2fd14ed",
+        "blockNumber": 6,
+        "logIndex": 0,
+        "payer": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+        "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "originalAmount": "3000000000000000000000",
+        "discountAmount": "300000000000000000000",
+        "paidAmount": "2700000000000000000000",
+        "tier": 1,
+        "gasUsed": "78828",
+        "effectiveGasPrice": "1520838418",
+        "verifiedAt": 1794493674
+      },
+      "rpcOutagePreservedHash": true,
+      "sqliteReopenPaidWithRpcOffline": true
+    }
+  ],
+  "paidLogCount": 2
+}

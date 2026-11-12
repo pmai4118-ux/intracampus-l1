@@ -30,6 +30,8 @@ Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật
 
 Hướng dẫn chi tiết cài môi trường, điền `.env`, kiểm tra RPC và chạy luồng U03 trên Windows nằm ở [docs/run-local.md](docs/run-local.md).
 
+B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) ghi cấu hình manifest chung, volume SQLite, đường HTTPS hai thiết bị, bằng chứng local và các bước nghiệm thu L1 còn thiếu.
+
 ## Kiểm tra trước khi mở PR
 
 ```sh
