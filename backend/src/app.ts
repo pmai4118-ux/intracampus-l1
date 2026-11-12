@@ -2,8 +2,10 @@ import express from "express";
 import { createNetworkRouter } from "./modules/network/network.routes.ts";
 import { createInvoicesRouter } from "./modules/invoices/invoices.routes.ts";
 import type { ReceiptService } from "./modules/invoices/receipt.service.ts";
+import { createGrantsRouter } from "./modules/grants/grants.routes.ts";
+import type { GrantsService } from "./modules/grants/grants.service.ts";
 
-export function createApp(rpcUrl?: string, receiptService?: ReceiptService) {
+export function createApp(rpcUrl?: string, receiptService?: ReceiptService, grantsService?: GrantsService) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -13,6 +15,7 @@ export function createApp(rpcUrl?: string, receiptService?: ReceiptService) {
 
   app.use(createNetworkRouter(rpcUrl));
   app.use(createInvoicesRouter(receiptService));
+  app.use(createGrantsRouter(grantsService));
 
   return app;
 }

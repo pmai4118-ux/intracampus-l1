@@ -1,5 +1,11 @@
 # Nhật ký quyết định
 
+## D014 · B05: học bổng FOOD và API chỉ đọc · 2026-11-12
+
+B05 dùng lại tài khoản sinh viên B03, ABI vault L05 và loader manifest L06. Một khoản FOOD 5.000 CAMPUS cho mỗi deployment/student, không nạp bù theo số dư còn lại. Intent hash/nonce lưu SQLite bền vững trước broadcast; receipt chưa rõ chặn lần gửi mới. Lịch sử cấp dùng receipt đã xác minh, và khi index log rỗng kiểm tra thêm receipt các block để tránh cấp trùng sau khi đã chi hết. Không đổi ABI hoặc P02.
+
+`GET /api/grants/:beneficiary[?txHash=...]` trả số dư nguyên wei, block canonical và allowlist hiện tại; thiếu dữ liệu trả unverified/null. Chỉ xác nhận cấp/chi với receipt/event đúng vault. U05 giữ trách nhiệm ví sinh viên ký `spend`; quyền lúc chi được chứng minh bởi vault thực thi, không suy ngược từ allowlist cuối block. [Runbook B05](b05-grants.md) ghi giao kèo, giới hạn journal một máy và nghiệm thu L1 còn thiếu. Nhánh B05 xếp trên L06 vì main hiện chưa chứa phụ thuộc; không tự merge hoặc triển khai L1.
+
 Thêm một mục khi đổi giao kèo dùng chung, cấu hình chain, dependency quan trọng hoặc quy trình làm việc. Mỗi mục ghi mã task nếu có, quyết định, lý do và module bị ảnh hưởng. Khi thay thế quyết định cũ, ghi rõ mục nào được thay thế.
 
 ## D001 · Quy trình làm việc với bảng sprint và AI · 2026-11-07
