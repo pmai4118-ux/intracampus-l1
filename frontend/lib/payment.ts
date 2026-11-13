@@ -42,6 +42,7 @@ export function restorePaymentPreview(storage: StorageLike, account: string): In
 const messageFor = (code: string) => ({
   INVOICE_EXPIRED: "Hóa đơn đã hết hạn. Yêu cầu POS tạo hóa đơn mới.",
   INVOICE_ALREADY_PAID: "Hóa đơn đã được thanh toán. Đối chiếu biên lai cũ, không trả thêm.",
+  PAYMENT_IN_PROGRESS: "Backend đang đối chiếu một giao dịch của hóa đơn này. Tra cứu hash cũ, không mở yêu cầu thanh toán khác.",
   WRONG_CHAIN: "Hãy chuyển ví và RPC về IntraCampus L1 · chain 20261.",
   INVALID_SIGNATURE: "Chữ ký hóa đơn chưa hợp lệ. Yêu cầu POS kiểm tra và tạo lại.",
   WALLET_SESSION_CHANGED: "Tài khoản hoặc mạng đã đổi. Kiểm tra lại hóa đơn bằng ví muốn trả tiền.",
@@ -56,6 +57,7 @@ export class PaymentController {
   private record: PaymentRecord | null = null;
   private stopped = false;
   private operation = false;
+  private externalPendingHash: string | null = null;
   private abort = new AbortController();
   private readonly key: string;
   private options: Options;
@@ -148,7 +150,8 @@ export class PaymentController {
       } else if (this.record) {
         this.update({ status: "blocked", canPay: false, message: "Không lưu được đầy đủ nhật ký. Tra cứu hóa đơn trước khi tiếp tục." });
       } else {
-        this.update({ status: "error", canPay: true, message: error instanceof InvoicePreviewError || error instanceof WalletTransactionError
+        const terminal = error instanceof InvoicePreviewError && ["PAYMENT_IN_PROGRESS", "INVOICE_ALREADY_PAID", "INVOICE_EXPIRED"].includes(error.code);
+        this.update({ status: terminal ? "blocked" : "error", canPay: !terminal, message: error instanceof InvoicePreviewError || error instanceof WalletTransactionError
           ? messageFor(error.code) : "Không lưu hoặc kiểm tra được phiên thanh toán. Chưa mở ví; thử lại khi kết nối và bộ nhớ sẵn sàng." });
       }
     } finally {
@@ -188,8 +191,12 @@ export class PaymentController {
         this.update({ status: "paid", txHash: r.txHash, receipt: r, canPay: false, message: "Thanh toán của ví này đã được xác minh. POS có thể đọc cùng biên lai." });
       } else if (lookup.transaction?.status === "reverted" && hash && same(lookup.transaction.txHash, hash)) {
         this.update({ status: "reverted", canPay: false, message: "Giao dịch đã revert, chưa thanh toán. Gas có thể đã bị tính; yêu cầu POS tạo hóa đơn mới sau khi kiểm tra." });
+      } else if (!this.record && (lookup.transaction?.status === "unverified" || this.externalPendingHash)) {
+        this.externalPendingHash ??= lookup.transaction?.txHash ?? null;
+        this.update({ status: "blocked", canPay: false, txHash: this.externalPendingHash,
+          message: "Backend đang theo dõi giao dịch cũ của hóa đơn này. Chưa biết ví nào đã ký; đối chiếu hash trên POS và không thanh toán thêm." });
       } else {
-        this.update({ status: this.record ? hash ? "pending" : "unknown" : "ready", canPay: !this.record,
+        this.update({ status: this.record ? hash ? "pending" : "unknown" : "ready", canPay: !this.record && !this.externalPendingHash,
           message: lookup.status === "rpc-error" ? "Mất kết nối xác minh. Giữ hash cũ và thử tra cứu lại; không gửi lại." :
             lookup.transaction?.status === "event-mismatch" ? "Event chưa khớp hóa đơn. Giữ hash để đối chiếu; chưa xác nhận thanh toán." :
               this.record ? "Chưa có biên lai đã xác minh. Tiếp tục tra cứu lần gửi cũ, kể cả khi hóa đơn hết hạn." : null });

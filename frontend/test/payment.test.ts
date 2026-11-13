@@ -65,10 +65,19 @@ test("changed quote is displayed and requires a second explicit click with anoth
   await h.c.pay(); assert.equal(h.sends(), 1); assert.equal(h.preflights(), 2);
 });
 test("expired, already-paid, invalid-signature and failed simulations never open Core", async () => {
-  for (const code of ["INVOICE_EXPIRED", "INVOICE_ALREADY_PAID", "INVALID_SIGNATURE", "PAYMENT_SIMULATION_FAILED"]) {
+  for (const code of ["INVOICE_EXPIRED", "INVOICE_ALREADY_PAID", "INVALID_SIGNATURE", "PAYMENT_SIMULATION_FAILED", "PAYMENT_IN_PROGRESS"]) {
     const h = harness(); h.setPreflight(async () => { throw new InvoicePreviewError(code); });
     await h.c.pay(); assert.equal(h.sends(), 0); assert.equal(h.db.getItem(paymentStorageKey(envelope)), null);
   }
+});
+test("a backend-known unverified hash blocks a new payer even when local journal is absent", async () => {
+  const h = harness(); await h.c.refresh();
+  assert.equal(h.c.getSnapshot().canPay, false); assert.equal(h.c.getSnapshot().txHash, hash);
+  await h.c.pay(); assert.equal(h.sends(), 0); assert.equal(h.preflights(), 0);
+  // A later incomplete response cannot erase that known pending hash or enable a new payment.
+  h.setFetch(async () => response(pending())); await h.c.refresh(); assert.equal(h.c.getSnapshot().canPay, false);
+  h.setFetch(async () => response(paid())); await h.c.refresh();
+  assert.equal(h.c.getSnapshot().receipt, null); assert.equal(h.c.getSnapshot().status, "blocked");
 });
 test("switching account or chain while preflight waits prevents signing", async () => {
   for (const change of [ready(B), { ...ready(), chainId: BigInt(43113) }]) {
