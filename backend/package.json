@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.ts",
     "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
+    "seed:grants": "node --env-file-if-exists=.env scripts/seed-grants.ts",
+    "test:b05:local": "node test/grants-local-evidence.ts",
     "test:b02:evidence": "node test/receipt-evidence.ts",
     "test:b01:evidence": "node --test --test-name-pattern=creates test/invoice-create.test.ts",
     "test:b01:local": "node test/invoice-local-evidence.ts",

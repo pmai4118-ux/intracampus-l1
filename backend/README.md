@@ -30,6 +30,8 @@ flowchart LR
 | `src/modules/grants/` | Đọc dữ liệu học bổng cho demo. | `B05` |
 | `src/modules/copilot/` | Tra cứu số dư và chi tiêu từ dữ liệu đã xác minh. Xem trước giao dịch thuộc phần mở rộng. | `B06`, `X02` |
 
+B05 cung cấp `GET /api/grants/:beneficiary[?txHash=...]` và CLI `pnpm --filter @intracampus/backend seed:grants` (mặc định dry-run). [Giao kèo U05 và runbook B05](../docs/b05-grants.md) mô tả chuỗi wei, receipt đã xác minh, seed chống cấp trùng, journal bền vững và bước người giữ issuer thực hiện.
+
 Chốt payload EIP-712, ABI sự kiện và giao kèo HTTP theo `P02` trước khi nối các phần thanh toán. Xem đường dẫn đề xuất trong từng task trên [bảng sprint](https://intracampus-l1-sprint.mphung2532.chatgpt.site).
 
 ## B02 · Tra cứu biên nhận
