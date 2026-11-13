@@ -6,6 +6,14 @@ export interface WalletProvider {
   removeListener(event: string, listener: (...args: unknown[]) => void): unknown;
 }
 export type WalletRpc = (method: string, params: unknown[], signal?: AbortSignal) => Promise<unknown>;
+export type WalletTransaction = { to: string; data: string; value: string };
+export class WalletTransactionError extends Error {
+  readonly code: string;
+  readonly outcome: "not-sent" | "rejected" | "unknown";
+  constructor(code: string, outcome: "not-sent" | "rejected" | "unknown") {
+    super(code); this.name = "WalletTransactionError"; this.code = code; this.outcome = outcome;
+  }
+}
 export type WalletStatus = "initializing" | "no-wallet" | "disconnected" | "connecting" | "rejected"
   | "wrong-chain" | "loading" | "ready" | "rpc-error" | "config-missing";
 export type StudentCard = { status: "unknown" | "none" | "valid" | "expired" | "inactive";
@@ -69,6 +77,7 @@ export class WalletController {
   private stopped = false;
   private attached = false;
   private busy = false;
+  private sending = false;
   private locallyDisconnected = false;
   private abort?: AbortController;
   private readonly accountEvent = (value: unknown) => {
@@ -119,7 +128,9 @@ export class WalletController {
     const generation = this.invalidate();
     if (!this.provider) { this.set({ ...initial(), status: "no-wallet" }); return; }
     const previous = selected ?? (knownAccounts ? undefined : this.state.address);
-    this.set({ ...initial(), status: "loading" });
+    // A periodic read must not unmount a payment popup/recovery panel for the same account.
+    // Monetary data/readiness are still invalidated immediately, before any provider await.
+    this.set({ ...this.state, status: "loading", balanceWei: null, card: unknownCard(), blockTimestamp: null, canProceed: false, message: null });
     try {
       const [available, rawChain] = await Promise.all([
         knownAccounts ?? this.provider.request({ method: "eth_accounts" }).then(accounts),
@@ -168,6 +179,41 @@ export class WalletController {
   }
   async selectAccount(address: string) {
     if (this.state.accounts.includes(address)) await this.refresh(this.state.accounts, address);
+  }
+  /** The connected student signs. A returned hash survives account changes while Core is open. */
+  async sendTransaction(expectedAccount: string, transaction: WalletTransaction): Promise<string> {
+    const fail = (code: string): never => { throw new WalletTransactionError(code, "not-sent"); };
+    if (this.sending) fail("WALLET_REQUEST_PENDING");
+    if (!isWalletAddress(expectedAccount) || !isWalletAddress(transaction.to)
+      || !/^0x(?:[0-9a-f]{2})+$/i.test(transaction.data)
+      || !/^0x(?:0|[1-9a-f][0-9a-f]{0,63})$/i.test(transaction.value)) fail("INVALID_TRANSACTION");
+    const selected = () => !this.stopped && !this.locallyDisconnected && this.state.canProceed
+      && this.state.address?.toLowerCase() === expectedAccount.toLowerCase()
+      && this.state.chainId === BigInt(campusNetwork.chainId);
+    if (!this.provider || !selected()) fail("WALLET_SESSION_CHANGED");
+    this.sending = true;
+    let requested = false;
+    try {
+      const [available, chain] = await Promise.all([
+        this.provider!.request({ method: "eth_accounts" }).then(accounts),
+        this.provider!.request({ method: "eth_chainId" }).then(quantity),
+      ]);
+      if (chain !== BigInt(campusNetwork.chainId)) fail("WRONG_CHAIN");
+      if (!selected() || !available.includes(expectedAccount.toLowerCase())) fail("WALLET_SESSION_CHANGED");
+      requested = true;
+      const hash = await this.provider!.request({ method: "eth_sendTransaction", params: [{
+        from: expectedAccount, to: transaction.to, data: transaction.data, value: transaction.value,
+        chainId: campusChainHex,
+      }] });
+      if (typeof hash !== "string" || !/^0x[0-9a-f]{64}$/i.test(hash) || /^0x0{64}$/i.test(hash)) {
+        throw new WalletTransactionError("SEND_OUTCOME_UNKNOWN", "unknown");
+      }
+      return hash;
+    } catch (error) {
+      if (error instanceof WalletTransactionError) throw error;
+      if (requested && errorCode(error) === 4001) throw new WalletTransactionError("SIGNATURE_REJECTED", "rejected");
+      throw new WalletTransactionError(requested ? "SEND_OUTCOME_UNKNOWN" : "WALLET_UNAVAILABLE", requested ? "unknown" : "not-sent");
+    } finally { this.sending = false; }
   }
   async switchNetwork() {
     if (!this.provider || this.stopped || this.busy) return;
