@@ -90,6 +90,21 @@ storage lỗi, gửi chưa rõ kết quả/reload, account đổi khi Core mở,
 chi và phản hồi xác nhận muộn. Đây là provider/HTTP giả lập; receipt EVM local
 và video Core/điện thoại/L1 phải được ghi riêng.
 
+Sau khi nhóm đã ghép B05 với U04/U05, có thể tái tạo luồng EVM/controller thật:
+
+```sh
+cd contracts
+forge build --force
+cd ..
+node frontend/test/u04-u05-local-evidence.mjs /path/to/new-local-evidence.json
+```
+
+Cần Anvil trong PATH hoặc `ANVIL_BIN` trỏ executable. Script tự tạo node
+loopback, API/SQLite và ví tạm, kiểm chứng artifact theo source, chạy hai mức
+giá cùng khoản chi grant rồi dừng node. Output phải là file mới; không ghi đè
+manifest hoặc evidence cũ. Thiếu B05 thì script dừng trước khi mở node và báo
+phụ thuộc PR #16. Không dùng khóa/RPC môi trường của người vận hành.
+
 Nghiệm thu hai thiết bị: operator seed B03/B05, sinh viên tự ký chi `1000`
 từ `5000`; đối chiếu API, `GrantSpent`, merchant tăng `1000` và voucher còn
 `4000`. Thử merchant bị gỡ, ví cá nhân, sai category và vượt số dư; ngân sách

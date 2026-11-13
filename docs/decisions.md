@@ -150,3 +150,13 @@ invoice để reload không tự gửi lại. Từ chối ký khác với lỗi 
 kết quả; chỉ receipt/event B02 đã xác minh mới được hiển thị thành công.
 POS dùng lại B04, Student đối chiếu thêm payer/hash của lần ký. Không thay
 P02, ABI L04 hoặc bổ sung ví ký phía backend. Xem [runbook U04](u04-payment.md).
+
+## D017 · U05: beneficiary chi FOOD từ vault và xác minh qua B05 · 2026-11-13
+
+GrantPanel dùng phiên ví U02/U04 để beneficiary tự ký `spend` với value 0;
+ngân sách lấy từ vault, CAMPUS ví cá nhân trả gas. Merchant/category/ABI từ
+manifest L06; B05 cung cấp snapshot số dư và receipt. Chỉ event GrantSpent
+khớp intent mới xác nhận, không tự trừ số dư trên giao diện. Journal theo
+deployment/beneficiary và Web Locks ngăn gửi lặp sau reload hoặc giữa các tab;
+hash nhập tay bị revert không đủ giải phóng intent gửi chưa rõ. PR B05 #16
+vẫn cần được nhóm tích hợp riêng; xem [runbook U05](u05-grants.md).

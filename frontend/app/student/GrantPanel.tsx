@@ -52,7 +52,7 @@ function GrantView({ controller, config }: { controller: GrantController; config
     {state.phase === "checking" || state.phase === "signing" || state.phase === "pending" ? <p role="status" aria-live="polite">
       {state.phase === "checking" ? "Đang kiểm tra lại số dư, mạng và mô phỏng khoản chi…" : state.phase === "signing" ? "Đang chờ bạn xác nhận trong Core…" : "Đã có hash, đang chờ receipt và event GrantSpent được xác minh…"}
     </p> : null}
-    {state.message ? <p role={state.errorCode ? "alert" : "status"} className="wallet-warning">{state.message}</p> : null}
+    {state.message ? <p role={state.errorCode ? "alert" : "status"} className={state.errorCode ? "wallet-warning" : "wallet-status"}>{state.message}</p> : null}
     {!matching ? <p>Giữ đúng ví được cấp và chain 20261 để chi. Khi đổi tài khoản, số dư cũ được xóa khỏi màn hình.</p> : null}
     {state.intent?.hash ? <div className="tx-proof-box"><strong>Hash khoản chi · {state.phase === "confirmed" ? "Đã xác minh" : "Chưa xác nhận thành công"}</strong>
       <code className="tx-hash-code">{state.intent.hash}</code></div> : null}
