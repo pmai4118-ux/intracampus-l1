@@ -151,6 +151,12 @@ kết quả; chỉ receipt/event B02 đã xác minh mới được hiển thị 
 POS dùng lại B04, Student đối chiếu thêm payer/hash của lần ký. Không thay
 P02, ABI L04 hoặc bổ sung ví ký phía backend. Xem [runbook U04](u04-payment.md).
 
+## D017 · B05: học bổng FOOD và API chỉ đọc · 2026-11-12
+
+B05 dùng lại tài khoản sinh viên B03, ABI vault L05 và loader manifest L06. Một khoản FOOD 5.000 CAMPUS cho mỗi deployment/student, không nạp bù theo số dư còn lại. Intent hash/nonce lưu SQLite bền vững trước broadcast; receipt chưa rõ chặn lần gửi mới. Lịch sử cấp dùng receipt đã xác minh, và khi index log rỗng kiểm tra thêm receipt các block để tránh cấp trùng sau khi đã chi hết. Không đổi ABI hoặc P02.
+
+`GET /api/grants/:beneficiary[?txHash=...]` trả số dư nguyên wei, block canonical và allowlist hiện tại; thiếu dữ liệu trả unverified/null. Chỉ xác nhận cấp/chi với receipt/event đúng vault. U05 giữ trách nhiệm ví sinh viên ký `spend`; quyền lúc chi được chứng minh bởi vault thực thi, không suy ngược từ allowlist cuối block. [Runbook B05](b05-grants.md) ghi giao kèo, giới hạn journal một máy và nghiệm thu L1 còn thiếu. Ngày 2026-11-13 đã cập nhật main `4ec299e` có L05/L06 nên diff còn B05. Intent chỉ được chuyển vào lịch sử khi transport chứng minh chưa gửi hoặc reader xác minh receipt revert canonical; mọi kết quả mơ hồ tiếp tục giữ khóa. Các RPC độc lập đọc song song tại block đã ghim, giữ kiểm tra chain/hash cuối.
+
 ## D018 · U05: beneficiary chi FOOD từ vault và xác minh qua B05 · 2026-11-13
 
 GrantPanel dùng phiên ví U02/U04 để beneficiary tự ký `spend` với value 0;
@@ -158,8 +164,7 @@ ngân sách lấy từ vault, CAMPUS ví cá nhân trả gas. Merchant/category/
 manifest L06; B05 cung cấp snapshot số dư và receipt. Chỉ event GrantSpent
 khớp intent mới xác nhận, không tự trừ số dư trên giao diện. Journal theo
 deployment/beneficiary và Web Locks ngăn gửi lặp sau reload hoặc giữa các tab;
-hash nhập tay bị revert không đủ giải phóng intent gửi chưa rõ. PR B05 #16
-vẫn cần được nhóm tích hợp riêng; xem [runbook U05](u05-grants.md).
+hash nhập tay bị revert không đủ giải phóng intent gửi chưa rõ. B05 #16 đã được tích hợp vào main tại `ad3e05c`; xem [runbook U05](u05-grants.md).
 
 Sau review PR #19, journal phân biệt `prepared` chưa chạm provider với
 `unknown` đã tới ranh giới gửi. `sendTransactionWithGuard` chuyển trạng thái
