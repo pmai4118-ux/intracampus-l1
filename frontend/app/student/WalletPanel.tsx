@@ -106,6 +106,6 @@ export function StudentWallet() {
       <InvoicePreview wallet={state} />
     </section>
     <GrantPanel />
-    <p className="wallet-live-note">Dữ liệu ví thật được đọc từ mạng đã cấu hình. Phần này không ký hoặc gửi giao dịch.</p>
+    <p className="wallet-live-note">Dữ liệu được đọc từ mạng đã cấu hình. Bạn chỉ yêu cầu giao dịch khi bấm thanh toán hoặc chi FOOD và xác nhận trong Core.</p>
   </div>;
 }

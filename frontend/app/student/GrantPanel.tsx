@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { createWalletRpc } from "../../lib/wallet";
-import { GrantController, grantConfig, grantMessage, parseGrantAmount, type GrantConfig, type GrantSender } from "../../lib/grants";
+import { GrantController, grantConfig, grantMessage, parseGrantAmount, type GrantConfig } from "../../lib/grants";
 import { useCampusWallet } from "./WalletPanel";
 
 function GrantView({ controller, config }: { controller: GrantController; config: GrantConfig }) {
@@ -79,7 +79,7 @@ export default function GrantPanel() {
     try {
       const config = grantConfig(), rpcUrl = browserWalletConfig().rpcUrl;
       if (!rpcUrl) throw new Error("RPC_UNAVAILABLE");
-      controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet: wallet as unknown as GrantSender, storage: window.localStorage });
+      controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet, storage: window.localStorage });
       setSession({ controller, config });
     } catch (cause) { setError(grantMessage(cause instanceof Error ? cause.message : "DEPLOYMENT_NOT_CONFIGURED")); }
     return () => controller?.dispose();
