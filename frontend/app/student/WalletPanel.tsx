@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, t
 import { browserWalletConfig, campusNetwork, formatWalletBalance } from "../../lib/chains";
 import { WalletController, type WalletProvider, type WalletSnapshot } from "../../lib/wallet";
 import { InvoicePreview } from "./InvoicePreview";
+import GrantPanel from "./GrantPanel";
 
 const WalletContext = createContext<{ state: WalletSnapshot; controller: WalletController } | null>(null);
 /** U04/U06 consume this context; readiness does not replace fresh payment preflight. */
@@ -104,6 +105,7 @@ export function StudentWallet() {
       <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
       <InvoicePreview wallet={state} />
     </section>
+    <GrantPanel />
     <p className="wallet-live-note">Dữ liệu ví thật được đọc từ mạng đã cấu hình. Phần này không ký hoặc gửi giao dịch.</p>
   </div>;
 }
