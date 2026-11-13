@@ -14,7 +14,8 @@
     "test:b05:local": "node test/grants-local-evidence.ts",
     "test:b02:evidence": "node test/receipt-evidence.ts",
     "test:b01:evidence": "node --test --test-name-pattern=creates test/invoice-create.test.ts",
-    "test:b01:local": "node test/invoice-local-evidence.ts"
+    "test:b01:local": "node test/invoice-local-evidence.ts",
+    "test:b04:local": "node test/b04-local-evidence.ts"
   },
   "dependencies": {
     "@intracampus/network": "workspace:*",

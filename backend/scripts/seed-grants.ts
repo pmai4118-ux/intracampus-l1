@@ -31,9 +31,12 @@ export type GrantSeedOptions = {
 export class GrantSeedError extends Error {
   constructor(code: string) { super(code); this.name = "GrantSeedError"; }
 }
+/** Only the transport's local pre-send phase may declare that nothing was broadcast. */
+export class GrantNotBroadcastError extends GrantSeedError {}
 export type GrantSeedResult = {
   mode: "dry-run" | "apply"; status: "planned" | "already-issued" | "confirmed";
   beneficiary: string; amountWei: string; balanceWei: string; transactionHash?: string;
+  recovery?: "canonical-revert";
 };
 const AMOUNT = 5000000000000000000000n;
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -62,8 +65,26 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
     return event;
   }
   const prior = journal?.get(operationId);
+  async function receiptFor(hash: string): Promise<VerifiedGrantEvent[] | null> {
+    try { return await reader.verifyReceipt(hash, beneficiary); }
+    catch (error) {
+      // Only the reader's strict canonical status-0 verdict is terminal proof. Generic RPC
+      // errors, missing/orphaned receipts and mismatched logs must retain the active intent.
+      if (!(error instanceof GrantError) || error.code !== "TX_REVERTED") throw error;
+      journal!.retire(operationId, hash, "canonical-revert");
+      throw new GrantSeedError("SEED_REVERTED_RETRY_ALLOWED");
+    }
+  }
   if (prior) {
-    const receipt = await reader.verifyReceipt(prior.transactionHash, beneficiary);
+    // Dry-run is read-only, including when the intent is known to have reverted.
+    let receipt: VerifiedGrantEvent[] | null;
+    if (!apply) {
+      try { receipt = await reader.verifyReceipt(prior.transactionHash, beneficiary); }
+      catch (error) {
+        if (!(error instanceof GrantError) || error.code !== "TX_REVERTED") throw error;
+        return { ...base, status: "planned", recovery: "canonical-revert", transactionHash: prior.transactionHash };
+      }
+    } else receipt = await receiptFor(prior.transactionHash);
     if (!receipt) throw new GrantSeedError("SEED_OUTCOME_UNKNOWN");
     validate(receipt, prior.transactionHash);
     const current = await reader.snapshot(beneficiary, receipt);
@@ -98,10 +119,14 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
   }
   if (!journal.reserve(operationId, { transactionHash: prepared.hash, nonce: prepared.nonce })) throw new GrantSeedError("SEED_OUTCOME_UNKNOWN");
   emit({ event: "grant-seed-intent", transactionHash: prepared.hash });
-  try { await transport.broadcast(prepared.rawTransaction); } catch {
+  try { await transport.broadcast(prepared.rawTransaction); } catch (error) {
+    if (error instanceof GrantNotBroadcastError) {
+      journal.retire(operationId, prepared.hash, "not-broadcast");
+      throw error;
+    }
     // RPC rejection/timeout can follow acceptance. The stored hash is the only recovery path.
   }
-  const receipt = await reader.verifyReceipt(prepared.hash, beneficiary);
+  const receipt = await receiptFor(prepared.hash);
   if (!receipt) throw new GrantSeedError("SEED_OUTCOME_UNKNOWN");
   validate(receipt, prepared.hash);
   const after = await reader.snapshot(beneficiary, receipt);
@@ -134,9 +159,14 @@ export function createGrantSeedTransport(provider: JsonRpcProvider, wallet: Wall
       return { rawTransaction, hash: keccak256(rawTransaction), nonce: next };
     },
     broadcast: async (rawTransaction) => {
-      await chain();
-      const tx = Transaction.from(rawTransaction);
-      if (await nonce() !== tx.nonce) throw new GrantSeedError("ISSUER_NONCE_CHANGED");
+      let tx: Transaction;
+      try {
+        await chain();
+        tx = Transaction.from(rawTransaction);
+        if (await nonce() !== tx.nonce) throw new GrantSeedError("ISSUER_NONCE_CHANGED");
+      } catch (error) {
+        throw new GrantNotBroadcastError(error instanceof GrantSeedError ? error.message : "RPC_UNAVAILABLE");
+      }
       const sent = await provider.broadcastTransaction(rawTransaction);
       if (sent.hash !== tx.hash) throw new GrantSeedError("BROADCAST_HASH_MISMATCH");
       // A timeout leaves the durable intent in place; rerun reconciles its receipt only.

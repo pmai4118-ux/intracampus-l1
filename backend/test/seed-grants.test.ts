@@ -6,7 +6,8 @@ import { test } from "node:test";
 import { Interface, Transaction, Wallet, id, keccak256 } from "ethers";
 import { requireDeployment } from "@intracampus/network";
 import template from "../../deployments/intracampus.json" with { type: "json" };
-import { seedGrant } from "../scripts/seed-grants.ts";
+import { seedGrant, createGrantSeedTransport } from "../scripts/seed-grants.ts";
+import { GrantError } from "../src/modules/grants/grants.types.ts";
 import type { GrantSeedReader, GrantSeedTransport } from "../scripts/seed-grants.ts";
 import { GrantSeedJournal } from "../src/modules/grants/grants.seed-repository.ts";
 import type { VerifiedGrantEvent } from "../src/modules/grants/grants.types.ts";
@@ -65,7 +66,7 @@ function setup() {
       return tx.hash!;
     },
   };
-  return { config, reader, transport, chain };
+  return { config, reader, transport, chain, signer };
 }
 
 test("dry-run plans exact FOOD allocation without signer or state changes", async () => {
@@ -184,5 +185,65 @@ test("an unresolved broadcast exposes its public hash for operator reconciliatio
     assert.equal(notices.length, 1); assert.equal(notices[0].event, "grant-seed-intent");
     assert.match(notices[0].transactionHash, /^0x[0-9a-f]{64}$/);
     assert.deepEqual(Object.keys(notices[0]).sort(), ["event", "transactionHash"]);
+  } finally { journal.close(); }
+});
+
+test("real transport nonce failure before send releases durable intent so retry can succeed", async () => {
+  const f = setup(); const journal = new GrantSeedJournal(":memory:");
+  const normalBroadcast = f.transport.broadcast;
+  const provider = { send: async (method: string) => method === "eth_chainId" ? "0x4f25" : "0x1" };
+  const realTransport = createGrantSeedTransport(provider as any, new Wallet(f.signer.privateKey), f.reader.deployment);
+  f.transport.broadcast = realTransport.broadcast;
+  try {
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /ISSUER_NONCE_CHANGED/);
+    assert.equal(f.chain.nonce, 0);
+    f.transport.broadcast = normalBroadcast;
+    assert.equal((await seedGrant({ ...f, journal, apply: true })).status, "confirmed");
+    assert.equal(f.chain.nonce, 1);
+  } finally { journal.close(); }
+});
+
+test("canonical reverted receipt survives restart and apply retires it before an explicit retry", async () => {
+  const f = setup(); f.chain.mode = "unknown";
+  const dir = await mkdtemp(join(tmpdir(), "b05-revert-")); const path = join(dir, "seed.sqlite");
+  let journal = new GrantSeedJournal(path);
+  try {
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /SEED_OUTCOME_UNKNOWN/);
+    journal.close(); journal = new GrantSeedJournal(path);
+    f.reader.verifyReceipt = async () => { throw new GrantError("TX_REVERTED"); };
+    const plan = await seedGrant({ config: f.config, reader: f.reader, journal });
+    assert.equal(plan.status, "planned"); assert.equal(plan.recovery, "canonical-revert");
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /SEED_REVERTED_RETRY_ALLOWED/);
+    f.reader.verifyReceipt = async (hash) => f.chain.events.filter((event) => event.transactionHash === hash);
+    f.chain.mode = "mine";
+    assert.equal((await seedGrant({ ...f, journal, apply: true })).status, "confirmed");
+    assert.equal(f.chain.nonce, 1);
+  } finally { journal.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test("an unverified revert error never releases an ambiguous intent", async () => {
+  const f = setup(); f.chain.mode = "unknown"; const journal = new GrantSeedJournal(":memory:");
+  try {
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /SEED_OUTCOME_UNKNOWN/);
+    f.reader.verifyReceipt = async () => { throw new Error("TX_REVERTED"); };
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /TX_REVERTED/);
+    f.reader.verifyReceipt = async () => null;
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /SEED_OUTCOME_UNKNOWN/);
+    assert.equal(f.chain.prepareCount, 1);
+  } finally { journal.close(); }
+});
+
+test("a canonical revert on the first apply releases only that failed transaction", async () => {
+  const f = setup(); const journal = new GrantSeedJournal(":memory:");
+  const broadcast = f.transport.broadcast;
+  f.transport.broadcast = async (raw) => { f.chain.nonce++; return keccak256(raw); };
+  f.reader.verifyReceipt = async () => { throw new GrantError("TX_REVERTED"); };
+  try {
+    await assert.rejects(seedGrant({ ...f, journal, apply: true }), /SEED_REVERTED_RETRY_ALLOWED/);
+    assert.equal(f.chain.balance, 0n);
+    f.transport.broadcast = broadcast;
+    f.reader.verifyReceipt = async (hash) => f.chain.events.filter((event) => event.transactionHash === hash);
+    assert.equal((await seedGrant({ ...f, journal, apply: true })).status, "confirmed");
+    assert.equal(f.chain.events.length, 1);
   } finally { journal.close(); }
 });

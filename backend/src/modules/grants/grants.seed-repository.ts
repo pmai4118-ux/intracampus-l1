@@ -13,6 +13,11 @@ export class GrantSeedJournal {
     if (!readOnly) this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       CREATE TABLE IF NOT EXISTS grant_seed_intents (
         operation_id TEXT PRIMARY KEY, transaction_hash TEXT NOT NULL, nonce INTEGER NOT NULL
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS grant_seed_retired (
+        operation_id TEXT NOT NULL, transaction_hash TEXT NOT NULL, nonce INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK(reason IN ('not-broadcast', 'canonical-revert')),
+        PRIMARY KEY(operation_id, transaction_hash)
       ) STRICT;`);
   }
   get(operationId: string): GrantSeedIntent | undefined {
@@ -25,6 +30,16 @@ export class GrantSeedJournal {
   reserve(operationId: string, intent: GrantSeedIntent): boolean {
     return this.db.prepare("INSERT OR IGNORE INTO grant_seed_intents(operation_id, transaction_hash, nonce) VALUES (?, ?, ?)")
       .run(operationId, intent.transactionHash, intent.nonce).changes === 1;
+  }
+  retire(operationId: string, transactionHash: string, reason: "not-broadcast" | "canonical-revert"): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare(`INSERT OR IGNORE INTO grant_seed_retired
+        SELECT operation_id, transaction_hash, nonce, ? FROM grant_seed_intents
+        WHERE operation_id = ? AND transaction_hash = ?`).run(reason, operationId, transactionHash);
+      this.db.prepare("DELETE FROM grant_seed_intents WHERE operation_id = ? AND transaction_hash = ?").run(operationId, transactionHash);
+      this.db.exec("COMMIT");
+    } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
   close(): void { this.db.close(); }
 }

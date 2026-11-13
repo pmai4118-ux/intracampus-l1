@@ -30,6 +30,8 @@ Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật
 
 Hướng dẫn chi tiết cài môi trường, điền `.env`, kiểm tra RPC và chạy luồng U03 trên Windows nằm ở [docs/run-local.md](docs/run-local.md).
 
+B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) ghi cấu hình manifest chung, volume SQLite, đường HTTPS hai thiết bị, bằng chứng local và các bước nghiệm thu L1 còn thiếu.
+
 ## Kiểm tra trước khi mở PR
 
 ```sh
@@ -50,6 +52,8 @@ forge test
 P02 có thêm `pnpm test:p02` (đã nằm trong `pnpm test`) để kiểm tra giao kèo JSON/QR, chữ ký và các tình huống tham chiếu. Foundry kiểm tra cùng [fixture P02](docs/fixtures/invoice-v1.json) bằng Solidity; xem [giao kèo invoice](docs/invoice-contract.md#6-fixture-chạy-được-và-kiểm-tra-giao-kèo). Đây là test fixture/local, chưa phải kết quả L1.
 
 L04 có [hướng dẫn contract thanh toán và bàn giao tích hợp](docs/l04-payment.md), log Foundry và hai receipt Anvil local. Smoke script kiểm tra ABI thực tế theo P02 và luồng thanh toán thường/ưu đãi; địa chỉ triển khai Avalanche L1 thuộc L06.
+
+U04 có [hướng dẫn thanh toán bằng ví sinh viên và khôi phục giao dịch](docs/u04-payment.md), dùng lại QR U03 và receipt B02/B04. Nghiệm thu ví Core trên L1 cần manifest/RPC thật và hai thiết bị HTTPS.
 
 B03/L05/L06 có [bàn giao và kết quả kiểm thử](docs/b03-l05-l06-handoff.md),
 [seed ví/thẻ](docs/demo-accounts.md), [vault học bổng](docs/l05-grants.md) và

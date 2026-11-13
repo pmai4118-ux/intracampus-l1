@@ -180,6 +180,10 @@ export async function verifyInvoicePreview(
   const stored = parseInvoicePayload(JSON.stringify(lookup.envelope));
   if (envelopeFingerprint(envelope) !== envelopeFingerprint(stored)) throw new InvoicePreviewError("INVALID_QR_PAYLOAD");
   if (lookup.status === "paid") throw new InvoicePreviewError("INVOICE_ALREADY_PAID");
+  if (lookup.transaction !== undefined && lookup.transaction !== null) {
+    const transaction = rpcRecord(lookup.transaction);
+    if (transaction.status === "unverified") throw new InvoicePreviewError("PAYMENT_IN_PROGRESS");
+  }
   if (lookup.status === "expired") throw new InvoicePreviewError("INVOICE_EXPIRED");
   if (lookup.status !== "pending") throw new InvoicePreviewError("API_UNAVAILABLE");
 

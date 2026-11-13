@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { createWalletRpc, type WalletSnapshot } from "../../lib/wallet";
+import { PayInvoice, PaymentRecovery } from "./PayInvoice";
 
 type BarcodeHit = { rawValue: string };
 type BarcodeDetectorLike = { detect(source: HTMLVideoElement): Promise<BarcodeHit[]> };
@@ -15,6 +16,7 @@ const messages: Record<string, string> = {
   INVALID_SIGNATURE: "Không xác minh được signer/chữ ký của hóa đơn trên contract.",
   INVOICE_EXPIRED: "Hóa đơn đã hết hạn theo thời gian của chain.",
   INVOICE_ALREADY_PAID: "Hóa đơn này đã được thanh toán. Không mở yêu cầu giao dịch mới.",
+  PAYMENT_IN_PROGRESS: "Hóa đơn đang có giao dịch chưa xác minh. Giữ hash cũ và tra cứu trên POS; không thanh toán thêm.",
   WRONG_CHAIN: "RPC đang kết nối sai mạng. Yêu cầu IntraCampus L1 · Chain 20261.",
   DEPLOYMENT_NOT_CONFIGURED: "Chưa có địa chỉ verifier và POS signer từ manifest L06. Chưa thể xác minh hóa đơn.",
   PAYMENT_SIMULATION_FAILED: "Contract chưa chấp nhận thanh toán tại trạng thái hiện tại. Kiểm tra chữ ký hóa đơn, dịch vụ và số dư CAMPUS rồi thử lại.",
@@ -42,7 +44,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     setPreview(null);
     setError(null);
     setBusy(false);
-  }, [wallet.address, wallet.chainId, wallet.canProceed]);
+  }, [wallet.address, wallet.chainId]);
 
   useEffect(() => {
     if (!cameraActive) return;
@@ -123,18 +125,19 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     try {
       const deployment = browserWalletConfig();
       const result = await verifyInvoicePreview(payload, wallet.address, deployment, createWalletRpc(rpcUrl), current.signal);
-      setPreview(result);
+      if (abort.current === current && !current.signal.aborted) setPreview(result);
     } catch (cause) {
       const code = cause instanceof InvoicePreviewError ? cause.code : "RPC_UNAVAILABLE";
-      setError(messages[code] ?? "Không thể xác minh hóa đơn. Hãy kiểm tra lại mã QR.");
+      if (abort.current === current && !current.signal.aborted) setError(messages[code] ?? "Không thể xác minh hóa đơn. Hãy kiểm tra lại mã QR.");
     } finally {
       if (abort.current === current) { abort.current = null; setBusy(false); }
     }
   }
 
   return <div className="invoice-student-preview" aria-labelledby="invoice-preview-title" aria-busy={busy}>
+    <PaymentRecovery />
     <h3 id="invoice-preview-title">Quét hoặc dán hóa đơn POS</h3>
-    <p>Hóa đơn chỉ mở bản xem trước sau khi đối chiếu với backend và chain 20261. Chưa có giao dịch nào được ký hoặc gửi.</p>
+    <p>Đối chiếu hóa đơn với backend và chain 20261, sau đó kiểm tra số tiền trước khi mở Core xác nhận.</p>
     <label htmlFor="student-invoice-payload">Payload QR</label>
     <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={5}
       aria-describedby={error ? "student-invoice-help student-invoice-error" : "student-invoice-help"} aria-invalid={Boolean(error)}
@@ -164,7 +167,8 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
         <div className="price-row"><dt>Giảm giá</dt><dd>{formatWalletBalance(preview.quote.discountAmount)}</dd></div>
         <div className="price-row total-row"><dt>Số CAMPUS cần trả</dt><dd className="total-amount">{formatWalletBalance(preview.quote.paidAmount)}</dd></div>
       </dl>
-      <p className="invoice-direction-note">Preflight đã kiểm tra hạn, paid flag, verifier/signer, giá và mô phỏng payInvoice. U04 sẽ làm mới kiểm tra ngay trước khi mở Core cho sinh viên xác nhận.</p>
+      <p className="invoice-direction-note">Hạn, paid flag, verifier/signer, giá và mô phỏng sẽ được kiểm tra lại ngay trước khi mở Core xác nhận.</p>
+      <PayInvoice preview={preview} />
     </section> : null}
   </div>;
 }

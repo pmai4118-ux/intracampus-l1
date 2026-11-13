@@ -65,16 +65,20 @@ export class GrantsReader {
     const { PurposeBoundGrantVault: vault, CampusPaymentRegistry: registry } = this.deployment.contracts;
     if (this.deployment.chainId !== 20261 || this.deployment.merchants.canteen.category.toLowerCase() !== FOOD) throw new GrantError("DEPLOYMENT_MISMATCH");
     grantAddress(this.deployment.merchants.canteen.address);
-    for (const contract of [vault, registry]) {
+    await Promise.all([vault, registry].map(async (contract) => {
       if (block.number < contract.blockNumber) throw new GrantError("DEPLOYMENT_MISMATCH");
-      const deployed = await this.block(contract.blockNumber, "DEPLOYMENT_MISMATCH");
+      const [deployed, code] = await Promise.all([
+        this.block(contract.blockNumber, "DEPLOYMENT_MISMATCH"),
+        this.provider.send("eth_getCode", [contract.address, toQuantity(block.number)]) as Promise<unknown>,
+      ]);
       if (!sameHash(deployed.hash, contract.blockHash)) throw new GrantError("DEPLOYMENT_MISMATCH");
-      const code: unknown = await this.provider.send("eth_getCode", [contract.address, toQuantity(block.number)]);
       if (typeof code !== "string" || !/^0x(?:[\da-f]{2})+$/i.test(code)
         || !sameHash(keccak256(code), contract.runtimeCodeHash)) throw new GrantError("DEPLOYMENT_MISMATCH");
-    }
-    const issuer = await this.call(this.vault, vault.address, "issuer", [], block.number);
-    const linkedRegistry = await this.call(this.vault, vault.address, "merchantRegistry", [], block.number);
+    }));
+    const [issuer, linkedRegistry] = await Promise.all([
+      this.call(this.vault, vault.address, "issuer", [], block.number),
+      this.call(this.vault, vault.address, "merchantRegistry", [], block.number),
+    ]);
     if (!sameAddress(issuer, this.deployment.roles.grantIssuer) || !sameAddress(linkedRegistry, registry.address)) throw new GrantError("DEPLOYMENT_MISMATCH");
     return block;
   }
@@ -92,10 +96,11 @@ export class GrantsReader {
     return this.safe(async () => {
       beneficiary = grantAddress(beneficiary);
       const block = await this.context("latest");
-      const balance = await this.call(this.vault, this.deployment.contracts.PurposeBoundGrantVault.address,
-        "balances", [beneficiary, FOOD], block.number);
+      const [balance, merchantAllowed] = await Promise.all([
+        this.call(this.vault, this.deployment.contracts.PurposeBoundGrantVault.address, "balances", [beneficiary, FOOD], block.number),
+        this.allowed(this.deployment.merchants.canteen.address, block.number),
+      ]);
       if (typeof balance !== "bigint" || balance < 0n) throw new GrantError("RPC_UNAVAILABLE");
-      const merchantAllowed = await this.allowed(this.deployment.merchants.canteen.address, block.number);
       for (const event of verifiedEvents) {
         if (event.blockNumber > block.number) throw new GrantError("CHAIN_CHANGED");
         await this.unchanged({ number: event.blockNumber, hash: event.blockHash });

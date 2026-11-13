@@ -4,6 +4,8 @@ Nhánh `codex/B05-demo-grants`, nền L06 `eba14b8`. Bằng chứng được t�
 
 ## Kết quả cuối
 
+Các số liệu trong bảng dưới ghi nhận lần bàn giao ban đầu. Kết quả sau review ngày 2026-11-13 ở cuối tài liệu thay thế số liệu đó cho head PR hiện tại.
+
 | Kiểm tra | Kết quả |
 | --- | --- |
 | Node / pnpm | Node 24.22.1, pnpm 11.25.0 |
@@ -35,3 +37,12 @@ Một test bị skip là integration SBT B03 tùy chọn chưa bật biến môi
 Đã tích hợp `main` tại `3b1d136` vào riêng nhánh B05. Giữ `InvoiceCreationService` ở tham số thứ ba của `createApp`, thêm `GrantsService` ở tham số thứ tư và dùng chung invoice repository/RPC cho B01/B02. Giữ test frontend U02/U03 và test L06 trong lệnh `pnpm test`. Nhật ký B01/U02 và D014 của main được giữ; quyết định B05 đổi thành D015 để tránh trùng mã.
 
 Test tạo invoice B01 được chạy trước nối lại service và thất bại 503 thay vì 201; sau sửa, cả invoice B01 và grants B05 đạt. Kiểm tra toàn repo sau tích hợp: `pnpm typecheck`, `pnpm test` **322 pass, 0 fail, 1 skip B03**, `pnpm build` đạt. Harness Anvil B05 chạy lại đạt 5.000 → 4.000, không cấp trùng và ba giao dịch sai bị revert; output kiểm chứng bổ sung nằm local `backend/data/b05-conflict-evidence.json` (bị Git bỏ qua). Phần code contract/seed/reader không đổi so với evidence JSON công khai trước đó. Không triển khai hoặc thực hiện giao dịch trên L1.
+
+## Sửa review ngày 2026-11-13
+
+- Cập nhật main `4ec299e` đã có B03/L05/L06 qua B04. Diff PR còn đúng 22 file B05; giữ B04/U04 và chuyển quyết định B05 sang D017, không đè mã D015/D016 của đồng đội.
+- Tái hiện lỗi reviewer bằng transport thật với nonce đã đổi: bản cũ báo `SEED_OUTCOME_UNKNOWN` và khóa intent. Bản sửa phân biệt lỗi trước lời gọi gửi, lưu intent vào lịch sử `not-broadcast` và cho phép retry sau khi sửa nguyên nhân. Lỗi RPC trong/sau lời gọi gửi vẫn giữ khóa để đối chiếu.
+- Reader xác minh receipt revert canonical thì apply lưu lịch sử `canonical-revert` và dừng với `SEED_REVERTED_RETRY_ALLOWED`; chỉ lần chạy rõ ràng kế tiếp mới có thể ký grant mới sau toàn bộ preflight. Dry-run trả kế hoạch phục hồi, không sửa DB. Test mở lại journal, lỗi revert chưa xác minh và intent chưa rõ đều được bao phủ.
+- Tối ưu các RPC đọc độc lập song song tại block đã ghim, vẫn xác minh chain/hash cuối. Test hồi quy thất bại với reader tuần tự, đạt sau sửa.
+- `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm build`, `git diff --check`: đạt. `pnpm test`: **367 pass, 0 fail, 1 skip B03**; backend 208, frontend 87, P02 35, artifact L04 5 và L06 32. Có **62 test B05**.
+- Evidence JSON công khai đã tạo lại từ nguồn hiện tại. Harness Anvil kiểm tra thêm nonce bị thay trước broadcast (không cấp), grant out-of-gas được mine với status 0, rồi seed thành công 5.000 → chi 1.000 → 4.000. Hai receipt phục hồi nằm ở `seed.nonceMovedReceipt` và `seed.failedSeedReceipt`; các hash/địa chỉ chỉ thuộc Anvil tạm. Chưa nghiệm thu L1 thật.

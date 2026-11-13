@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { setImmediate } from "node:timers/promises";
 import { test } from "node:test";
 import express from "express";
 import { GrantsReader } from "../src/modules/grants/grants.rpc.ts";
@@ -39,6 +40,20 @@ test("snapshot pins balance, code and allowlist reads and reports a revoked merc
   const result = await new GrantsReader(provider, rpc.deployment).snapshot(beneficiary);
   assert.deepEqual(result, { blockNumber: 10, blockHash: hash(10), balanceWei: 4000n, merchantAllowed: false });
   for (const call of rpc.calls.filter((call) => ["eth_call", "eth_getCode"].includes(call.method))) assert.equal(call.params[1], "0xa");
+});
+
+test("snapshot can complete independent code reads concurrently at the pinned block", async (t) => {
+  const { rpc, provider } = await rpcFixture(t); rpc.balance = 3000n;
+  const send = provider.send.bind(provider); let codeReads = 0;
+  provider.send = async (method, params) => {
+    if (method === "eth_getCode") {
+      codeReads++; await setImmediate();
+      if (codeReads < 2) throw new Error("Independent deployment reads were serialized");
+    }
+    return send(method, params);
+  };
+  const snapshot = await new GrantsReader(provider, rpc.deployment).snapshot(beneficiary);
+  assert.equal(snapshot.balanceWei, 3000n); assert.equal(snapshot.blockHash, hash(10));
 });
 
 for (const [label, change, expected] of [

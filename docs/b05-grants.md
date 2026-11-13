@@ -4,7 +4,7 @@ B05 cấp một khoản **5.000 CAMPUS FOOD** cho `student.address` của cấu 
 
 ## Phụ thuộc và trạng thái
 
-Nhánh `codex/B05-demo-grants` dựa trên L06 `eba14b8`. Khi kiểm tra, `origin/main` là `3b1d136`: PR L05 #11 và L06 #12 đã merged vào nhánh phụ thuộc, nên code tương ứng chưa nằm trong main. Nhóm cần đưa L05/L06 vào main theo quy trình review trước khi tích hợp B05. Không tự merge phụ thuộc trong lượt này.
+Nhánh `codex/B05-demo-grants` đã cập nhật theo `main` tại `4ec299e` ngày 2026-11-13. Main hiện chứa B03/L05/L06 qua tích hợp B04; diff PR B05 chỉ còn module grants, seed, cấu hình tích hợp, test và tài liệu B05. Trước đó nhánh xếp trên L06 `eba14b8` do main cũ thiếu phụ thuộc; rào cản phạm vi đó đã được xử lý bằng cập nhật main, không tự merge PR phụ thuộc.
 
 Đã đọc B03 #10, L05 #11, L06 #12, tài liệu/ABI và loader manifest. Bảng sprint không truy cập được bằng công cụ đọc trong phiên này; tiêu chí triển khai theo yêu cầu B05 được giao. Manifest canonical `deployments/intracampus.json` vẫn `unconfigured`. Chưa có nghiệm thu Avalanche L1 của nhóm.
 
@@ -47,11 +47,15 @@ Trước broadcast, CLI ký trong bộ nhớ, kiểm tra toàn bộ giao dịch 
 | `confirmed` | Receipt thành công và `GrantIssued` đúng; lưu hash và đọc số dư lại |
 | `already-issued` | Đã đối chiếu khoản cấp trước; không gửi thêm |
 | `SEED_OUTCOME_UNKNOWN` | Intent đã lưu nhưng chưa có receipt. Giữ journal, tra hash; chạy lại chỉ để đối chiếu |
-| `TX_REVERTED`, `SEED_RECEIPT_MISMATCH` | Không báo cấp thành công; người vận hành kiểm tra hash và contract |
+| `SEED_REVERTED_RETRY_ALLOWED` | Reader đã xác minh receipt revert canonical. Apply lưu lịch sử intent thất bại rồi dừng; lần chạy apply tiếp theo sẽ kiểm tra toàn bộ trước khi ký lại |
+| `ISSUER_NONCE_CHANGED`, lỗi preflight trước gửi | Transport xác nhận chưa gọi broadcast: chuyển intent sang lịch sử `not-broadcast`, báo nguyên nhân; có thể sửa cấu hình/chờ nonce ổn định rồi chạy lại |
+| `SEED_RECEIPT_MISMATCH` | Giữ intent, không báo cấp thành công; người vận hành kiểm tra hash và contract |
 | `ISSUER_HAS_PENDING_TRANSACTIONS` | Đợi/đối chiếu giao dịch issuer trước; không chạy song song với tác vụ khác |
 | `WRONG_CHAIN`, `DEPLOYMENT_MISMATCH`, `RPC_UNAVAILABLE` | Sửa nguồn cấu hình/kết nối, không đổi địa chỉ để né kiểm tra |
 
-Nếu crash sau khi commit intent nhưng trước khi broadcast, journal cố ý giữ trạng thái chưa rõ. Không có nút tự xóa intent hoặc tự thay thế nonce. Người giữ issuer cần đối chiếu receipt, nonce, mempool và lịch sử trên node trước khi xử lý thủ công. Một receipt thành công tìm được ở lần chạy sau đủ để tiếp tục đọc; chưa biết kết quả thì không gửi grant mới.
+Dry-run không thay đổi journal. Nếu intent cũ có receipt revert canonical, kế hoạch trả `status: planned`, `recovery: canonical-revert` và hash cũ. Apply xác minh lại, chuyển đúng intent/hash sang bảng lịch sử `grant_seed_retired` với lý do `canonical-revert` rồi dừng, yêu cầu operator chạy lại rõ ràng. Lỗi chắc chắn trước lời gọi `provider.broadcastTransaction` được transport phân loại riêng và lưu lý do `not-broadcast`. Việc lưu lịch sử và gỡ khóa đúng hash diễn ra trong một transaction SQLite; không gỡ intent mới của tiến trình khác. Database cũ được bổ sung bảng lịch sử khi mở ở chế độ ghi.
+
+Nếu crash mà chưa có bằng chứng giai đoạn gửi hoặc RPC timeout sau khi bắt đầu broadcast, journal vẫn giữ trạng thái chưa rõ. Không có nút tự xóa intent hoặc tự thay thế nonce. Người giữ issuer cần đối chiếu receipt, nonce, mempool và lịch sử trên node trước khi xử lý thủ công. Receipt thiếu, orphan, không khớp hoặc thông báo lỗi thô có chữ “revert” không cho phép gỡ khóa. Một receipt thành công tìm được ở lần chạy sau đủ để tiếp tục đọc; chưa biết kết quả thì không gửi grant mới.
 
 Tất cả tiến trình seed phải dùng **cùng một journal trên một máy issuer**. Không xóa journal, không chạy từ hai máy/kho dữ liệu khác nhau và không dùng issuer gửi tác vụ khác đồng thời. Hợp đồng L05 không có seed ID/chống cấp trùng trên chain; bảo đảm chống cấp trùng đang gửi dựa vào journal chung và lịch sử RPC tin cậy. RPC phải cung cấp đầy đủ logs và state lịch sử từ block triển khai; lỗi đọc làm dừng.
 

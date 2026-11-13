@@ -30,3 +30,7 @@ Architecture: reuse B03 account parsing, L06 manifest validation and ABI, ethers
 ## Review focus
 
 Unknown broadcast before a hash is returned; crash after on-chain confirmation; concurrent seed processes; RPC history/receipt mismatch; chain reset reusing addresses. Tests must fail closed without another issuance and without leaking RPC errors or credentials.
+
+## Review follow-up · 2026-11-13
+
+The user authorized pushing review fixes. Main `4ec299e` now includes dependencies via B04; update the B05 branch and preserve B04/U04. Retire only the matching durable intent with an audit reason when the transport proves no broadcast occurred or the reader verifies a canonical revert. Dry-run stays read-only, ambiguous outcomes retain the lock, and a reverted seed stops for an explicit operator retry. Parallelize independent pinned RPC reads, retaining final chain/hash checks. Regression tests, fresh full suite/build and real Anvil recovery evidence completed; see `docs/evidence/b05-verification.md`.

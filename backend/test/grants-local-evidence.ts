@@ -183,6 +183,32 @@ async function main(): Promise<void> {
     assert.equal(await provider.getTransactionCount(issuer.address), beforeDryRun);
     assert.equal((await lookup()).balanceWei, "0");
 
+    stage = "recover-pre-broadcast-nonce-change";
+    let nonceMovedReceipt: TransactionReceipt | null = null;
+    await assert.rejects(seedGrant({ config, reader, journal, apply: true, transport: {
+      ...transport, broadcast: async (raw) => {
+        nonceMovedReceipt = await (await issuer.sendTransaction({ to: issuer.address, value: 0n })).wait();
+        return transport.broadcast(raw);
+      },
+    } }), /ISSUER_NONCE_CHANGED/);
+    assert(nonceMovedReceipt && (nonceMovedReceipt as TransactionReceipt).status === 1);
+    assert.equal((await lookup()).balanceWei, "0");
+
+    stage = "recover-canonical-reverted-seed";
+    let failedSeedHash = "";
+    const lowGasTransport = { ...transport, prepare: async () => {
+      const nonce = await issuer.getNonce("pending");
+      const rawTransaction = await issuer.signTransaction({ to: await vault.getAddress(), chainId: 20261,
+        nonce, value: 5000n * unit, gasLimit: 35000n, gasPrice: (await provider.getFeeData()).gasPrice!, type: 0,
+        data: vault.interface.encodeFunctionData("grant", [config.student.address, food]) });
+      failedSeedHash = keccak256(rawTransaction);
+      return { rawTransaction, hash: failedSeedHash, nonce };
+    } };
+    await assert.rejects(seedGrant({ config, reader, journal, transport: lowGasTransport, apply: true }), /SEED_REVERTED_RETRY_ALLOWED/);
+    const failedSeedReceipt = await provider.getTransactionReceipt(failedSeedHash);
+    assert(failedSeedReceipt && failedSeedReceipt.status === 0);
+    assert.equal((await lookup()).balanceWei, "0");
+
     stage = "seed-and-read-http-5000";
     const issued = await seedGrant({ config, reader, journal, transport, apply: true });
     assert.equal(issued.status, "confirmed");
@@ -270,6 +296,7 @@ async function main(): Promise<void> {
       chainId: 20261, client, sourceHashNormalization: "UTF-8 with LF line endings", sourceSha256,
       deployment: manifest satisfies DeployedManifest, deployReceipts, configureReceipts,
       seed: { planned, cliPlanned, issued, repeated, restarted, cliRestarted,
+        nonceMovedReceipt: publicReceipt(nonceMovedReceipt!), failedSeedReceipt: publicReceipt(failedSeedReceipt),
         additionalTransactionsAfterRepeat: 0, additionalTransactionsAfterRestart: 0 },
       grant: { issuedReceipt: publicReceipt(issuedReceipt), spentReceipt: publicReceipt(spentReceipt), funded, spent,
         remainingWei: "4000000000000000000000", merchantIncreaseWei: "1000000000000000000000", rejections },
