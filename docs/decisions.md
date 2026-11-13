@@ -151,7 +151,7 @@ kết quả; chỉ receipt/event B02 đã xác minh mới được hiển thị 
 POS dùng lại B04, Student đối chiếu thêm payer/hash của lần ký. Không thay
 P02, ABI L04 hoặc bổ sung ví ký phía backend. Xem [runbook U04](u04-payment.md).
 
-## D017 · U05: beneficiary chi FOOD từ vault và xác minh qua B05 · 2026-11-13
+## D018 · U05: beneficiary chi FOOD từ vault và xác minh qua B05 · 2026-11-13
 
 GrantPanel dùng phiên ví U02/U04 để beneficiary tự ký `spend` với value 0;
 ngân sách lấy từ vault, CAMPUS ví cá nhân trả gas. Merchant/category/ABI từ

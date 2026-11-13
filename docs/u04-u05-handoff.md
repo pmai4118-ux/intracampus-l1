@@ -11,6 +11,17 @@ trạng thái sprint thay reviewer.
 
 ## Kết quả kiểm tra
 
+Các kết quả EVM/browser ghép B05 dưới đây là bằng chứng lịch sử trên source
+kiểm thử riêng, không xác nhận main hiện tại đã chứa API B05. Review ngày
+2026-11-13 yêu cầu giữ U05 draft tới khi B05 được nhóm tích hợp vào main.
+
+Sau khi đọc review mới nhất, đã chuyển PR #19 về draft theo lựa chọn của người
+dùng và kiểm tra lại code `fccc5ac` với thay đổi tài liệu này: Node 24.22.1,
+`pnpm typecheck`, `pnpm test` (345 pass, 0 fail, 1 skip B03 tùy chọn),
+`pnpm build`, `git diff --check` đạt. Không ghép nhánh B05 vào U05 hoặc merge
+B05 vào main trong lượt này; chưa chạy lại bằng chứng tích hợp với B05 head
+`0d6ac91`. Quyết định U05 dùng D018 để không trùng D017 của B05 khi ghép sau này.
+
 - Node 24.22.2, pnpm 11.25.0: `pnpm typecheck`, `pnpm test`, `pnpm build` đạt
   trên source U04/U05 sau sửa review. Bộ test có 345 pass, 1 skip integration
   B03 tùy chọn; frontend 127 pass, gồm 14 regression mới cho khôi phục không hash.
@@ -49,9 +60,11 @@ của B04. Hash trong evidence chỉ thuộc node Anvil tạm, không phải Ava
 
 1. U04 #18 đã merge vào main; PR U05 #19 dùng main làm base và giữ các test
    U04/B04. Không merge U05 vào nhánh U04.
-2. Tích hợp B05 PR #16 và xử lý conflict theo main mới; giữ mọi test script
-   trong backend/package.json và cả các quyết định. U05 dùng giao kèo B05,
-   chưa chép API/seed từ nhánh đồng đội vào task frontend.
+2. Chờ nhóm duyệt/merge B05 PR #16 (head đã kiểm tra: `0d6ac91`), giữ U05 #19
+   ở draft. B05 đã sửa recovery/reset và hết conflict, nhưng main `4ec299e`
+   vẫn thiếu route grants. Khi B05 vào main, cập nhật U05, giữ mọi test script
+   và quyết định; chạy typecheck/test/build/CI và EVM/controller từ đúng source
+   mới rồi yêu cầu review lại. U05 không chép API/seed hay tự merge B05.
 3. Operator xuất manifest L06 L1 thật, bàn giao RPC HTTPS 20261 và seed B03/B05.
    Build/restart hai client từ cùng manifest, SQLite trên volume bền vững.
 4. Hai thiết bị HTTPS chạy Core thật, quay QR → xác nhận → receipt cho hai ví;
