@@ -59,6 +59,52 @@ Nếu crash mà chưa có bằng chứng giai đoạn gửi hoặc RPC timeout s
 
 Tất cả tiến trình seed phải dùng **cùng một journal trên một máy issuer**. Không xóa journal, không chạy từ hai máy/kho dữ liệu khác nhau và không dùng issuer gửi tác vụ khác đồng thời. Hợp đồng L05 không có seed ID/chống cấp trùng trên chain; bảo đảm chống cấp trùng đang gửi dựa vào journal chung và lịch sử RPC tin cậy. RPC phải cung cấp đầy đủ logs và state lịch sử từ block triển khai; lỗi đọc làm dừng.
 
+## Reset dữ liệu demo mà không thay đổi ví khác
+
+### L1 hoặc node dùng chung: không rollback, không xóa journal
+
+Vault L05 không có quyền thu hồi/reset riêng một grant đã cấp. Xóa SQLite, xóa intent hoặc chạy lại B03 không hoàn tác `grant`/`spend` và không đưa số dư 4.000 về 5.000. Giữ journal để đối chiếu, dùng lại ngân sách còn lại. Nếu cần kịch bản sạch, chuẩn bị **ví sinh viên demo mới** trong file cấu hình B03 riêng và cấp một khoản mới sau khi issuer đồng ý; các ví cũ, grant cũ và journal của chúng được giữ nguyên. Khoản cấp mới vẫn dùng ngân sách/gas thật của issuer. Không tự `grant` thêm cho ví cũ để gọi đó là reset.
+
+RPC lỗi, receipt-null hoặc sai deployment chưa phải bằng chứng rollback. Trên L1 dùng chung, không chạy `evm_revert`, `anvil_reset`, ghi đè state hay xóa journal để vượt `SEED_OUTCOME_UNKNOWN`. Nếu mạng đã bị reset bởi operator, cần bàn giao deployment và lịch sử mới rõ ràng; không chỉ dựa vào chain ID 20261. Không có thao tác reset on-chain tự động trong B05.
+
+### Anvil local dùng riêng: checkpoint có kiểm soát, đối chiếu rồi gỡ đúng một intent
+
+Chỉ áp dụng trên node **Anvil tạm, loopback, do chính người chạy demo sở hữu**, manifest `environment: local-anvil`, không có thiết bị/người dùng khác gửi giao dịch. `evm_revert` khôi phục **toàn node**, không riêng một ví. Chỉ giữ được ví khác khi checkpoint đã chứa trạng thái của họ và không có hoạt động của họ sau checkpoint. Nếu không chứng minh được điều này, dừng quy trình; dùng node/deployment demo riêng mới, không rollback node đang dùng chung.
+
+1. **Trước demo**, sau deploy/allowlist và sau khi chuẩn bị các ví đối chứng, tạo checkpoint bằng `evm_snapshot`. Ghi snapshot ID, block number/hash, manifest vault/block deploy, issuer, beneficiary, FOOD; ghi số dư native, nonce và grant của ví đối chứng. Người nhận cần số dư FOOD 0 tại checkpoint. Giữ snapshot của đúng phiên Anvil; không dùng một ID từ phiên node khác. Lưu kế hoạch seed/hash công khai và đường dẫn journal khi chạy demo.
+2. **Dừng các tiến trình seed/UI đang ký và mọi tác nhân gửi lại giao dịch.** Chỉ trên node riêng nói trên, operator chủ động gọi `evm_revert` với snapshot đã ghi. Nếu ví khác đã giao dịch từ checkpoint, không làm bước này. Không dùng cách xóa journal đơn thuần để reset chain.
+3. **Đối chiếu rollback trước khi sửa SQLite.** Kiểm tra `web3_clientVersion` là Anvil, RPC loopback/chain 20261; block checkpoint canonical; code/roles/allowlist và block deploy vẫn khớp manifest local. Với ví mục tiêu, kiểm tra FOOD về 0 và không còn cấp sau checkpoint. Receipt **và transaction** của hash seed cũ đều phải `null`; nonce issuer `pending` bằng `latest`, không còn transaction có thể phát lại. Nếu còn pending, receipt chưa rõ hoặc không kiểm soát được signer khác, dừng. So sánh lại ví đối chứng với giá trị checkpoint; chúng phải giữ nguyên. `SEED_OUTCOME_UNKNOWN` lúc này là hành vi đúng: operation ID vẫn khớp vì deployment không đổi, còn receipt seed đã bị rollback.
+4. **Đóng sạch journal và sao lưu trước khi sửa.** Dừng mọi tiến trình đang mở DB. Sau khi SQLite đóng sạch, sao chép đúng file journal (mặc định `backend/data/grant-seed.sqlite`) tới bản backup riêng; nếu vẫn còn WAL/SHM hoặc có process giữ DB thì dùng backup SQLite nhất quán, không sao chép thiếu WAL rồi xóa. Không xóa/ghi đè cả DB và không thao tác `invoices.sqlite`.
+5. **Chọn đúng một hàng.** Dùng hash seed cũ tra `SELECT * FROM grant_seed_intents WHERE transaction_hash = :tx_hash`; phải đúng một hàng. Đối chiếu `operation_id` với `id(JSON.stringify(["b05-food-v1",20261,vaultAddressLower,vaultDeployBlockHashLower,grantIssuerLower,beneficiaryLower,foodLower,"5000000000000000000000"]))` (hàm `id` của ethers). Các giá trị lấy từ manifest/config đã ghi, không lấy từ ví đang mở ngẫu nhiên. Giữ nguyên các hàng của ví khác và bảng lịch sử `grant_seed_retired`.
+6. **Lưu bằng chứng reset rồi gỡ đúng intent đã rollback.** Dùng SQLite transaction dưới đây, bind các tham số bằng giá trị đã đối chiếu. Chỉ làm sau đầy đủ bước 1–5, không áp dụng cho receipt-null do RPC lỗi. Sau mỗi lệnh ghi, `SELECT changes()` phải bằng 1; nếu khác, chạy `ROLLBACK`, dừng và đối chiếu lại, không nới điều kiện WHERE.
+
+```sql
+CREATE TABLE IF NOT EXISTS grant_seed_local_resets (
+  operation_id TEXT, transaction_hash TEXT, nonce INTEGER,
+  snapshot_id TEXT, rollback_block_hash TEXT
+) STRICT;
+BEGIN IMMEDIATE;
+INSERT INTO grant_seed_local_resets
+SELECT operation_id, transaction_hash, nonce, :snapshot_id, :rollback_block_hash
+FROM grant_seed_intents
+WHERE operation_id = :operation_id AND transaction_hash = :tx_hash;
+SELECT changes(); -- Phải bằng 1; nếu khác thì ROLLBACK và dừng.
+DELETE FROM grant_seed_intents
+WHERE operation_id = :operation_id AND transaction_hash = :tx_hash;
+SELECT changes(); -- Phải bằng 1; nếu khác thì ROLLBACK và dừng.
+COMMIT;
+```
+
+Không dùng `retire(..., "not-broadcast")` hoặc `canonical-revert` để mô tả rollback: giao dịch trước đó có thể đã thành công, chỉ bị xóa khỏi lịch sử node local. Bảng `grant_seed_local_resets` và backup giữ hash/nonce/checkpoint cũ để phân biệt tình huống này. So sánh các hàng journal ngoài `operation_id` mục tiêu với backup; chúng phải không đổi.
+
+7. **Đóng editor DB, chạy dry-run lại** với đúng config, manifest local và `--allow-local`. Kế hoạch phải là `planned`, FOOD 0, cấp 5.000, đúng ví/căn-tin/issuer. Sau khi operator duyệt, chạy cùng lệnh với `--apply`. Đọc receipt mới và số dư **5.000**, chi lại 1.000 bằng ví sinh viên nếu cần kịch bản 4.000; kiểm tra ví đối chứng và các intent khác vẫn nguyên. Không tự gửi lại raw transaction cũ.
+
+Harness `test:b05:local` tái hiện quy trình này: cấp grant cho ví đối chứng trước checkpoint, seed/chi ở ví mục tiêu, rollback node riêng, xác nhận intent cũ bị khóa, sao lưu và gỡ đúng hàng bằng transaction trên, rồi seed lại. Evidence `localReset` ghi ví đối chứng trước/sau, operation ID, hash cũ đã mất, kế hoạch mới và receipt/hash seed mới. Các receipt giai đoạn trước rollback được xác minh khi chúng còn canonical; sau rollback chúng cố ý không còn trên node. Đây chỉ là bằng chứng local, không phải reset hoặc nghiệm thu L1.
+
+### Chi phí đọc trước khi gửi
+
+Seed ghim history vào đúng hash snapshot rồi tái sử dụng trong **cùng một lần gọi** nếu snapshot ban đầu và pre-send có cùng block number **và** hash. History từ fork khác bị từ chối `CHAIN_CHANGED`. Nếu block tiến lên hoặc đổi fork cùng độ cao thì đọc lại history. Không cache kết quả qua lần chạy, không bỏ qua kiểm tra balance/allowlist trước gửi hoặc unique intent trong journal.
+
 ## Giao kèo HTTP cho U05
 
 ```http

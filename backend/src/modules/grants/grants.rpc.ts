@@ -176,11 +176,12 @@ export class GrantsReader {
       return events.sort((a, b) => a.logIndex - b.logIndex);
     });
   }
-  async issued(beneficiary: string, toBlock: number): Promise<VerifiedGrantEvent[]> {
+  async issued(beneficiary: string, toBlock: number, expectedBlockHash?: string): Promise<VerifiedGrantEvent[]> {
     return this.safe(async () => {
       beneficiary = grantAddress(beneficiary);
       if (!Number.isSafeInteger(toBlock) || toBlock < this.deployment.contracts.PurposeBoundGrantVault.blockNumber) throw new GrantError("INVALID_REQUEST");
       const pinned = await this.context(toBlock);
+      if (expectedBlockHash !== undefined && !sameHash(pinned.hash, expectedBlockHash)) throw new GrantError("CHAIN_CHANGED");
       const fragment = this.vault.getEvent("GrantIssued");
       if (!fragment) throw new GrantError("DEPLOYMENT_MISMATCH");
       const topics = this.vault.encodeFilterTopics(fragment, [beneficiary, FOOD]);

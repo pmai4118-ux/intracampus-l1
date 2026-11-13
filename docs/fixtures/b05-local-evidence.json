@@ -1,6 +1,6 @@
 {
   "evidence": "LOCAL ANVIL EVM ONLY; not Avalanche L1 evidence",
-  "generatedAt": "2026-11-13T11:03:23.597Z",
+  "generatedAt": "2026-11-13T12:44:21.616Z",
   "chainId": 20261,
   "client": "anvil/v1.7.1",
   "sourceHashNormalization": "UTF-8 with LF line endings",
@@ -8,8 +8,8 @@
     "contracts/src/StudentSBTIdentity.sol": "26c90ba2e0872b0832a10d59cce0255abc222fb921f26b21967a576295b926d1",
     "contracts/src/CampusPaymentRegistry.sol": "5cb5821ebd11551666bdd74b4dd8f3fb5180bea9e02066415d55bff7675aad4c",
     "contracts/src/PurposeBoundGrantVault.sol": "2eb54aaadef86a7db1df4ad683223b97be152151753553ab2a3dea0e365fc88a",
-    "backend/scripts/seed-grants.ts": "8d5b4969083c2e06d2f91c88f5a1d3840ea294018781786d1765a5bb62024e24",
-    "backend/src/modules/grants/grants.rpc.ts": "821fc9e2d0013936d784cd2fcae29a4ef4cc7ce68845ae44306b8726fc46a42a",
+    "backend/scripts/seed-grants.ts": "a8ab65efd5341eb9c314cb695f644cf53cc19a41ecdfb4b3ca6205c115cbdf2e",
+    "backend/src/modules/grants/grants.rpc.ts": "b4dc138692c1cd6953cf0d78cbdbaa41879381d0dcd8b1ef266b8afbc5471fd0",
     "backend/src/modules/grants/grants.seed-repository.ts": "47f78bf59cc5542839dcab0aad5322a911004f922ed4dfea23256f9c2b730b6e",
     "backend/src/modules/grants/grants.service.ts": "8d8e5f73c79a37f986636bfaf78ce52de45d55690fc6ad6d3a2805a740d479d5"
   },
@@ -446,7 +446,7 @@
         ],
         "transactionHash": "0xee196a96f71798b3d5d982e2cebf18bbc5bba9c1e8ead987e8371d1d132a42df",
         "blockNumber": 2,
-        "blockHash": "0xe581b2870bdbad1396eeb35a45aa88d52d95192f37358388034a008795959f88",
+        "blockHash": "0x01748468dd3e69fc56322d45af198c64564bcee082b145e42dd5b14a172c30a5",
         "runtimeCodeHash": "0xc13cf8784c7c62b8b1ec93f4fdcd69771c12dec2639bd0934a864159e9220ed2"
       },
       "CampusPaymentRegistry": {
@@ -895,7 +895,7 @@
         ],
         "transactionHash": "0x1720a368c748565f75fc645787b3c02a8ffd8c631abd3b8c88596f2fbeb59828",
         "blockNumber": 3,
-        "blockHash": "0x988ed5b5e32e70452c8267bc3867f2f6cc874be6d6e0c5e7d9f2fdd5cf4b0fda",
+        "blockHash": "0xfcf14ce117c87f252459beafdf206a4ba2c607d67c7d15d576a9a39b9df3a226",
         "runtimeCodeHash": "0x0bbe60732f1a5a9db4838c17fef50dc5f2a53d60766f3ff4df8ec7aeae39def4"
       },
       "PurposeBoundGrantVault": {
@@ -1175,16 +1175,16 @@
             "inputs": []
           }
         ],
-        "transactionHash": "0xd6447bafd5645a331738566cd1bf34ab08677321802f2cd1cee4906890767844",
+        "transactionHash": "0x56f754a223c76211cfc0fa4d4517b12e31700dc76559d5ea05d926c6a39e5170",
         "blockNumber": 4,
-        "blockHash": "0xa126e3ccf856a8478e84fff25f79566b0941e1d0d2d854ffc6eaf4108648890f",
-        "runtimeCodeHash": "0x4096db6cf7ddb7ecfb65b44f1768f598835fd4e43950bd32188c5f4d007ad613"
+        "blockHash": "0xbe0c94fea6009411eb86ce8c30da635f8cb53742678caa104b2956146b816e29",
+        "runtimeCodeHash": "0x2f409dca8a3ee69cfe3ed352e495655d8c545b47545f9963d73315ea58c822c6"
       }
     },
     "roles": {
       "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "sbtIssuer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "grantIssuer": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+      "grantIssuer": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
       "posSigner": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
     },
     "merchants": {
@@ -1203,7 +1203,7 @@
       "transactionHash": "0xee196a96f71798b3d5d982e2cebf18bbc5bba9c1e8ead987e8371d1d132a42df",
       "status": 1,
       "blockNumber": 2,
-      "blockHash": "0xe581b2870bdbad1396eeb35a45aa88d52d95192f37358388034a008795959f88",
+      "blockHash": "0x01748468dd3e69fc56322d45af198c64564bcee082b145e42dd5b14a172c30a5",
       "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "to": null,
       "gasUsed": "590476",
@@ -1214,7 +1214,7 @@
       "transactionHash": "0x1720a368c748565f75fc645787b3c02a8ffd8c631abd3b8c88596f2fbeb59828",
       "status": 1,
       "blockNumber": 3,
-      "blockHash": "0x988ed5b5e32e70452c8267bc3867f2f6cc874be6d6e0c5e7d9f2fdd5cf4b0fda",
+      "blockHash": "0xfcf14ce117c87f252459beafdf206a4ba2c607d67c7d15d576a9a39b9df3a226",
       "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "to": null,
       "gasUsed": "804345",
@@ -1222,10 +1222,10 @@
       "logs": []
     },
     {
-      "transactionHash": "0xd6447bafd5645a331738566cd1bf34ab08677321802f2cd1cee4906890767844",
+      "transactionHash": "0x56f754a223c76211cfc0fa4d4517b12e31700dc76559d5ea05d926c6a39e5170",
       "status": 1,
       "blockNumber": 4,
-      "blockHash": "0xa126e3ccf856a8478e84fff25f79566b0941e1d0d2d854ffc6eaf4108648890f",
+      "blockHash": "0xbe0c94fea6009411eb86ce8c30da635f8cb53742678caa104b2956146b816e29",
       "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "to": null,
       "gasUsed": "450574",
@@ -1238,7 +1238,7 @@
       "transactionHash": "0x744e969dd5bbac5a10db4d82c3f300f17c5612b82386c05d13a76dd272c938ee",
       "status": 1,
       "blockNumber": 5,
-      "blockHash": "0xd7164613868845675ad949178e377529c91c42bdef61cb508c395ee33a0dea70",
+      "blockHash": "0xaa88c1981e45e040e4c1ff8869fd38475a2e06f42a38cbb19a992521cc386f41",
       "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
       "gasUsed": "46745",
@@ -1255,7 +1255,7 @@
           "logIndex": 0,
           "transactionHash": "0x744e969dd5bbac5a10db4d82c3f300f17c5612b82386c05d13a76dd272c938ee",
           "blockNumber": 5,
-          "blockHash": "0xd7164613868845675ad949178e377529c91c42bdef61cb508c395ee33a0dea70"
+          "blockHash": "0xaa88c1981e45e040e4c1ff8869fd38475a2e06f42a38cbb19a992521cc386f41"
         }
       ]
     },
@@ -1263,7 +1263,7 @@
       "transactionHash": "0x3ba915fb72384886f1c9fbc5dd348b83eaebbd3cff3ca1c24fdf1350b46ea854",
       "status": 1,
       "blockNumber": 6,
-      "blockHash": "0xe4fa8c31bfba35c90cf562ac248def189bb28e302919435c3a756217bc1794cb",
+      "blockHash": "0xc6277bb027038dd4f2ade84e32b4e7020fc8fa5b1b14287c6180b00a5947eefb",
       "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
       "gasUsed": "46745",
@@ -1280,11 +1280,53 @@
           "logIndex": 0,
           "transactionHash": "0x3ba915fb72384886f1c9fbc5dd348b83eaebbd3cff3ca1c24fdf1350b46ea854",
           "blockNumber": 6,
-          "blockHash": "0xe4fa8c31bfba35c90cf562ac248def189bb28e302919435c3a756217bc1794cb"
+          "blockHash": "0xc6277bb027038dd4f2ade84e32b4e7020fc8fa5b1b14287c6180b00a5947eefb"
         }
       ]
     }
   ],
+  "localReset": {
+    "environment": "exclusive-local-anvil",
+    "snapshotId": "0x0",
+    "rollbackBlock": {
+      "number": 9,
+      "hash": "0x83e7732d7f3e60af97753b43a15601d9c31de67c20b4fccf6d58c64980a9e611"
+    },
+    "resetOperationId": "0x8ed4de8a48a693de7732f80e5c71b260e9c6589a4a89c86f789ab205f1b98a32",
+    "removedTransactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704",
+    "oldReceiptAbsentAfterRollback": true,
+    "oldTransactionAbsentAfterRollback": true,
+    "unknownIntentBlockedUntilManualReconciliation": true,
+    "otherJournalRowsUnchanged": true,
+    "peerBefore": {
+      "address": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+      "balanceWei": "100000000000000000000000",
+      "nonce": 0,
+      "grantWei": "5000000000000000000000"
+    },
+    "peerAfter": {
+      "address": "0x976EA74026E726554dB657fA54763abd0C3a0aa9",
+      "balanceWei": "100000000000000000000000",
+      "nonce": 0,
+      "grantWei": "5000000000000000000000"
+    },
+    "resetPlan": {
+      "mode": "dry-run",
+      "beneficiary": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "amountWei": "5000000000000000000000",
+      "balanceWei": "0",
+      "status": "planned"
+    },
+    "resetSeed": {
+      "mode": "apply",
+      "beneficiary": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "amountWei": "5000000000000000000000",
+      "balanceWei": "5000000000000000000000",
+      "status": "confirmed",
+      "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
+    },
+    "note": "Global rollback was performed only on the dedicated test node, with no other actor after the snapshot. Earlier target receipts in this file were canonical when verified before rollback; afterwards they are deliberately absent. Never run this reset procedure on a shared L1."
+  },
   "seed": {
     "planned": {
       "mode": "dry-run",
@@ -1300,7 +1342,7 @@
         "environment": "local-anvil",
         "vaultAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
         "registryAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-        "issuer": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+        "issuer": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
         "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
         "merchant": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
         "mode": "dry-run",
@@ -1316,7 +1358,7 @@
       "amountWei": "5000000000000000000000",
       "balanceWei": "5000000000000000000000",
       "status": "confirmed",
-      "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7"
+      "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
     },
     "repeated": {
       "mode": "apply",
@@ -1324,7 +1366,7 @@
       "amountWei": "5000000000000000000000",
       "balanceWei": "5000000000000000000000",
       "status": "already-issued",
-      "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7"
+      "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
     },
     "restarted": {
       "mode": "apply",
@@ -1332,7 +1374,7 @@
       "amountWei": "5000000000000000000000",
       "balanceWei": "4000000000000000000000",
       "status": "already-issued",
-      "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7"
+      "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
     },
     "cliRestarted": [
       {
@@ -1341,7 +1383,7 @@
         "environment": "local-anvil",
         "vaultAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
         "registryAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-        "issuer": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+        "issuer": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
         "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
         "merchant": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
         "mode": "dry-run",
@@ -1349,7 +1391,7 @@
         "amountWei": "5000000000000000000000",
         "balanceWei": "4000000000000000000000",
         "status": "already-issued",
-        "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7"
+        "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
       },
       {
         "event": "grant-seed-result",
@@ -1358,26 +1400,26 @@
         "amountWei": "5000000000000000000000",
         "balanceWei": "4000000000000000000000",
         "status": "already-issued",
-        "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7"
+        "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704"
       }
     ],
     "nonceMovedReceipt": {
-      "transactionHash": "0x0d697d98e463ee2f32d8a6011f99bef52463fcefdac2bfb15741eb177253afb0",
+      "transactionHash": "0xc64d16ae345a9690d391ba50f408e5bd85ce4a767a6d6837be512595b3e823fc",
       "status": 1,
       "blockNumber": 7,
-      "blockHash": "0x8420a7369e1acbca59ca2aa2a46db889981cbeea087b7dbfed43f1c6763c8a4a",
-      "from": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
-      "to": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+      "blockHash": "0x34a217f045054f778820b05bb9fccc23655896e1dfac37eaaf5e43f786b5f2ad",
+      "from": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
+      "to": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
       "gasUsed": "21000",
       "effectiveGasPrice": "1457226163",
       "logs": []
     },
     "failedSeedReceipt": {
-      "transactionHash": "0x28c82a7a35a4e56df9ccc62dba7a4e5d51bd0ea0f300fd76d117853132f8ba88",
+      "transactionHash": "0x3ae97028a358005a0a9c50ca0c0b50295360b4ab5be5f44cfaa75211ef99a42b",
       "status": 0,
       "blockNumber": 8,
-      "blockHash": "0x4c080a027a3f38db5703e1f253092c3e6093b68999a3eb18069f347071a566b3",
-      "from": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+      "blockHash": "0x1dc71cbcc1e405ddd0e98c6d45bfa0aaa0590436f42f697a8df6d40a2fb21fe0",
+      "from": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
       "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       "gasUsed": "35000",
       "effectiveGasPrice": "1400152908",
@@ -1387,15 +1429,16 @@
     "additionalTransactionsAfterRestart": 0
   },
   "grant": {
+    "phase": "verified-before-exclusive-local-rollback",
     "issuedReceipt": {
-      "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7",
+      "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704",
       "status": 1,
-      "blockNumber": 9,
-      "blockHash": "0x8ee164d549ca36e2f11c55a9e3df0a76b4431afcce7425fe3dfe5f99f97e0891",
-      "from": "0xE61B7Ed4968276654E35d619E4F2Dd69Ab12Cb3c",
+      "blockNumber": 10,
+      "blockHash": "0xf830b91ab220404af2c52db0d5e5b4556e33536c95dcae7da3451c930db06dc7",
+      "from": "0xf9A7a60CA4a7D511634E01686127E0Dc6f01A3a9",
       "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-      "gasUsed": "73727",
-      "effectiveGasPrice": "1350250506",
+      "gasUsed": "60047",
+      "effectiveGasPrice": "1306684384",
       "logs": [
         {
           "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -1403,25 +1446,25 @@
             "0xedf9d44edf9c5f6feee00d887b9ae27aedc61bd3d110a86a991e9b5864d7e205",
             "0x00000000000000000000000090f79bf6eb2c4f870365e785982e1f101e93b906",
             "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
-            "0x000000000000000000000000e61b7ed4968276654e35d619e4f2dd69ab12cb3c"
+            "0x000000000000000000000000f9a7a60ca4a7d511634e01686127e0dc6f01a3a9"
           ],
           "data": "0x00000000000000000000000000000000000000000000010f0cf064dd5920000000000000000000000000000000000000000000000000010f0cf064dd59200000",
           "logIndex": 0,
-          "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7",
-          "blockNumber": 9,
-          "blockHash": "0x8ee164d549ca36e2f11c55a9e3df0a76b4431afcce7425fe3dfe5f99f97e0891"
+          "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704",
+          "blockNumber": 10,
+          "blockHash": "0xf830b91ab220404af2c52db0d5e5b4556e33536c95dcae7da3451c930db06dc7"
         }
       ]
     },
     "spentReceipt": {
-      "transactionHash": "0xf659e791d408e36b0ebe16ee29d310fa3636061bdb5dc96ffde04f1e5ab23875",
+      "transactionHash": "0xfb80ff268e85d4d698fab91137606d8fb8216f936fc25203e9f2bd3cf098e026",
       "status": 1,
-      "blockNumber": 10,
-      "blockHash": "0x5531b3b79d6fa49f8ebc7d1283268a3c25356c544fc34bc65649f23df6559a47",
+      "blockNumber": 11,
+      "blockHash": "0xf9c6d026388505f519715d263e61c90f0ff84034be22a699c5b1cdedc0b1c929",
       "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
       "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       "gasUsed": "58623",
-      "effectiveGasPrice": "1306684384",
+      "effectiveGasPrice": "1268502299",
       "logs": [
         {
           "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -1433,9 +1476,9 @@
           ],
           "data": "0x00000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000d8d726b7177a800000",
           "logIndex": 0,
-          "transactionHash": "0xf659e791d408e36b0ebe16ee29d310fa3636061bdb5dc96ffde04f1e5ab23875",
-          "blockNumber": 10,
-          "blockHash": "0x5531b3b79d6fa49f8ebc7d1283268a3c25356c544fc34bc65649f23df6559a47"
+          "transactionHash": "0xfb80ff268e85d4d698fab91137606d8fb8216f936fc25203e9f2bd3cf098e026",
+          "blockNumber": 11,
+          "blockHash": "0xf9c6d026388505f519715d263e61c90f0ff84034be22a699c5b1cdedc0b1c929"
         }
       ]
     },
@@ -1451,8 +1494,8 @@
       },
       "balanceWei": "5000000000000000000000",
       "block": {
-        "number": 9,
-        "hash": "0x8ee164d549ca36e2f11c55a9e3df0a76b4431afcce7425fe3dfe5f99f97e0891"
+        "number": 10,
+        "hash": "0xf830b91ab220404af2c52db0d5e5b4556e33536c95dcae7da3451c930db06dc7"
       },
       "allowedMerchants": [
         {
@@ -1462,20 +1505,20 @@
         }
       ],
       "transaction": {
-        "hash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7",
+        "hash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704",
         "status": "verified",
         "events": [
           {
             "event": "GrantIssued",
-            "transactionHash": "0x86bd3b298687dcbe91fc7f5a9f022efbcb0f0aecac3fe9808d03c5e60f9184a7",
-            "blockNumber": 9,
-            "blockHash": "0x8ee164d549ca36e2f11c55a9e3df0a76b4431afcce7425fe3dfe5f99f97e0891",
+            "transactionHash": "0xc1d137033dacfdb0204e2f0d3a680db8aedd5cc7a3088549dcd5f827d1c34704",
+            "blockNumber": 10,
+            "blockHash": "0xf830b91ab220404af2c52db0d5e5b4556e33536c95dcae7da3451c930db06dc7",
             "logIndex": 0,
             "beneficiary": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
             "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
             "amountWei": "5000000000000000000000",
             "balanceWei": "5000000000000000000000",
-            "issuer": "0xe61b7ed4968276654e35d619e4f2dd69ab12cb3c"
+            "issuer": "0xf9a7a60ca4a7d511634e01686127e0dc6f01a3a9"
           }
         ]
       }
@@ -1492,8 +1535,8 @@
       },
       "balanceWei": "4000000000000000000000",
       "block": {
-        "number": 10,
-        "hash": "0x5531b3b79d6fa49f8ebc7d1283268a3c25356c544fc34bc65649f23df6559a47"
+        "number": 11,
+        "hash": "0xf9c6d026388505f519715d263e61c90f0ff84034be22a699c5b1cdedc0b1c929"
       },
       "allowedMerchants": [
         {
@@ -1503,14 +1546,14 @@
         }
       ],
       "transaction": {
-        "hash": "0xf659e791d408e36b0ebe16ee29d310fa3636061bdb5dc96ffde04f1e5ab23875",
+        "hash": "0xfb80ff268e85d4d698fab91137606d8fb8216f936fc25203e9f2bd3cf098e026",
         "status": "verified",
         "events": [
           {
             "event": "GrantSpent",
-            "transactionHash": "0xf659e791d408e36b0ebe16ee29d310fa3636061bdb5dc96ffde04f1e5ab23875",
-            "blockNumber": 10,
-            "blockHash": "0x5531b3b79d6fa49f8ebc7d1283268a3c25356c544fc34bc65649f23df6559a47",
+            "transactionHash": "0xfb80ff268e85d4d698fab91137606d8fb8216f936fc25203e9f2bd3cf098e026",
+            "blockNumber": 11,
+            "blockHash": "0xf9c6d026388505f519715d263e61c90f0ff84034be22a699c5b1cdedc0b1c929",
             "logIndex": 0,
             "beneficiary": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
             "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
@@ -1528,14 +1571,14 @@
         "label": "parking merchant cannot use FOOD",
         "expectedError": "InvalidMerchant",
         "receipt": {
-          "transactionHash": "0xa29387d922a8a3cf4da384764069a3c9596dec17578d9cad5e6879a537c4d056",
+          "transactionHash": "0x3217989b94b270e7e6eaf8d5763b3a03efa31495ebefdea9059253daa86babea",
           "status": 0,
-          "blockNumber": 11,
-          "blockHash": "0x0327d84ec58f7521dd986b7af47d3c8500971a5bb3f6b29df6d5dcc2af63edfb",
+          "blockNumber": 12,
+          "blockHash": "0x4705297559311ff3a815395d21e6e0cdaedc2cbd3b96a7d36c1705b0ffb51f25",
           "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
           "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "gasUsed": "50700",
-          "effectiveGasPrice": "1268498659",
+          "effectiveGasPrice": "1235070682",
           "logs": []
         },
         "remainingWei": "4000000000000000000000",
@@ -1553,14 +1596,14 @@
         "label": "unallowed personal wallet cannot receive FOOD",
         "expectedError": "InvalidMerchant",
         "receipt": {
-          "transactionHash": "0xfc9ce2fc7d272259ddf30115ed7c381fcd1b32ffb2edbc4876122df8ace9959e",
+          "transactionHash": "0x3ffd463dcf92a80b3c734bf7656e96179ed570cd48d381df9d77ba34c7e26b64",
           "status": 0,
-          "blockNumber": 12,
-          "blockHash": "0x425bef641571bde486e035dc322a0a57374f0779ee9b0cb1073c489d230f71ec",
+          "blockNumber": 13,
+          "blockHash": "0xb5e0fed3b6e64235e6e311ce7ca19fcd78b82a468a8b52ad6f3d45b5de5c4c41",
           "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
           "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "gasUsed": "50700",
-          "effectiveGasPrice": "1235049768",
+          "effectiveGasPrice": "1205786165",
           "logs": []
         },
         "remainingWei": "4000000000000000000000",
@@ -1578,14 +1621,14 @@
         "label": "FOOD grant cannot fund PARKING",
         "expectedError": "InsufficientGrantBalance",
         "receipt": {
-          "transactionHash": "0x0b470019281f9c2299e2ce30e0b23bba3c9431f1e92a98fbb3b5d098bc71d3d1",
+          "transactionHash": "0x50f94d0e3830cfdab7b40e22ec146e4e6775ae6205f8084475a6dd48d6b20af4",
           "status": 0,
-          "blockNumber": 13,
-          "blockHash": "0x3866cb275c00f8e2d4c55bd9a942aaf2cc0794d6f39ce36e33657e0e424ff1f5",
+          "blockNumber": 14,
+          "blockHash": "0x4716f0ffe26ea758ddf60c84dc6be91a7b9174082b148ccda70573730ebdfa7f",
           "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
           "to": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "gasUsed": "52962",
-          "effectiveGasPrice": "1205767856",
+          "effectiveGasPrice": "1180149840",
           "logs": []
         },
         "remainingWei": "4000000000000000000000",
@@ -1601,5 +1644,5 @@
       }
     ]
   },
-  "note": "Contracts are fresh local deployments; ephemeral Anvil is stopped after this run. Rejected transactions are mined reverts, not only simulations. No key, raw signed transaction, or operator RPC is included."
+  "note": "Two local phases: grant contains receipts verified before an exclusive-node rollback; localReset proves the old grant receipt disappeared, only its journal row was archived/deleted, and a fresh seed preserved the peer wallet and journal row. Ephemeral Anvil is stopped after this run. Rejected transactions are mined reverts. No key, raw signed transaction, or operator RPC is included."
 }

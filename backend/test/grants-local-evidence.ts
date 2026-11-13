@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import type { Server } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -93,7 +94,7 @@ async function main(): Promise<void> {
     const accounts = await Promise.all(signers.map((signer) => signer.getAddress()));
     // The one locally signed seed key is random, funded only on this ephemeral chain, and never serialized.
     const issuer = new Wallet(Wallet.createRandom().privateKey, provider);
-    await (await signers[0].sendTransaction({ to: issuer.address, value: 6000n * unit })).wait();
+    await (await signers[0].sendTransaction({ to: issuer.address, value: 12000n * unit })).wait();
     const deployed: Partial<Record<typeof names[number], PublicContract>> = {};
     const deployReceipts: ReturnType<typeof publicReceipt>[] = [];
     async function deploy(name: typeof names[number], args: unknown[]): Promise<Contract> {
@@ -209,6 +210,15 @@ async function main(): Promise<void> {
     assert(failedSeedReceipt && failedSeedReceipt.status === 0);
     assert.equal((await lookup()).balanceWei, "0");
 
+    stage = "isolated-local-reset-baseline";
+    const peerConfig = { ...config, student: { ...config.student, address: accounts[6] } };
+    const peerSeed = await seedGrant({ config: peerConfig, reader, journal, transport, apply: true });
+    assert.equal(peerSeed.status, "confirmed");
+    const peerBefore = { address: accounts[6], balanceWei: (await provider.getBalance(accounts[6])).toString(),
+      nonce: await provider.getTransactionCount(accounts[6]), grantWei: (await reader.snapshot(accounts[6])).balanceWei.toString() };
+    const resetSnapshot = await provider.send("evm_snapshot", []);
+    const resetBlock = await provider.getBlock("latest"); assert(resetBlock);
+
     stage = "seed-and-read-http-5000";
     const issued = await seedGrant({ config, reader, journal, transport, apply: true });
     assert.equal(issued.status, "confirmed");
@@ -285,6 +295,50 @@ async function main(): Promise<void> {
     await rejectedSpend("unallowed personal wallet cannot receive FOOD", accounts[6], food, "InvalidMerchant");
     await rejectedSpend("FOOD grant cannot fund PARKING", accounts[4], parking, "InsufficientGrantBalance");
 
+    stage = "local-rollback-keeps-unknown-intent-locked";
+    assert.equal(await provider.send("evm_revert", [resetSnapshot]), true);
+    assert.equal(await provider.send("eth_getTransactionReceipt", [issued.transactionHash]), null);
+    assert.equal(await provider.send("eth_getTransactionByHash", [issued.transactionHash]), null);
+    assert.equal(await provider.send("eth_getTransactionCount", [issuer.address, "pending"]),
+      await provider.send("eth_getTransactionCount", [issuer.address, "latest"]));
+    assert.equal((await reader.snapshot(config.student.address)).balanceWei, 0n);
+    assert.equal(await vault.totalAllocated(), 5000n * unit);
+    await assert.rejects(seedGrant({ config, reader, journal, transport, apply: true }), /SEED_OUTCOME_UNKNOWN/);
+    journal.close();
+    await copyFile(journalPath, join(workDir, "grants-before-local-reset.sqlite"));
+    const resetDb = new DatabaseSync(journalPath);
+    let targetIntent: Record<string, any>;
+    let peerIntents: unknown[];
+    try {
+      const matches = resetDb.prepare("SELECT * FROM grant_seed_intents WHERE transaction_hash = ?").all(issued.transactionHash);
+      assert.equal(matches.length, 1); targetIntent = matches[0];
+      peerIntents = resetDb.prepare("SELECT * FROM grant_seed_intents WHERE operation_id <> ? ORDER BY operation_id").all(targetIntent.operation_id);
+      assert.equal(peerIntents.length, 1);
+      resetDb.exec(`CREATE TABLE IF NOT EXISTS grant_seed_local_resets (
+        operation_id TEXT, transaction_hash TEXT, nonce INTEGER, snapshot_id TEXT, rollback_block_hash TEXT
+      ) STRICT; BEGIN IMMEDIATE;`);
+      resetDb.prepare(`INSERT INTO grant_seed_local_resets SELECT operation_id, transaction_hash, nonce, ?, ?
+        FROM grant_seed_intents WHERE operation_id = ? AND transaction_hash = ?`)
+        .run(resetSnapshot, resetBlock.hash, targetIntent.operation_id, issued.transactionHash);
+      assert.equal(resetDb.prepare("DELETE FROM grant_seed_intents WHERE operation_id = ? AND transaction_hash = ?")
+        .run(targetIntent.operation_id, issued.transactionHash).changes, 1);
+      resetDb.exec("COMMIT");
+      assert.deepEqual(resetDb.prepare("SELECT * FROM grant_seed_intents WHERE operation_id <> ? ORDER BY operation_id")
+        .all(targetIntent.operation_id), peerIntents);
+    } finally { resetDb.close(); }
+    journal = new GrantSeedJournal(journalPath);
+    const resetPlan = await seedGrant({ config, reader, journal }); assert.equal(resetPlan.status, "planned");
+    const resetSeed = await seedGrant({ config, reader, journal, transport, apply: true });
+    assert.equal(resetSeed.status, "confirmed"); assert.equal(resetSeed.balanceWei, "5000000000000000000000");
+    const peerAfter = { address: accounts[6], balanceWei: (await provider.getBalance(accounts[6])).toString(),
+      nonce: await provider.getTransactionCount(accounts[6]), grantWei: (await reader.snapshot(accounts[6])).balanceWei.toString() };
+    assert.deepEqual(peerAfter, peerBefore);
+    const resetEvidence = { environment: "exclusive-local-anvil", snapshotId: resetSnapshot,
+      rollbackBlock: { number: resetBlock.number, hash: resetBlock.hash }, resetOperationId: targetIntent.operation_id,
+      removedTransactionHash: issued.transactionHash, oldReceiptAbsentAfterRollback: true, oldTransactionAbsentAfterRollback: true,
+      unknownIntentBlockedUntilManualReconciliation: true, otherJournalRowsUnchanged: true, peerBefore, peerAfter, resetPlan, resetSeed,
+      note: "Global rollback was performed only on the dedicated test node, with no other actor after the snapshot. Earlier target receipts in this file were canonical when verified before rollback; afterwards they are deliberately absent. Never run this reset procedure on a shared L1." };
+
     stage = "write-public-local-evidence";
     const sourceSha256 = Object.fromEntries(await Promise.all([
       ...names.map((name) => `contracts/src/${name}.sol`),
@@ -295,18 +349,19 @@ async function main(): Promise<void> {
       evidence: "LOCAL ANVIL EVM ONLY; not Avalanche L1 evidence", generatedAt: new Date().toISOString(),
       chainId: 20261, client, sourceHashNormalization: "UTF-8 with LF line endings", sourceSha256,
       deployment: manifest satisfies DeployedManifest, deployReceipts, configureReceipts,
+      localReset: resetEvidence,
       seed: { planned, cliPlanned, issued, repeated, restarted, cliRestarted,
         nonceMovedReceipt: publicReceipt(nonceMovedReceipt!), failedSeedReceipt: publicReceipt(failedSeedReceipt),
         additionalTransactionsAfterRepeat: 0, additionalTransactionsAfterRestart: 0 },
-      grant: { issuedReceipt: publicReceipt(issuedReceipt), spentReceipt: publicReceipt(spentReceipt), funded, spent,
+      grant: { phase: "verified-before-exclusive-local-rollback", issuedReceipt: publicReceipt(issuedReceipt), spentReceipt: publicReceipt(spentReceipt), funded, spent,
         remainingWei: "4000000000000000000000", merchantIncreaseWei: "1000000000000000000000", rejections },
-      note: "Contracts are fresh local deployments; ephemeral Anvil is stopped after this run. Rejected transactions are mined reverts, not only simulations. No key, raw signed transaction, or operator RPC is included.",
+      note: "Two local phases: grant contains receipts verified before an exclusive-node rollback; localReset proves the old grant receipt disappeared, only its journal row was archived/deleted, and a fresh seed preserved the peer wallet and journal row. Ephemeral Anvil is stopped after this run. Rejected transactions are mined reverts. No key, raw signed transaction, or operator RPC is included.",
     };
     const serialized = JSON.stringify(evidence, null, 2) + "\n";
     assert.equal(serialized.includes(issuer.privateKey), false);
     await mkdir(dirname(output), { recursive: true });
     await writeFile(output, serialized, { flag: "wx" });
-    console.log(`B05 local EVM: seed twice, HTTP 5000 → spend 1000 → HTTP 4000, restart without refill and three mined reverts passed.\nEvidence: ${output}`);
+    console.log(`B05 local EVM: 5000 → 4000, no refill, three mined reverts, and isolated rollback/reset preserving the peer wallet and journal passed.\nEvidence: ${output}`);
   } finally {
     journal?.close();
     if (server) await new Promise<void>((done, fail) => server!.close((error) => error ? fail(error) : done()));

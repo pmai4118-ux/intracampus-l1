@@ -119,6 +119,11 @@ test("empty indexed logs cannot hide prior issuance after the grant is fully spe
   assert.equal(events.length, 1); assert.equal(events[0].amountWei, "5000");
 });
 
+test("issued history must belong to the hash of the snapshot it will be reused with", async (t) => {
+  const { rpc, provider } = await rpcFixture(t); rpc.settle();
+  await assert.rejects(new GrantsReader(provider, rpc.deployment).issued(beneficiary, 10, hash(999)), /CHAIN_CHANGED/);
+});
+
 test("absence of issuance cannot be established when a block transaction receipt is unavailable", async (t) => {
   const { rpc, provider } = await rpcFixture(t);
   rpc.settle(); rpc.logs = [];

@@ -15,7 +15,7 @@ import { GrantError, GrantsReader } from "../src/modules/grants/grants.rpc.ts";
 export type GrantSeedReader = {
   deployment: DeployedManifest;
   snapshot(beneficiary: string, verifiedEvents?: readonly VerifiedGrantEvent[]): Promise<GrantSnapshot>;
-  issued(beneficiary: string, toBlock: number): Promise<VerifiedGrantEvent[]>;
+  issued(beneficiary: string, toBlock: number, expectedBlockHash?: string): Promise<VerifiedGrantEvent[]>;
   verifyReceipt(hash: string, beneficiary: string): Promise<VerifiedGrantEvent[] | null>;
 };
 export type GrantSeedTransport = {
@@ -90,7 +90,7 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
     const current = await reader.snapshot(beneficiary, receipt);
     return { ...base, status: "already-issued", transactionHash: prior.transactionHash, balanceWei: current.balanceWei.toString() };
   }
-  const history = await reader.issued(beneficiary, snapshot.blockNumber);
+  const history = await reader.issued(beneficiary, snapshot.blockNumber, snapshot.blockHash);
   if (history.length) {
     if (history.length !== 1 || history[0].amountWei !== AMOUNT.toString()) throw new GrantSeedError("EXISTING_GRANT_CONFLICT");
     const event = validate(history);
@@ -114,7 +114,9 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
   // Recheck before persisting/broadcasting. The unique durable row serializes concurrent runs.
   const beforeSend = await reader.snapshot(beneficiary);
   if (!beforeSend.merchantAllowed) throw new GrantSeedError("MERCHANT_NOT_ALLOWED");
-  if (beforeSend.balanceWei !== 0n || (await reader.issued(beneficiary, beforeSend.blockNumber)).length) {
+  const samePinnedBlock = beforeSend.blockNumber === snapshot.blockNumber && same(beforeSend.blockHash, snapshot.blockHash);
+  const preSendHistory = samePinnedBlock ? history : await reader.issued(beneficiary, beforeSend.blockNumber, beforeSend.blockHash);
+  if (beforeSend.balanceWei !== 0n || preSendHistory.length) {
     throw new GrantSeedError("GRANT_CHANGED_DURING_SEED");
   }
   if (!journal.reserve(operationId, { transactionHash: prepared.hash, nonce: prepared.nonce })) throw new GrantSeedError("SEED_OUTCOME_UNKNOWN");

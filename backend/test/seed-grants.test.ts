@@ -247,3 +247,23 @@ test("a canonical revert on the first apply releases only that failed transactio
     assert.equal(f.chain.events.length, 1);
   } finally { journal.close(); }
 });
+
+for (const [label, secondBlock, secondHash, expectedScans] of [
+  ["unchanged pinned block", 100, hash(100), [100]],
+  ["new block", 101, hash(101), [100, 101]],
+  ["different fork at the same height", 100, hash(101), [100, 100]],
+] as const) test(`pre-send history respects ${label}`, async () => {
+  const f = setup(); const journal = new GrantSeedJournal(":memory:");
+  const scans: number[] = []; let snapshots = 0;
+  const snapshot = f.reader.snapshot;
+  f.reader.snapshot = async (...args) => {
+    const value = await snapshot(...args); snapshots++;
+    return snapshots === 1 ? value : { ...value, blockNumber: secondBlock, blockHash: secondHash };
+  };
+  f.reader.issued = async (_beneficiary, toBlock) => { scans.push(toBlock); return []; };
+  try {
+    assert.equal((await seedGrant({ ...f, journal, apply: true })).status, "confirmed");
+    assert.deepEqual(scans, expectedScans);
+    assert.equal(f.chain.events.length, 1);
+  } finally { journal.close(); }
+});
