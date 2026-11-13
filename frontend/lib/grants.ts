@@ -49,7 +49,7 @@ export type GrantLookup = { balanceWei: string; block: { number: number; hash: s
   transaction: null | { hash: string; status: "pending" | "verified"; event: GrantEvent | null } };
 export type GrantIntent = { schemaVersion: 1; id: string; chainId: 20261; beneficiary: string; vault: string; deploymentHash: string;
   merchant: string; category: string; amountWei: string; afterBlock: number; recoveredHash: boolean;
-  phase: "unknown" | "pending" | "confirmed" | "reverted"; hash: string | null };
+  phase: "prepared" | "unknown" | "pending" | "confirmed" | "reverted"; hash: string | null };
 
 /** B05 remains the chain/receipt verifier; this parser binds its trusted response to this exact wallet and spend. */
 export function parseGrantLookup(value: unknown, config: GrantConfig, beneficiary: string, intent?: GrantIntent | null): GrantLookup {
@@ -145,6 +145,9 @@ export function grantMessage(code: string): string {
     SIMULATION_FAILED: "Chưa mô phỏng được khoản chi. Kiểm tra số dư, merchant và kết nối; chưa mở yêu cầu ký.",
     SIGNATURE_REJECTED: "Bạn đã từ chối ký. Chưa gửi khoản chi; có thể xem lại và thử lại.",
     SEND_OUTCOME_UNKNOWN: "Chưa rõ ví đã gửi hay chưa. Kiểm tra lịch sử Core và tra hash; không gửi lại khoản chi.",
+    SEND_NOT_STARTED: "Lượt chuẩn bị trước dừng trước bước yêu cầu ví ký. Có thể khôi phục lượt chưa gửi để đọc lại số dư.",
+    RECOVERY_NOT_AVAILABLE: "Không xác minh được lượt này chưa gửi. Giữ bản ghi và đối chiếu giao dịch trong Core; không chi lại.",
+    WALLET_UPDATE_REQUIRED: "Phiên ví chưa hỗ trợ khôi phục an toàn. Tải lại ứng dụng trước khi chi.",
     TX_REVERTED: "Giao dịch đã thất bại. Voucher không bị trừ; ví vẫn có thể mất phí gas.",
     RECEIPT_MISMATCH: "Receipt chưa khớp khoản chi này. Giữ hash để đối chiếu, chưa xác nhận thành công.",
     STORAGE_UNAVAILABLE: "Trình duyệt không lưu được giao dịch để khôi phục. Cho phép lưu trữ trước khi chi.",
@@ -158,9 +161,9 @@ export function grantMessage(code: string): string {
 }
 
 export type GrantSender = { getSnapshot(): { address: string | null; chainId: bigint | null; canProceed: boolean };
-  sendTransaction(account: string, tx: { to: string; data: string; value: string }): Promise<string> };
+  sendTransactionWithGuard(account: string, tx: { to: string; data: string; value: string }, beforeBroadcast: () => void): Promise<string> };
 export type GrantState = { beneficiary: string | null; lookup: GrantLookup | null; stale: boolean; busy: boolean;
-  phase: "idle" | "checking" | "signing" | "unknown" | "pending" | "confirmed" | "reverted"; intent: GrantIntent | null;
+  phase: "idle" | "checking" | "prepared" | "signing" | "unknown" | "pending" | "confirmed" | "reverted"; intent: GrantIntent | null;
   message: string | null; errorCode: string | null; storageBlocked: boolean };
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Lock = (name: string, run: () => Promise<void>) => Promise<void>;
@@ -191,8 +194,9 @@ export class GrantController {
         && data.chainId === 20261 && same(data.beneficiary, account) && same(data.vault, c.vault)
         && same(data.deploymentHash, c.deploymentHash) && same(data.merchant, c.merchant) && same(data.category, c.category)
         && money(data.amountWei) && BigInt(data.amountWei) > BigInt(0) && integer(data.afterBlock) && typeof data.recoveredHash === "boolean"
-        && ["unknown", "pending", "confirmed", "reverted"].includes(String(data.phase))
-        && (data.phase === "unknown" ? data.hash === null : hash(data.hash)), "JOURNAL_INVALID");
+        && ["prepared", "unknown", "pending", "confirmed", "reverted"].includes(String(data.phase))
+        && (["prepared", "unknown"].includes(String(data.phase)) ? data.hash === null : hash(data.hash))
+        && (data.phase !== "prepared" || data.recoveredHash === false), "JOURNAL_INVALID");
       return data as GrantIntent;
     } catch { throw new GrantUiError("JOURNAL_INVALID"); }
   }
@@ -238,6 +242,7 @@ export class GrantController {
       this.set({ lookup: result, stale: false, intent, phase: intent?.phase ?? "idle", errorCode: null,
         message: intent?.phase === "confirmed" ? "Đã xác minh khoản chi FOOD. Số dư hiển thị đã đọc lại từ chain."
           : intent?.phase === "unknown" ? grantMessage("SEND_OUTCOME_UNKNOWN") : null });
+      if (intent?.phase === "prepared") this.set({ message: grantMessage("SEND_NOT_STARTED") });
     } catch (error) {
       if (!this.active(generation)) return;
       if (error instanceof GrantUiError && error.code === "TX_REVERTED" && this.state.intent?.hash) {
@@ -264,6 +269,9 @@ export class GrantController {
     try {
       await (this.options.lock ?? browserGrantLock)(grantJournalKey(this.options.config, account), async () => {
         check(!this.state.storageBlocked, "STORAGE_UNAVAILABLE");
+        // Older senders do not expose the synchronous boundary and must not be used
+        // with a recoverable prepared record.
+        check(typeof this.options.wallet.sendTransactionWithGuard === "function", "WALLET_UPDATE_REQUIRED");
         check(this.readIntent(account) === null, "SPEND_IN_PROGRESS"); this.walletMatches(account);
         const lookup = await lookupGrant(this.options.fetcher ?? fetch, this.options.config, account);
         check(lookup.allowed, "MERCHANT_NOT_ALLOWED"); check(BigInt(lookup.balanceWei) >= amount, "INSUFFICIENT_GRANT_BALANCE");
@@ -272,14 +280,37 @@ export class GrantController {
         check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
         const c = this.options.config;
         let intent: GrantIntent = { schemaVersion: 1, id: crypto.randomUUID(), chainId: 20261, beneficiary: account, vault: c.vault, deploymentHash: c.deploymentHash,
-          merchant: c.merchant, category: c.category, amountWei: amount.toString(), afterBlock, recoveredHash: false, phase: "unknown", hash: null };
-        this.write(account, intent); this.set({ intent, phase: "signing", lookup, stale: false });
+          merchant: c.merchant, category: c.category, amountWei: amount.toString(), afterBlock, recoveredHash: false, phase: "prepared", hash: null };
+        this.write(account, intent); this.set({ intent, lookup, stale: false });
+        let guardError: unknown;
         let txHash: string;
-        try { txHash = await this.options.wallet.sendTransaction(account, transaction); check(hash(txHash), "SEND_OUTCOME_UNKNOWN"); }
+        try {
+          txHash = await this.options.wallet.sendTransactionWithGuard(account, transaction, () => {
+            try {
+              check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
+              const latest = this.readIntent(account);
+              check(latest?.id === intent.id && latest.phase === "prepared" && latest.hash === null, "SPEND_IN_PROGRESS");
+              const sending: GrantIntent = { ...intent, phase: "unknown" };
+              this.write(account, sending); intent = sending;
+              this.set({ intent, phase: "signing" });
+            } catch (error) { guardError = error; throw error; }
+          });
+          check(hash(txHash), "SEND_OUTCOME_UNKNOWN");
+        }
         catch (error) {
           const outcome = error && typeof error === "object" && "outcome" in error ? error.outcome : "unknown";
-          if (outcome === "not-sent" || outcome === "rejected") { this.write(account, null); if (this.active(generation)) this.set({ intent: null, phase: "idle" });
+          if (outcome === "not-sent" || outcome === "rejected") {
+            check(this.readIntent(account)?.id === intent.id, "SPEND_IN_PROGRESS"); this.write(account, null);
+            if (this.active(generation)) this.set({ intent: null, phase: "idle" });
+            if (guardError instanceof GrantUiError) throw guardError;
             throw new GrantUiError(outcome === "rejected" ? "SIGNATURE_REJECTED" : "WALLET_CHANGED"); }
+          // An unexpected sender failure cannot be treated as proof of no broadcast.
+          // The guarded production sender always promotes before invoking the provider.
+          if (intent.phase === "prepared") {
+            check(this.readIntent(account)?.id === intent.id, "SPEND_IN_PROGRESS");
+            intent = { ...intent, phase: "unknown" }; this.write(account, intent);
+            if (this.active(generation)) this.set({ intent });
+          }
           if (this.active(generation)) this.set({ phase: "unknown" }); throw new GrantUiError("SEND_OUTCOME_UNKNOWN");
         }
         intent = { ...intent, hash: txHash, phase: "pending" };
@@ -296,6 +327,25 @@ export class GrantController {
       this.operation = false;
       if (this.active(generation)) { this.set({ busy: false }); if (this.state.intent?.hash) await this.refresh(); }
     }
+  }
+  /** Only this protocol's durable pre-provider state proves no broadcast. No RPC absence inference. */
+  async reconcilePrepared() {
+    const account = this.state.beneficiary, intent = this.state.intent, generation = this.generation;
+    if (!account || !intent || this.operation || this.state.busy || this.disposed) return;
+    if (intent.phase !== "prepared" || intent.hash !== null) { this.fail(new GrantUiError("RECOVERY_NOT_AVAILABLE")); return; }
+    this.operation = true; this.set({ busy: true, message: null, errorCode: null });
+    let cleared = false;
+    try {
+      await (this.options.lock ?? browserGrantLock)(grantJournalKey(this.options.config, account), async () => {
+        check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
+        const latest = this.readIntent(account);
+        check(latest?.id === intent.id && latest.phase === "prepared" && latest.hash === null, "RECOVERY_NOT_AVAILABLE");
+        this.write(account, null); cleared = true;
+        this.set({ intent: null, phase: "idle", message: "Đã khôi phục lượt chưa gửi. Đọc lại số dư trước khi tạo khoản chi mới.", errorCode: null, storageBlocked: false });
+      });
+    } catch (error) { if (this.active(generation)) this.fail(error); }
+    finally { this.operation = false; if (this.active(generation)) this.set({ busy: false }); }
+    if (cleared && this.active(generation)) await this.refresh();
   }
   async recoverHash(value: string) {
     const account = this.state.beneficiary, intent = this.state.intent;

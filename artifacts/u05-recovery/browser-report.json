@@ -1,0 +1,35 @@
+{
+  "environment": "Anvil local only; not Avalanche L1/Core acceptance",
+  "chainId": 20261,
+  "cases": [
+    "Pause actual WalletController account/chain checks: durable prepared, zero provider sends",
+    "Second live tab cannot reconcile while original sender holds the Web Lock",
+    "Reload releases old lock; explicit prepared reconciliation clears only unsent intent, reads5000, sends nothing",
+    "Only a new explicit click spends once: real GrantSpent5000→4000",
+    "Actual broadcast with lost response stays unknown/blocked after reload; no no-broadcast reset is offered",
+    "Unknown recovers only by matching real hash/event; no third send"
+  ],
+  "sends": [
+    {
+      "hash": "0x244bc2cf4dac38e509f54ea5155a7e65111c0e19d5af3d737979201a404e6c89",
+      "tx": {
+        "from": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+        "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "data": "0xe2f7cbfa0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d00000000000000000000000000000000000000000000003635c9adc5dea00000",
+        "value": "0x0",
+        "chainId": "0x4f25"
+      }
+    },
+    {
+      "hash": "0x5929cb0a4689ab651111988e8a745fd0832bedf50da9df5b7b5aca404d368c23",
+      "tx": {
+        "from": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+        "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "data": "0xe2f7cbfa0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d00000000000000000000000000000000000000000000003635c9adc5dea00000",
+        "value": "0x0",
+        "chainId": "0x4f25"
+      }
+    }
+  ],
+  "errors": []
+}

@@ -56,6 +56,11 @@ function GrantView({ controller, config }: { controller: GrantController; config
     {!matching ? <p>Giữ đúng ví được cấp và chain 20261 để chi. Khi đổi tài khoản, số dư cũ được xóa khỏi màn hình.</p> : null}
     {state.intent?.hash ? <div className="tx-proof-box"><strong>Hash khoản chi · {state.phase === "confirmed" ? "Đã xác minh" : "Chưa xác nhận thành công"}</strong>
       <code className="tx-hash-code">{state.intent.hash}</code></div> : null}
+    {state.phase === "prepared" ? <div>
+      <p>Lượt trước dừng trước bước yêu cầu ví ký. Khôi phục lượt chưa gửi sẽ đọc lại số dư, không gửi giao dịch.</p>
+      <button type="button" className="secondary-btn" disabled={!matching || state.busy || state.storageBlocked}
+        onClick={() => void controller.reconcilePrepared()}>Khôi phục lượt chưa gửi</button>
+    </div> : null}
     {state.phase === "unknown" || (state.intent?.recoveredHash && ["RECOVERY_HASH_REVERTED", "RECEIPT_MISMATCH", "INVALID_GRANT_RESPONSE"].includes(state.errorCode ?? "")) ? <form onSubmit={(event) => { event.preventDefault(); void controller.recoverHash(recoveryHash.trim()); }}>
       <label htmlFor="grant-recovery-hash" className="field-label">Hash từ lịch sử giao dịch Core</label>
       <input id="grant-recovery-hash" className="mono-textarea" value={recoveryHash} onChange={(event) => setRecoveryHash(event.target.value)} autoComplete="off" />

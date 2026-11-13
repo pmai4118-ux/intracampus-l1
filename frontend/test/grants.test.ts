@@ -16,6 +16,13 @@ const unit = BigInt(10) ** BigInt(18), amount = BigInt(1000) * unit;
 const word = (value: bigint) => `0x${value.toString(16).padStart(64, "0")}`;
 const addressWord = (value: string) => `0x${value.slice(2).padStart(64, "0")}`;
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+async function waitUntil(predicate: () => boolean, message: string) {
+  const deadline = Date.now() + 5000;
+  while (!predicate()) {
+    if (Date.now() >= deadline) assert.fail(message);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 const makeIntent = (patch: Partial<GrantIntent> = {}): GrantIntent => ({ schemaVersion: 1, id: crypto.randomUUID(), chainId: 20261, beneficiary,
   vault: config.vault, deploymentHash: config.deploymentHash, merchant: config.merchant, category: config.category,
   amountWei: amount.toString(), afterBlock: 10, recoveredHash: false, phase: "pending", hash, ...patch });
@@ -43,13 +50,20 @@ function mockRpc(overrides: Record<string, unknown> = {}, calls: Array<{ method:
     throw Error("Unexpected RPC method");
   };
 }
-function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: GrantSender["sendTransaction"]; db?: Map<string, string>;
+function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: GrantSender["sendTransactionWithGuard"]; db?: Map<string, string>;
+  beforeBoundary?: () => Promise<void>;
   store?: Pick<Storage, "getItem" | "setItem" | "removeItem">; lock?: (name: string, run: () => Promise<void>) => Promise<void> } = {}) {
   const db = options.db ?? new Map<string, string>();
   const store = options.store ?? { getItem: (key: string) => db.get(key) ?? null, setItem: (key: string, value: string) => { db.set(key, value); }, removeItem: (key: string) => { db.delete(key); } };
   const walletState = { address: beneficiary as string | null, chainId: BigInt(20261) as bigint | null, canProceed: true };
   let sends = 0;
-  const wallet: GrantSender = { getSnapshot: () => walletState, sendTransaction: async (account, tx) => { sends++; return options.send ? options.send(account, tx) : hash; } };
+  const wallet: GrantSender = { getSnapshot: () => walletState, sendTransactionWithGuard: async (account, tx, beforeBroadcast) => {
+    sends++;
+    if (options.beforeBoundary) await options.beforeBoundary();
+    try { beforeBroadcast(); }
+    catch { throw { outcome: "not-sent", code: "BROADCAST_GUARD_FAILED" }; }
+    return options.send ? options.send(account, tx, beforeBroadcast) : hash;
+  } };
   const fetcher: typeof fetch = options.fetcher ?? (async (url) => response(body(BigInt(4000) * unit, String(url).includes("txHash") ? "verified" : "none")));
   const controller = new GrantController({ config, rpc: options.rpc ?? mockRpc(), wallet, storage: store, fetcher, lock: options.lock ?? (async (_name, run) => run()), pollMs: 100_000 });
   return { controller, db, walletState, sends: () => sends };
@@ -61,6 +75,124 @@ test("only a validated L06 production manifest provides the FOOD vault", () => {
   assert.equal(config.vault, manifest.contracts.PurposeBoundGrantVault.address);
   const wrong = structuredClone(manifest); wrong.contracts.PurposeBoundGrantVault.abi = [];
   assert.throws(() => grantConfig(wrong));
+});
+
+test("a reload during pre-broadcast account checks leaves a prepared intent that can be reconciled without a hash", async (t) => {
+  let resume!: () => void;
+  const waiting = new Promise<void>((resolve) => { resume = resolve; });
+  const old = harness({ beforeBoundary: () => waiting });
+  t.after(() => old.controller.dispose());
+  await old.controller.bindWallet(beneficiary);
+  const operation = old.controller.spend(amount);
+  await waitUntil(() => old.db.has(grantJournalKey(config, beneficiary)), "prepared intent was not saved");
+  assert.equal(JSON.parse(old.db.get(grantJournalKey(config, beneficiary))!).phase, "prepared");
+  old.controller.dispose(); // A new document has no live JS work from the previous page.
+  const reload = harness({ db: old.db }); t.after(() => reload.controller.dispose());
+  await reload.controller.bindWallet(beneficiary);
+  assert.equal(reload.controller.getSnapshot().phase, "prepared");
+  assert.equal(reload.sends(), 0);
+  await reload.controller.spend(amount); assert.equal(reload.sends(), 0, "restoring must never submit automatically");
+  await reload.controller.reconcilePrepared();
+  assert.equal(reload.controller.getSnapshot().intent, null);
+  assert.equal(reload.db.size, 0);
+  // A disposed precheck completing late cannot cross the durable boundary or recreate an old intent.
+  resume(); await operation; assert.equal(reload.db.size, 0);
+  await reload.controller.spend(amount);
+  assert.equal(reload.sends(), 1); assert.equal(reload.controller.getSnapshot().phase, "confirmed");
+});
+
+test("a live tab holding pre-broadcast checks prevents another tab from reconciling its prepared intent", async (t) => {
+  let held = false, resume!: () => void;
+  const lock = async (_name: string, run: () => Promise<void>) => {
+    if (held) throw new GrantUiError("SPEND_IN_PROGRESS");
+    held = true; try { await run(); } finally { held = false; }
+  };
+  const first = harness({ lock, beforeBoundary: () => new Promise<void>((resolve) => { resume = resolve; }) });
+  const second = harness({ lock, db: first.db });
+  t.after(() => { first.controller.dispose(); second.controller.dispose(); });
+  await first.controller.bindWallet(beneficiary); const operation = first.controller.spend(amount);
+  await waitUntil(() => Boolean(resume), "wallet prechecks never started");
+  await second.controller.bindWallet(beneficiary);
+  const saved = first.db.get(grantJournalKey(config, beneficiary));
+  await second.controller.reconcilePrepared();
+  assert.equal(first.db.get(grantJournalKey(config, beneficiary)), saved);
+  assert.equal(second.sends(), 0); assert.equal(second.controller.getSnapshot().errorCode, "SPEND_IN_PROGRESS");
+  resume(); await operation;
+  assert.equal(first.controller.getSnapshot().phase, "confirmed");
+});
+
+test("crossing the broadcast boundary without a returned hash stays unknown after reload and cannot reconcile", async (t) => {
+  const first = harness({ send: async () => { throw Error("connection lost after eth_sendTransaction"); } });
+  t.after(() => first.controller.dispose()); await first.controller.bindWallet(beneficiary); await first.controller.spend(amount);
+  const saved = first.db.get(grantJournalKey(config, beneficiary));
+  assert.equal(JSON.parse(saved!).phase, "unknown");
+  const reload = harness({ db: first.db }); t.after(() => reload.controller.dispose()); await reload.controller.bindWallet(beneficiary);
+  await reload.controller.reconcilePrepared(); await reload.controller.spend(amount);
+  assert.equal(reload.sends(), 0); assert.equal(reload.db.get(grantJournalKey(config, beneficiary)), saved);
+  assert.equal(reload.controller.getSnapshot().intent?.phase, "unknown");
+});
+
+test("legacy unknown journals cannot be treated as proven no-broadcast preparation", async (t) => {
+  const intent = makeIntent({ phase: "unknown", hash: null });
+  const db = new Map([[grantJournalKey(config, beneficiary), JSON.stringify(intent)]]);
+  const h = harness({ db }); t.after(() => h.controller.dispose()); await h.controller.bindWallet(beneficiary);
+  await h.controller.reconcilePrepared(); await h.controller.spend(amount);
+  assert.equal(h.sends(), 0); assert.equal(h.db.get(grantJournalKey(config, beneficiary)), JSON.stringify(intent));
+});
+
+test("prepared reconciliation checks the current wallet and never clears a newer unknown intent", async (t) => {
+  const prepared = makeIntent({ phase: "prepared", hash: null });
+  const db = new Map([[grantJournalKey(config, beneficiary), JSON.stringify(prepared)]]);
+  const h = harness({ db }); t.after(() => h.controller.dispose()); await h.controller.bindWallet(beneficiary);
+  h.walletState.chainId = BigInt(43113);
+  await h.controller.reconcilePrepared(); assert.equal(h.db.size, 1);
+  h.walletState.chainId = BigInt(20261);
+  const newer = makeIntent({ phase: "unknown", hash: null }); db.set(grantJournalKey(config, beneficiary), JSON.stringify(newer));
+  await h.controller.reconcilePrepared();
+  assert.equal(h.db.get(grantJournalKey(config, beneficiary)), JSON.stringify(newer)); assert.equal(h.sends(), 0);
+});
+
+test("prepared journal removal failure preserves the no-hash record and cannot open Core", async (t) => {
+  const prepared = makeIntent({ phase: "prepared", hash: null });
+  const db = new Map([[grantJournalKey(config, beneficiary), JSON.stringify(prepared)]]);
+  const h = harness({ db, store: { getItem: (key) => db.get(key) ?? null, setItem: (key, value) => { db.set(key, value); }, removeItem: () => { throw Error("storage disabled"); } } });
+  t.after(() => h.controller.dispose()); await h.controller.bindWallet(beneficiary);
+  await h.controller.reconcilePrepared(); await h.controller.spend(amount);
+  assert.equal(h.sends(), 0); assert.equal(h.db.get(grantJournalKey(config, beneficiary)), JSON.stringify(prepared));
+});
+
+test("a sender without the guarded broadcast API cannot open a wallet request", async (t) => {
+  let sends = 0;
+  const h = new GrantController({ config, rpc: mockRpc(), storage: {
+    getItem: () => null, setItem: () => {}, removeItem: () => {},
+  }, wallet: { getSnapshot: () => ({ address: beneficiary, chainId: BigInt(20261), canProceed: true }),
+    sendTransaction: async () => { sends++; return hash; } } as unknown as GrantSender,
+  fetcher: async () => response(body()), lock: async (_name, run) => run() });
+  t.after(() => h.dispose()); await h.bindWallet(beneficiary); await h.spend(amount);
+  assert.equal(sends, 0);
+});
+
+test("failure to save the unknown boundary prevents provider submission and only removes the prepared intent", async (t) => {
+  const db = new Map<string, string>(); let writes = 0, providerRequests = 0;
+  const h = harness({ db, store: { getItem: (key) => db.get(key) ?? null,
+    setItem: (key, value) => { if (++writes > 1) throw Error("quota at broadcast boundary"); db.set(key, value); },
+    removeItem: (key) => { db.delete(key); } }, send: async () => { providerRequests++; return hash; } });
+  t.after(() => h.controller.dispose()); await h.controller.bindWallet(beneficiary); await h.controller.spend(amount);
+  assert.equal(providerRequests, 0); assert.equal(h.db.size, 0);
+  assert.equal(h.controller.getSnapshot().errorCode, "STORAGE_UNAVAILABLE");
+});
+
+test("an unexpected guarded sender failure before its callback is conservatively unknown, never recoverable prepared", async (t) => {
+  const db = new Map<string, string>();
+  const controller = new GrantController({ config, rpc: mockRpc(), storage: {
+    getItem: (key) => db.get(key) ?? null, setItem: (key, value) => { db.set(key, value); }, removeItem: (key) => { db.delete(key); },
+  }, wallet: { getSnapshot: () => ({ address: beneficiary, chainId: BigInt(20261), canProceed: true }),
+    sendTransactionWithGuard: async () => { throw Error("unexpected custom transport failure"); } },
+  fetcher: async () => response(body()), lock: async (_name, run) => run() });
+  t.after(() => controller.dispose()); await controller.bindWallet(beneficiary); await controller.spend(amount);
+  assert.equal(controller.getSnapshot().phase, "unknown");
+  assert.equal(JSON.parse(db.get(grantJournalKey(config, beneficiary))!).phase, "unknown");
+  await controller.reconcilePrepared(); assert.equal(db.size, 1);
 });
 test("decimal amounts stay exact in wei and reject ambiguous or overflowing input", () => {
   assert.equal(parseGrantAmount("1000.000000000000000001"), amount + BigInt(1));
@@ -186,7 +318,7 @@ test("account switch while Core is open preserves hash for its original benefici
   let finish!: (hash: string) => void;
   const h = harness({ send: () => new Promise((resolve) => { finish = resolve; }) }); t.after(() => h.controller.dispose());
   await h.controller.bindWallet(beneficiary); const operation = h.controller.spend(amount);
-  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  await waitUntil(() => Boolean(finish), "wallet request never opened");
   h.walletState.address = other; await h.controller.bindWallet(other); finish(hash); await operation;
   assert.equal(h.controller.getSnapshot().beneficiary, other); assert.equal(h.controller.getSnapshot().intent, null);
   assert.equal(JSON.parse(h.db.get(grantJournalKey(config, beneficiary))!).hash, hash);
@@ -198,7 +330,7 @@ test("two tabs serialize claim and send through the lock and shared durable inte
   const first = harness({ lock, send: () => new Promise((resolve) => { release = resolve; }) });
   const second = harness({ lock, db: first.db }); t.after(() => { first.controller.dispose(); second.controller.dispose(); });
   await first.controller.bindWallet(beneficiary); await second.controller.bindWallet(beneficiary);
-  const operation = first.controller.spend(amount); while (!release) await new Promise((resolve) => setImmediate(resolve));
+  const operation = first.controller.spend(amount); await waitUntil(() => Boolean(release), "wallet request never opened");
   await second.controller.spend(amount); assert.equal(second.sends(), 0); assert.equal(second.controller.getSnapshot().errorCode, "SPEND_IN_PROGRESS");
   release(hash); await operation; await second.controller.spend(amount); assert.equal(second.sends(), 0);
 });
@@ -230,7 +362,7 @@ test("a late confirmation from another tab cannot overwrite a newer spend journa
 });
 test("a hash remains visible if storage fails after Core returns it", async (t) => {
   const db = new Map<string, string>(); let writes = 0;
-  const h = harness({ db, store: { getItem: (key) => db.get(key) ?? null, setItem: (key, value) => { if (++writes > 1) throw Error("quota"); db.set(key, value); }, removeItem: (key) => { db.delete(key); } },
+  const h = harness({ db, store: { getItem: (key) => db.get(key) ?? null, setItem: (key, value) => { if (++writes > 2) throw Error("quota"); db.set(key, value); }, removeItem: (key) => { db.delete(key); } },
     fetcher: async (url) => response(body(amount, String(url).includes("txHash") ? "pending" : "none")) });
   t.after(() => h.controller.dispose()); await h.controller.bindWallet(beneficiary); await h.controller.spend(amount);
   assert.equal(h.controller.getSnapshot().intent?.hash, hash); assert.equal(h.controller.getSnapshot().storageBlocked, true);

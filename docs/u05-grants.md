@@ -7,8 +7,10 @@ Số CAMPUS trong ví cá nhân dùng trả gas; khoản chi được lấy từ
 
 ## Phụ thuộc
 
-- U04 cung cấp `WalletController.sendTransaction(expectedAccount, transaction)`
-  với kiểm tra lại tài khoản/mạng và phân loại kết quả gửi chưa rõ.
+- U04 cung cấp phiên ví với kiểm tra lại tài khoản/mạng. U05 dùng
+  `WalletController.sendTransactionWithGuard(account, transaction, beforeBroadcast)`:
+  callback đồng bộ lưu ranh giới gửi sau các kiểm tra ví, ngay trước
+  `eth_sendTransaction`. Sender cũ thiếu API này bị chặn trước khi tạo intent.
 - L05/L06 đã có trên `main` `f6667b4`; manifest Git hiện vẫn `unconfigured`.
   Cần operator xuất deployment mạng demo thật, RPC 20261 và rebuild cả hai client.
   Manifest unconfigured hoặc local-anvil không bật nút chi production.
@@ -35,8 +37,10 @@ Số CAMPUS trong ví cá nhân dùng trả gas; khoản chi được lấy từ
    `spend` ở latest và kiểm tra block vẫn canonical ngay trước bước ký.
    Merchant/category/ABI lấy từ manifest chung, không lấy từ input tùy ý.
 4. Core của beneficiary xác nhận giao dịch `value: 0`; gas được hiển thị và
-   trả riêng bởi ví. Trước khi gọi ví, app lưu intent công khai để tránh gửi lại
-   sau mất mạng/reload. Sau khi có hash, app lưu hash và tra B05 mỗi 2,5 giây.
+   trả riêng bởi ví. Trong lúc kiểm tra account/chain của ví, app lưu intent
+   `prepared` chưa gửi. Callback chuyển sang `unknown` ngay trước provider request,
+   không có `await` giữa hai bước. Sau khi có hash, app lưu hash và tra B05 mỗi
+   2,5 giây.
 5. Chỉ B05 receipt đã xác minh, đúng `GrantSpent`, beneficiary/merchant/category,
    số tiền/hash và block sau intent mới làm app xác nhận thành công. Số dư
    hiển thị là snapshot chain mới, không tự trừ bằng JavaScript. Sau `5000 →
@@ -62,6 +66,15 @@ xóa storage làm mất cơ chế khôi phục, vì vậy giữ cùng URL HTTPS 
 - Từ chối ký hoặc ví xác nhận chắc chắn chưa gửi: bỏ intent, có thể xem lại và
   thử khoản chi mới. Lỗi truyền sau khi gọi ví hoặc hash không hợp lệ: giữ
   intent **chưa rõ kết quả**, chặn mọi lần chi tiếp theo.
+- Reload trước provider request: bản ghi `prepared` không có hash cho phép bấm
+  **Khôi phục lượt chưa gửi**. App lấy cùng Web Lock, kiểm tra đúng beneficiary,
+  deployment và intent ID, đọc lại trạng thái vẫn `prepared`, rồi xóa lượt chuẩn
+  bị và đọc lại số dư. Thao tác này không gửi giao dịch; muốn chi phải bấm lại
+  nút chi sau preflight mới. Tab cũ đang giữ lock ngăn tab khác khôi phục.
+- `unknown` từ bản cũ hoặc sau khi đã qua ranh giới gửi không được đổi thành
+  `prepared` chỉ vì không có hash. RPC không thấy log/receipt, nonce hoặc số dư
+  chưa thay đổi không chứng minh chưa gửi; các bản ghi đó vẫn cần đối chiếu Core.
+  Không có nút xóa chung để vượt qua trạng thái chưa rõ.
 - Mất hash: kiểm tra đúng giao dịch trong lịch sử Core, nhập hash để đối chiếu.
   Receipt cũ trước block intent, sai người/merchant/số tiền không được chấp nhận.
   Hash tự nhập bị revert không chứng minh giao dịch ban đầu chưa gửi, nên vẫn
@@ -89,6 +102,10 @@ chain/merchant/category, vượt số dư, receipt sai/cũ/revert/pending, RPC m
 storage lỗi, gửi chưa rõ kết quả/reload, account đổi khi Core mở, hai tab cùng
 chi và phản hồi xác nhận muộn. Đây là provider/HTTP giả lập; receipt EVM local
 và video Core/điện thoại/L1 phải được ghi riêng.
+
+Regression review PR #19 có 14 ca mới: reload trong account/chain checks,
+prepared reconciliation không gửi, lock giữa tab, callback/dispose/storage lỗi,
+unknown cũ hoặc sau broadcast vẫn khóa. Xem [bằng chứng browser khôi phục](../artifacts/u05-recovery/browser-report.json).
 
 Sau khi nhóm đã ghép B05 với U04/U05, có thể tái tạo luồng EVM/controller thật:
 

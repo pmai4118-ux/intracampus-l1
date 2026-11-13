@@ -1,8 +1,8 @@
 # U04 / U05 · Bàn giao tích hợp
 
-Source bắt đầu từ `main` `f6667b4` (B04 đã merge). U04 và U05 có nhánh/PR riêng;
-U05 xếp sau U04 để review đúng phần voucher. Không merge hoặc thay đổi trạng
-thái sprint thay reviewer.
+Source bắt đầu từ `main` `f6667b4` (B04 đã merge), đã cập nhật main `4ec299e`
+sau khi nhóm merge U04 #18. U05 #19 tiếp tục giữ PR riêng và không tự thay đổi
+trạng thái sprint thay reviewer.
 
 | Task | Kết quả | Hướng dẫn |
 | --- | --- | --- |
@@ -12,8 +12,12 @@ thái sprint thay reviewer.
 ## Kết quả kiểm tra
 
 - Node 24.22.2, pnpm 11.25.0: `pnpm typecheck`, `pnpm test`, `pnpm build` đạt
-  trên source U04/U05 kết hợp. Bộ test có 331 pass, 1 skip integration B03 tùy
-  chọn; frontend 113 pass gồm 24 test U04 và 26 test U05 mới.
+  trên source U04/U05 sau sửa review. Bộ test có 345 pass, 1 skip integration
+  B03 tùy chọn; frontend 127 pass, gồm 14 regression mới cho khôi phục không hash.
+- Source ghép kiểm thử riêng: main `4ec299e7` + B05 `0abf0d565` + U05 sau sửa:
+  **403/403 pass, 0 skip** (backend 204, frontend 127, P02 35, artifact 5,
+  exporter 32), typecheck/build và CLI Anvil 8 tình huống đạt. Giữ script/test
+  B04/B05 khi xử lý conflict trong worktree kiểm thử.
 - `pnpm test:rpc`: 18 pass. Không thay Solidity, genesis hoặc giao kèo P02.
 - [Evidence EVM/controller](fixtures/u04-u05-local-evidence.json): 8 tình
   huống chạy contract L03/L04/L05 thật, B01/B02/B05 HTTP và controller frontend
@@ -29,6 +33,12 @@ thái sprint thay reviewer.
   [receipt sinh viên](../artifacts/u04-u05/student-discount-receipt.png),
   [grant sau khi chi](../artifacts/u04-u05/student-grant-after.png) có nhãn
   kiểm thử. Đây là hai viewport trên desktop, chưa phải điện thoại vật lý/Core.
+- Review không hash: [6 ca browser mới](../artifacts/u05-recovery/browser-report.json)
+  dừng account/chain checks trước gửi, tab cũ giữ Web Lock, reload và khôi phục
+  prepared không cần hash/không gửi, chỉ bấm chi mới mới có giao dịch, còn đã
+  broadcast nhưng mất phản hồi vẫn bị khóa sau reload. Có
+  [ảnh prepared](../artifacts/u05-recovery/prepared-after-reload.png) và
+  [unknown vẫn khóa](../artifacts/u05-recovery/unknown-remains-blocked.png).
 
 Browser dùng bản sao source riêng và manifest cấu hình tổng hợp để chạy với
 Anvil; canonical `deployments/intracampus.json` của các nhánh vẫn unconfigured.
@@ -37,8 +47,8 @@ của B04. Hash trong evidence chỉ thuộc node Anvil tạm, không phải Ava
 
 ## Phần nhóm cần ghép và nghiệm thu
 
-1. Review/merge U04 vào main. Đổi base PR U05 sang main sau đó, giữ các test
-   của U04/B04. Không merge U05 vào nhánh U04.
+1. U04 #18 đã merge vào main; PR U05 #19 dùng main làm base và giữ các test
+   U04/B04. Không merge U05 vào nhánh U04.
 2. Tích hợp B05 PR #16 và xử lý conflict theo main mới; giữ mọi test script
    trong backend/package.json và cả các quyết định. U05 dùng giao kèo B05,
    chưa chép API/seed từ nhánh đồng đội vào task frontend.

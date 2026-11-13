@@ -160,3 +160,9 @@ khớp intent mới xác nhận, không tự trừ số dư trên giao diện. J
 deployment/beneficiary và Web Locks ngăn gửi lặp sau reload hoặc giữa các tab;
 hash nhập tay bị revert không đủ giải phóng intent gửi chưa rõ. PR B05 #16
 vẫn cần được nhóm tích hợp riêng; xem [runbook U05](u05-grants.md).
+
+Sau review PR #19, journal phân biệt `prepared` chưa chạm provider với
+`unknown` đã tới ranh giới gửi. `sendTransactionWithGuard` chuyển trạng thái
+đồng bộ sau kiểm tra account/chain và ngay trước `eth_sendTransaction`.
+Khôi phục không hash chỉ xóa đúng prepared intent dưới cùng Web Lock; không
+suy ra chưa gửi từ việc RPC không tìm được giao dịch. Unknown cũ vẫn giữ khóa.
