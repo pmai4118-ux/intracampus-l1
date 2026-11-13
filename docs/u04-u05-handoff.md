@@ -1,19 +1,45 @@
 # U04 / U05 · Bàn giao tích hợp
 
-Source bắt đầu từ `main` `f6667b4` (B04 đã merge), đã cập nhật main `4ec299e`
-sau khi nhóm merge U04 #18. U05 #19 tiếp tục giữ PR riêng và không tự thay đổi
-trạng thái sprint thay reviewer.
+B05 #16 đã được nhóm merge vào main tại `ad3e05c` ngày 2026-11-13. Nhánh U05
+đã ghép main bằng merge local `8ede41e`, giữ D017 của B05 và D018 của U05.
+API grants và UI/controller nay cùng một source, không cần worktree ghép thử.
+U05 #19 vẫn giữ PR riêng; lượt này chưa push hay thay trạng thái sprint/PR.
 
 | Task | Kết quả | Hướng dẫn |
 | --- | --- | --- |
 | U04 | Core của sinh viên gửi payInvoice sau preflight mới, giữ intent/hash, khôi phục qua GET và dùng chung receipt POS | [u04-payment.md](u04-payment.md) |
 | U05 | Beneficiary ký spend FOOD, số dư/allowlist từ B05 và L06, receipt khớp mới xác nhận; intent chưa rõ khóa gửi tiếp | [u05-grants.md](u05-grants.md) |
 
-## Kết quả kiểm tra
+## Kết quả mới sau khi tích hợp B05
 
-Các kết quả EVM/browser ghép B05 dưới đây là bằng chứng lịch sử trên source
-kiểm thử riêng, không xác nhận main hiện tại đã chứa API B05. Review ngày
-2026-11-13 yêu cầu giữ U05 draft tới khi B05 được nhóm tích hợp vào main.
+Xem [báo cáo và lệnh tái hiện](evidence/u05-b05-integration.md). Các proof mới
+được chạy trên nhánh U05 đã ghép B05 cuối `0d6ac91` qua main `ad3e05c`.
+
+- `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build`
+  đạt. Lượt mặc định có 411 pass / 0 fail / 1 skip B03 tùy chọn; frontend 127
+  pass, giữ toàn bộ regression prepared/unknown/reload. Foundry sau build
+  artifact hiện tại đạt 69/69.
+  Lượt cuối bật ANVIL_BIN và SEED_SBT_ARTIFACT cho B03 đạt **412 pass / 0 fail /
+  0 skip**; typecheck/build vẫn đạt.
+- [Evidence EVM/controller mới](fixtures/u05-b05-integrated-local-evidence.json):
+  8 ca với contract thật, B01/B02/B05 HTTP và controller U04/U05; hai mức giá
+  3.000/2.700, từ chối ký, mất phản hồi/reload không gửi lại, FOOD 5.000 →
+  4.000 và chặn merchant/category/số dư không hợp lệ.
+- [Browser mới](../artifacts/u05-b05-integration/browser-report.json) chạy
+  Student và proxy Next thật với B05/Anvil. Provider EIP-1193 được tiêm;
+  một ca HTTP lỗi được mô phỏng. Ảnh có nhãn EVM local, không phải Core thật.
+- Rà soát độc lập không phát hiện lỗi tích hợp nghiệp vụ; giữ sửa no-hash đã
+  được reviewer chấp nhận. Không đổi ABI/P02, contract hay backend grants.
+
+Browser dùng source copy bị Git bỏ qua; lưu SHA-256 của GrantPanel/controller/
+proxy để đối chiếu. Riêng manifest ở bản sao có deployed shape với địa chỉ
+Anvil để thử UI; API vẫn dùng manifest local-anvil. Manifest canonical được
+kiểm tra hash trước/sau, vẫn unconfigured. Địa chỉ/hash Anvil không phải L1.
+
+## Bằng chứng lịch sử trước tích hợp B05
+
+Các kết quả dưới đây được giữ để đối chiếu review cũ. Tại thời điểm tạo chúng,
+main chưa có API B05; không dùng các kết quả này thay cho proof mới bên trên.
 
 Sau khi đọc review mới nhất, đã chuyển PR #19 về draft theo lựa chọn của người
 dùng và kiểm tra lại code `fccc5ac` với thay đổi tài liệu này: Node 24.22.1,
@@ -60,11 +86,9 @@ của B04. Hash trong evidence chỉ thuộc node Anvil tạm, không phải Ava
 
 1. U04 #18 đã merge vào main; PR U05 #19 dùng main làm base và giữ các test
    U04/B04. Không merge U05 vào nhánh U04.
-2. Chờ nhóm duyệt/merge B05 PR #16 (head đã kiểm tra: `0d6ac91`), giữ U05 #19
-   ở draft. B05 đã sửa recovery/reset và hết conflict, nhưng main `4ec299e`
-   vẫn thiếu route grants. Khi B05 vào main, cập nhật U05, giữ mọi test script
-   và quyết định; chạy typecheck/test/build/CI và EVM/controller từ đúng source
-   mới rồi yêu cầu review lại. U05 không chép API/seed hay tự merge B05.
+2. B05 #16 đã merge và source U05 đã tích hợp local. Khi được người dùng giao
+   push: cập nhật đúng PR #19, chạy CI trên head mới và yêu cầu reviewer xem
+   lại. PR vẫn draft trên GitHub trong lượt này; không tự đánh dấu task Xong.
 3. Operator xuất manifest L06 L1 thật, bàn giao RPC HTTPS 20261 và seed B03/B05.
    Build/restart hai client từ cùng manifest, SQLite trên volume bền vững.
 4. Hai thiết bị HTTPS chạy Core thật, quay QR → xác nhận → receipt cho hai ví;
@@ -73,3 +97,6 @@ của B04. Hash trong evidence chỉ thuộc node Anvil tạm, không phải Ava
 
 Test EVM/controller có thể tái tạo bằng CLI trong [runbook U05](u05-grants.md).
 Không cần gửi khóa/seed phrase vào chat; người giữ ví tự xác nhận trong Core.
+
+`pnpm rpc:check` hiện trả `not-configured`, expectedChainId 20261, exit 1;
+backend chưa có `.env`. Chưa có kết quả Core/điện thoại vật lý/Avalanche L1.

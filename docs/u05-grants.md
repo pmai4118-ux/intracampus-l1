@@ -15,15 +15,14 @@ Số CAMPUS trong ví cá nhân dùng trả gas; khoản chi được lấy từ
   Cần operator xuất deployment mạng demo thật, RPC 20261 và rebuild cả hai client.
   Manifest unconfigured hoặc local-anvil không bật nút chi production.
 - B05 PR [#16](https://github.com/pmai4118-ux/intracampus-l1/pull/16) cung cấp
-  `GET /api/grants/:beneficiary?txHash=...`, seed và xác minh receipt. Review ngày
-  2026-11-13 xác nhận lỗi khôi phục không hash của U05 đã sửa, nhưng main
-  `4ec299e` vẫn chưa có route này. B05 đã cập nhật ở `0d6ac91`, hết conflict và
-  bổ sung hướng dẫn reset; PR vẫn mở, chưa được tích hợp vào main.
-  Theo quyết định của người dùng, giữ U05 #19 **draft** chờ nhóm review/merge
-  B05; không chép API/seed vào PR frontend hoặc tự merge PR phụ thuộc.
-  Sau khi B05 vào main, cập nhật nhánh U05 theo main mới, giữ mọi test script
-  và chạy lại CI/typecheck/test/build cùng luồng EVM/controller trên source đó.
-  Kết quả CI riêng U05 hoặc worktree ghép thử không thay thế bước nghiệm thu này.
+  `GET /api/grants/:beneficiary?txHash=...`, seed và xác minh receipt. B05 đã
+  được nhóm merge vào main tại `ad3e05c`; nhánh U05 đã ghép main bằng merge
+  local `8ede41e`, giữ D017 của B05 và D018 của U05. Không chép backend/seed
+  sang frontend. Review đã chấp nhận sửa no-hash tại `fccc5ac`.
+  Source kết hợp đã chạy lại typecheck/test/build và harness Anvil; xem
+  [kết quả tích hợp mới](evidence/u05-b05-integration.md). PR #19 vẫn draft
+  trên GitHub vì lượt này chưa push/cập nhật PR; cần reviewer xem lại source
+  mới và CI sau khi người dùng cho phép push. Nghiệm thu L1 vẫn còn riêng.
 - Next proxy `/api/grants/:path*` dùng chung `BACKEND_URL` đã được B04 kiểm tra.
   API đi qua cùng origin HTTPS để Core điện thoại truy cập được; không cần mở
   CORS rộng hoặc đưa địa chỉ backend loopback vào trình duyệt điện thoại.
@@ -112,10 +111,11 @@ Regression review PR #19 có 14 ca mới: reload trong account/chain checks,
 prepared reconciliation không gửi, lock giữa tab, callback/dispose/storage lỗi,
 unknown cũ hoặc sau broadcast vẫn khóa. Xem [bằng chứng browser khôi phục](../artifacts/u05-recovery/browser-report.json).
 
-Review mới nhất ngày 2026-11-13 đã chấp nhận phần sửa no-hash; hiện không có
-finding logic U05 chưa sửa trong review đó. Điểm chặn còn lại là runtime B05
-chưa vào main. Chỉ chuyển PR khỏi draft sau khi main có route thật, kiểm tra
-lại source đã tích hợp và được reviewer xác nhận; không tự đánh dấu task Xong.
+Review ngày 2026-11-13 đã chấp nhận phần sửa no-hash. B05 đã vào main và source
+U05+B05 đã được ghép tại `8ede41e`, nên thiếu route runtime không còn là điểm
+chặn local. Không dùng bằng chứng lịch sử của worktree ghép thử thay cho lượt
+kiểm chứng mới. Chỉ cập nhật PR/CI và yêu cầu reviewer xác nhận khi được giao;
+không tự đánh dấu task Xong hoặc coi Anvil là nghiệm thu L1.
 
 Sau khi nhóm đã ghép B05 với U04/U05, có thể tái tạo luồng EVM/controller thật:
 

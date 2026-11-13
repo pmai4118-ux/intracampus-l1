@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { access, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Contract, ContractFactory, Interface, JsonRpcProvider, Wallet, id, keccak256 } from "ethers";
@@ -38,6 +38,11 @@ async function main() {
   const outputArgument = process.argv[2];
   if (!outputArgument || process.argv.length !== 3) throw Error("USAGE");
   const output = resolve(outputArgument);
+  // Optional test-only lifecycle for the Python browser proof. Never used by the app.
+  const browserDirectory = process.env.U05_BROWSER_FIXTURE_DIR ? resolve(process.env.U05_BROWSER_FIXTURE_DIR) : null;
+  if (browserDirectory && !browserDirectory.toLowerCase().startsWith((join(root, "backend", "data") + sep).toLowerCase())) {
+    throw Error("BROWSER_DIRECTORY");
+  }
   if (output.toLowerCase() === join(root, "deployments/intracampus.json").toLowerCase()) throw Error("CANONICAL_OUTPUT");
   try { await access(output); throw Error("OUTPUT_EXISTS"); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -65,7 +70,7 @@ async function main() {
   const killAnvil = () => { anvil.kill(); }; process.once("exit", killAnvil);
   const provider = new JsonRpcProvider(rpcUrl, undefined, { cacheTimeout: -1, batchMaxCount: 1 });
   provider.pollingInterval = 50;
-  let server, repository, grants;
+  let server, repository, grants, finishBrowser;
   const sessions = [], fetchOriginal = globalThis.fetch;
   const evidence = { environment: "local-anvil", chainId: 20261,
     scope: "Ephemeral Anvil, actual source-verified contracts and HTTP services, injected EIP-1193 adapter. Not Core, physical-device or Avalanche L1 acceptance.",
@@ -108,7 +113,9 @@ async function main() {
       config: { merchant: merchants.parking.address, privateKey: pos.privateKey, expectedSigner: pos.address, studentSbt: deployed.StudentSBTIdentity.address } });
     const receipts = new ReceiptService({ repository, rpc: invoiceRpc, deployment });
     grants = new GrantsService({ rpcUrl, deployment: manifest, allowLocal: true, provider });
-    server = createApp(rpcUrl, receipts, creation, grants).listen(0, "127.0.0.1"); await once(server, "listening");
+    const app = createApp(rpcUrl, receipts, creation, grants);
+    if (browserDirectory) app.post("/__u05-fixture/stop", (_req, res) => { res.sendStatus(204); finishBrowser?.(); });
+    server = app.listen(0, "127.0.0.1"); await once(server, "listening");
     const api = `http://127.0.0.1:${server.address().port}`;
     globalThis.fetch = (url, options) => fetchOriginal(typeof url === "string" && url.startsWith("/") ? api + url : url, options);
     const trusted = { paymentRegistryAddress: deployed.CampusPaymentRegistry.address, posSignerAddress: roles.posSigner };
@@ -211,6 +218,23 @@ async function main() {
     await mkdir(dirname(output), { recursive: true });
     await writeFile(output, JSON.stringify(evidence, null, 2) + "\n", { flag: "wx" });
     process.stdout.write(`${evidence.cases.length} local EVM/controller scenarios passed; public evidence written to the requested file.\n`);
+    if (browserDirectory) {
+      stage = "prepare-isolated-browser-fixture";
+      // A separate local account keeps the eight controller cases and their receipts intact.
+      const beneficiary = accounts[7];
+      await (await contracts.StudentSBTIdentity.mint(beneficiary, BigInt((await provider.getBlock("latest")).timestamp) + 7n * 86400n)).wait();
+      await (await contracts.PurposeBoundGrantVault.grant(beneficiary, id("FOOD"), { value: 5000n * unit })).wait();
+      const publicConfig = { environment: "local-anvil", chainId: 20261, api, rpcUrl, beneficiary, preparedBeneficiary: accounts[3], normalAccount: accounts[2], admin: accounts[0],
+        vault: deployed.PurposeBoundGrantVault.address, registry: deployed.CampusPaymentRegistry.address, canteen: merchants.canteen.address,
+        disableCanteen: registryInterface.encodeFunctionData("setMerchantCategory", [merchants.canteen.address, merchants.canteen.category, false]),
+        enableCanteen: registryInterface.encodeFunctionData("setMerchantCategory", [merchants.canteen.address, merchants.canteen.category, true]), manifest,
+        scope: "Test fixture only. UI uses a synthetic deployment in an ignored source copy; canonical manifest and operator environment are untouched." };
+      await mkdir(browserDirectory, { recursive: true });
+      const waitForBrowser = new Promise((done) => { finishBrowser = done; });
+      await writeFile(join(browserDirectory, "public-config.json"), JSON.stringify(publicConfig, null, 2) + "\n", { flag: "wx" });
+      process.stdout.write("Isolated browser fixture ready. POST /__u05-fixture/stop to close its loopback resources.\n");
+      await waitForBrowser;
+    }
   } finally {
     globalThis.fetch = fetchOriginal;
     for (const session of sessions) session.dispose();
@@ -223,6 +247,7 @@ catch (error) {
   const messages = { USAGE: "Usage: node frontend/test/u04-u05-local-evidence.mjs <new-evidence.json>",
     OUTPUT_EXISTS: "Output already exists. Choose a new evidence filename; existing evidence is preserved.",
     CANONICAL_OUTPUT: "Local evidence cannot replace deployments/intracampus.json.",
+    BROWSER_DIRECTORY: "Browser fixtures must stay inside ignored backend/data; the canonical deployment is never replaced.",
     B05_MISSING: "B05 API source is missing. Integrate/review B05 PR #16 together with U04/U05 before running this local acceptance script." };
   process.stderr.write((messages[error.message] ?? `Local acceptance failed at ${stage}. Check Node24/pnpm dependencies, Anvil and current artifacts (forge build --force).`) + "\n");
   process.exitCode = 1;
