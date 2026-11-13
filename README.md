@@ -30,6 +30,8 @@ Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật
 
 Hướng dẫn chi tiết cài môi trường, điền `.env`, kiểm tra RPC và chạy luồng U03 trên Windows nằm ở [docs/run-local.md](docs/run-local.md).
 
+B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) ghi cấu hình manifest chung, volume SQLite, đường HTTPS hai thiết bị, bằng chứng local và các bước nghiệm thu L1 còn thiếu.
+
 ## Kiểm tra trước khi mở PR
 
 ```sh
@@ -50,6 +52,12 @@ forge test
 P02 có thêm `pnpm test:p02` (đã nằm trong `pnpm test`) để kiểm tra giao kèo JSON/QR, chữ ký và các tình huống tham chiếu. Foundry kiểm tra cùng [fixture P02](docs/fixtures/invoice-v1.json) bằng Solidity; xem [giao kèo invoice](docs/invoice-contract.md#6-fixture-chạy-được-và-kiểm-tra-giao-kèo). Đây là test fixture/local, chưa phải kết quả L1.
 
 L04 có [hướng dẫn contract thanh toán và bàn giao tích hợp](docs/l04-payment.md), log Foundry và hai receipt Anvil local. Smoke script kiểm tra ABI thực tế theo P02 và luồng thanh toán thường/ưu đãi; địa chỉ triển khai Avalanche L1 thuộc L06.
+
+B03/L05/L06 có [bàn giao và kết quả kiểm thử](docs/b03-l05-l06-handoff.md),
+[seed ví/thẻ](docs/demo-accounts.md), [vault học bổng](docs/l05-grants.md) và
+[deploy/xuất ABI](docs/deployment.md). Manifest L1 hiện chưa cấu hình; bằng chứng
+đi kèm là EVM local. Dùng `pnpm smoke:l06` sau `forge build --force` để tái hiện
+deploy → seed hai lần → chi học bổng trên Anvil.
 
 GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Xem [bảng sprint của nhóm](https://intracampus-l1-sprint.mphung2532.chatgpt.site) để chọn task và đọc tiêu chí nghiệm thu. Đặt mã task trong tiêu đề PR, ví dụ `[U01] Dựng khung Student và POS`. Thành viên đã đăng ký trên bảng sẽ thấy PR trong chi tiết task.
 

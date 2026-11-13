@@ -1,4 +1,4 @@
-import { campusNetwork } from "@intracampus/network";
+import { campusNetwork, getDeployment, requireDeployment } from "@intracampus/network";
 export { campusNetwork };
 export type WalletConfig = { rpcUrl?: string; sbtAddress?: string; paymentRegistryAddress?: string; posSignerAddress?: string };
 export const campusChainHex = `0x${campusNetwork.chainId.toString(16)}`;
@@ -21,8 +21,21 @@ export function validateWalletConfig(config: WalletConfig): WalletConfig {
   return { rpcUrl, sbtAddress, paymentRegistryAddress, posSignerAddress };
 }
 // Only public, build-time configuration. Never expose a key or RPC secret here.
+export function walletConfigFromDeployment(config: WalletConfig, manifest: unknown = getDeployment()): WalletConfig {
+  const data = getDeployment(manifest);
+  if (data.status !== "deployed") return validateWalletConfig(config);
+  const shared = requireDeployment(data);
+  const addresses = { sbtAddress: shared.contracts.StudentSBTIdentity.address,
+    paymentRegistryAddress: shared.contracts.CampusPaymentRegistry.address, posSignerAddress: shared.roles.posSigner };
+  for (const key of Object.keys(addresses) as Array<keyof typeof addresses>) {
+    if (config[key]?.trim() && config[key]!.trim().toLowerCase() !== addresses[key].toLowerCase()) {
+      throw new Error("Wallet environment must match the canonical L06 deployment manifest");
+    }
+  }
+  return validateWalletConfig({ ...config, ...addresses });
+}
 export function browserWalletConfig(): WalletConfig {
-  return validateWalletConfig({ rpcUrl: process.env.NEXT_PUBLIC_INTRACAMPUS_RPC_URL,
+  return walletConfigFromDeployment({ rpcUrl: process.env.NEXT_PUBLIC_INTRACAMPUS_RPC_URL,
     sbtAddress: process.env.NEXT_PUBLIC_STUDENT_SBT_ADDRESS,
     paymentRegistryAddress: process.env.NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS,
     posSignerAddress: process.env.NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS });

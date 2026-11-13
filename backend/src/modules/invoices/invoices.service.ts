@@ -12,7 +12,8 @@ export const invoiceTypes = { Invoice: [
   { name: "category", type: "bytes32" }, { name: "amount", type: "uint256" },
   { name: "expiresAt", type: "uint64" },
 ] };
-const signerAbi = new Interface(["function posSigner() view returns (address)"]);
+const signerAbi = new Interface(["function posSigner() view returns (address)",
+  "function studentSbt() view returns (address)", "function allowedMerchantCategories(address,bytes32) view returns (bool)"]);
 type CreationErrorCode = "INVALID_REQUEST" | "UNKNOWN_SERVICE_OR_MERCHANT" | "INVALID_SIGNATURE"
   | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "INTERNAL_ERROR";
 const errors: Record<CreationErrorCode, [number, string, string]> = {
@@ -65,6 +66,7 @@ export class InvoiceCreationService {
     try {
       if (!config.privateKey || !/^0x[0-9a-f]{64}$/i.test(config.privateKey)) throw new Error();
       wallet = new Wallet(config.privateKey);
+      if (config.expectedSigner && !same(config.expectedSigner, wallet.address)) throw new Error();
     } catch { throw new InvoiceCreationError("INVALID_SIGNATURE"); }
 
     let issuedAt: number;
@@ -82,6 +84,15 @@ export class InvoiceCreationService {
       if (typeof rawSigner !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(rawSigner)) throw new Error();
       const signer = `0x${rawSigner.slice(-40)}`;
       if (!isAddress(signer) || !same(signer, wallet.address)) throw new InvoiceCreationError("INVALID_SIGNATURE");
+      if (config.studentSbt) {
+        const sbt = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
+          data: signerAbi.encodeFunctionData("studentSbt") }, block.number]);
+        if (typeof sbt !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(sbt)
+          || !same(`0x${sbt.slice(-40)}`, config.studentSbt)) throw new Error();
+        const allowed = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
+          data: signerAbi.encodeFunctionData("allowedMerchantCategories", [config.merchant, id(parkingService.categoryCode)]) }, block.number]);
+        if (allowed !== `0x${"0".repeat(63)}1`) throw new Error();
+      }
     } catch (error) {
       if (error instanceof InvoiceCreationError) throw error;
       throw new InvoiceCreationError("RPC_UNAVAILABLE");

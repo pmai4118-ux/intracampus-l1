@@ -1,0 +1,59 @@
+{
+  "response": {
+    "invoiceId": "0x5a7f214bed0ee53baf6f746e45f8d3ad84195f2defb1fcf5a37eada33a0c9ee0",
+    "envelope": {
+      "schemaVersion": 1,
+      "domain": {
+        "name": "IntraCampusPayment",
+        "version": "1",
+        "chainId": 20261,
+        "verifyingContract": "0x0000000000000000000000000000000000020261"
+      },
+      "invoice": {
+        "invoiceId": "0x5a7f214bed0ee53baf6f746e45f8d3ad84195f2defb1fcf5a37eada33a0c9ee0",
+        "merchant": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+        "amount": "3000000000000000000000",
+        "expiresAt": 1794493538
+      },
+      "meta": {
+        "invoiceCode": "INV-20261112-PARKING-5d8c1a8d-e16c-4e04-93bc-deff852d86b1",
+        "merchantId": "parking-demo",
+        "merchantName": "Bãi xe demo",
+        "serviceId": "parking-single",
+        "serviceName": "Một lượt gửi xe demo",
+        "categoryCode": "PARKING",
+        "issuedAt": 1794493238
+      },
+      "signer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "signature": "0x575a2851e6c8fab29a8f1df468c5a25148a157522e8733abfca0279f2eed872f53c8540a66fb30e2c8d58216e410f170625e4f91c765c94dba97115a7b44bdbc1c"
+    },
+    "status": "paid",
+    "receipt": {
+      "invoiceId": "0x5a7f214bed0ee53baf6f746e45f8d3ad84195f2defb1fcf5a37eada33a0c9ee0",
+      "invoiceCode": "INV-20261112-PARKING-5d8c1a8d-e16c-4e04-93bc-deff852d86b1",
+      "chainId": 20261,
+      "contractAddress": "0x0000000000000000000000000000000000020261",
+      "txHash": "0x5a1f358a685924edbfc155f7be3d85b14b7b33400d399f3be5abe6704e0eadce",
+      "blockNumber": 129,
+      "logIndex": 0,
+      "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "merchant": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+      "originalAmount": "3000000000000000000000",
+      "discountAmount": "300000000000000000000",
+      "paidAmount": "2700000000000000000000",
+      "tier": 1,
+      "gasUsed": "68420",
+      "effectiveGasPrice": "25000000000",
+      "verifiedAt": 1794493269
+    },
+    "transaction": {
+      "txHash": "0x5a1f358a685924edbfc155f7be3d85b14b7b33400d399f3be5abe6704e0eadce",
+      "status": "confirmed"
+    },
+    "updatedAt": 1794493269
+  },
+  "scenario": "POST -> reload -> RPC outage -> paid -> backend restart -> RPC offline -> GET paid",
+  "evidence": "SYNTHETIC JSON-RPC fixture, real HTTP/SQLite and browser POS; not EVM or Avalanche L1"
+}

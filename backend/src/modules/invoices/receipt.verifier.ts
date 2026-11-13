@@ -1,8 +1,12 @@
-import { Interface } from "ethers";
-import { campusNetwork, type SignedInvoiceEnvelope, type VerifiedInvoiceReceipt } from "@intracampus/network";
+import { Interface, type InterfaceAbi } from "ethers";
+import { campusNetwork, getDeployment, requireDeployment, type SignedInvoiceEnvelope, type VerifiedInvoiceReceipt } from "@intracampus/network";
 import { isAddress, isHash, object, quantity, safeQuantity, same } from "./invoices.schema.ts";
 
-export const paymentAbi = new Interface([
+const publicManifest = getDeployment();
+// The fixed P02 codec keeps offline fixtures usable before a real deployment exists.
+// A configured receipt service uses the exact same full ABI as the frontend.
+export const paymentAbi = new Interface(publicManifest.status === "deployed"
+  ? requireDeployment(publicManifest).contracts.CampusPaymentRegistry.abi as InterfaceAbi : [
   "event InvoicePaid(bytes32 indexed invoiceId,address indexed payer,address indexed merchant,bytes32 category,uint256 originalAmount,uint256 discountAmount,uint256 paidAmount,uint8 tier)",
   "function isInvoicePaid(bytes32 invoiceId) view returns (bool)",
 ]);
