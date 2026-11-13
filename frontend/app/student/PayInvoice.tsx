@@ -50,6 +50,9 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
     const timer = window.setTimeout(() => void controller.refresh(), 3000);
     return () => window.clearTimeout(timer);
   }, [controller, payment]);
+  useEffect(() => {
+    if (payment?.receipt?.txHash) void walletController.refresh();
+  }, [payment?.receipt?.txHash, walletController]);
 
   const quote = payment?.preview.quote ?? preview.quote;
   const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261);

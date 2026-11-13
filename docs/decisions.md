@@ -140,3 +140,13 @@ Sau khi B02 vào `main` tại `12a45f1`, receipt config lấy verifier/block t�
 manifest khi đã cấu hình, ABI decoder cũng lấy ABI chung; các biến môi trường
 B02 nếu còn đặt phải khớp hoàn toàn hoặc backend từ chối khởi động. Khi chưa
 deploy vẫn hỗ trợ codec P02/biến cấu hình B02 cho fixture và phát triển.
+
+## D016 · U04: sinh viên ký và khôi phục giao dịch chưa rõ · 2026-11-13
+
+U04 dùng phiên ví U02 hiện có; chỉ ví sinh viên gửi `payInvoice` với giá từ
+preflight mới nhất. Account/chain được kiểm tra lại trước khi mở Core; đổi
+giá yêu cầu xác nhận lại. Dấu lần gửi và hash được giữ theo deployment, ví và
+invoice để reload không tự gửi lại. Từ chối ký khác với lỗi transport chưa rõ
+kết quả; chỉ receipt/event B02 đã xác minh mới được hiển thị thành công.
+POS dùng lại B04, Student đối chiếu thêm payer/hash của lần ký. Không thay
+P02, ABI L04 hoặc bổ sung ví ký phía backend. Xem [runbook U04](u04-payment.md).
