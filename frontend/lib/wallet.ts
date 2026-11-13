@@ -182,9 +182,13 @@ export class WalletController {
   }
   /** The connected student signs. A returned hash survives account changes while Core is open. */
   async sendTransaction(expectedAccount: string, transaction: WalletTransaction): Promise<string> {
+    return this.sendTransactionWithGuard(expectedAccount, transaction, () => {});
+  }
+  /** The synchronous guard durably records the send boundary after all asynchronous wallet checks. */
+  async sendTransactionWithGuard(expectedAccount: string, transaction: WalletTransaction, beforeBroadcast: () => void): Promise<string> {
     const fail = (code: string): never => { throw new WalletTransactionError(code, "not-sent"); };
     if (this.sending) fail("WALLET_REQUEST_PENDING");
-    if (!isWalletAddress(expectedAccount) || !isWalletAddress(transaction.to)
+    if (typeof beforeBroadcast !== "function" || !isWalletAddress(expectedAccount) || !isWalletAddress(transaction.to)
       || !/^0x(?:[0-9a-f]{2})+$/i.test(transaction.data)
       || !/^0x(?:0|[1-9a-f][0-9a-f]{0,63})$/i.test(transaction.value)) fail("INVALID_TRANSACTION");
     const selected = () => !this.stopped && !this.locallyDisconnected && this.state.canProceed
@@ -200,6 +204,10 @@ export class WalletController {
       ]);
       if (chain !== BigInt(campusNetwork.chainId)) fail("WRONG_CHAIN");
       if (!selected() || !available.includes(expectedAccount.toLowerCase())) fail("WALLET_SESSION_CHANGED");
+      // No await between the durable marker and the provider request. A reload during
+      // the account/chain checks above has not crossed this boundary.
+      const guardResult: unknown = beforeBroadcast();
+      if (guardResult !== undefined) fail("INVALID_BROADCAST_GUARD");
       requested = true;
       const hash = await this.provider!.request({ method: "eth_sendTransaction", params: [{
         from: expectedAccount, to: transaction.to, data: transaction.data, value: transaction.value,

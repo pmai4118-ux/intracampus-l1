@@ -1,0 +1,69 @@
+{
+  "environment": "local-anvil",
+  "chainId": 20261,
+  "scope": "Ephemeral Anvil, actual source-verified contracts and HTTP services, injected EIP-1193 adapter. Not Core, physical-device or Avalanche L1 acceptance.",
+  "selectors": {
+    "payInvoice": "0xba5e2a9e",
+    "spend": "0xe2f7cbfa"
+  },
+  "cases": [
+    {
+      "name": "normal: real B01 invoice → frontend preflight/send → B02 receipt → journal reload",
+      "invoiceId": "0x45ef07a163c237f45ea92e9e67b699ff75ef2276f96916d9038054d284e55b73",
+      "txHash": "0xffe7877ca7dd88c88604a3b36a72551fe2951e41524c795ff17d312f620664f4",
+      "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "paidAmountWei": "3000000000000000000000",
+      "discountAmountWei": "0",
+      "sendCount": 1
+    },
+    {
+      "name": "student: real B01 invoice → frontend preflight/send → B02 receipt → journal reload",
+      "invoiceId": "0x1c4651d93256620ea917cdabe66d2cf166385210d631867cb52518b76107db65",
+      "txHash": "0xe959d17325ef7d01dbbb7d1dee6793f8077f5f9a3880fcae586d5d06ff1df103",
+      "payer": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "paidAmountWei": "2700000000000000000000",
+      "discountAmountWei": "300000000000000000000",
+      "sendCount": 1
+    },
+    {
+      "name": "EIP-1193 rejection4001: no on-chain payment; retry requires fresh preflight",
+      "requests": 1
+    },
+    {
+      "name": "disconnect after actual broadcast: restored unknown intent recovers receipt without resend",
+      "txHash": "0x861d26a0a7242df87fdc860a54d1c249d86606da9b3115a6db3c267e23426951",
+      "sendCount": 1
+    },
+    {
+      "name": "frontend grant spend + B05 HTTP verifies GrantSpent and balance",
+      "beforeWei": "5000000000000000000000",
+      "afterWei": "4000000000000000000000",
+      "transactionHash": "0xae3c5de137c28f151a2c8591828a0cfa76d9ed1e439245b6e6514c30d0ed4898",
+      "event": {
+        "event": "GrantSpent",
+        "transactionHash": "0xae3c5de137c28f151a2c8591828a0cfa76d9ed1e439245b6e6514c30d0ed4898",
+        "blockNumber": 11,
+        "blockHash": "0xceff0c7ccc1e9bde317e59c1eb75ab5b0f38913566b4362ba95e9cb7266f35ca",
+        "logIndex": 0,
+        "beneficiary": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+        "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
+        "amountWei": "1000000000000000000000",
+        "balanceWei": "4000000000000000000000",
+        "merchant": "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"
+      },
+      "sendCount": 1
+    },
+    {
+      "name": "grant preflight blocks personal wallet; voucher remains4000",
+      "code": "MERCHANT_NOT_ALLOWED"
+    },
+    {
+      "name": "grant preflight blocks wrong category; voucher remains4000",
+      "code": "INSUFFICIENT_GRANT_BALANCE"
+    },
+    {
+      "name": "grant preflight blocks over balance; voucher remains4000",
+      "code": "INSUFFICIENT_GRANT_BALANCE"
+    }
+  ]
+}

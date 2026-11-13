@@ -166,9 +166,10 @@ test("an HTTP422 body cannot masquerade as a verified paid response", async () =
 
 class Provider implements WalletProvider {
   address = A; chain = "0x4f25"; calls: { method: string; params?: unknown[] }[] = [];
+  accountsWait?: Promise<unknown>;
   send: () => Promise<unknown> = async () => hash;
   async request(call: { method: string; params?: unknown[] }): Promise<unknown> {
-    this.calls.push(call); if (call.method === "eth_accounts") return [this.address];
+    this.calls.push(call); if (call.method === "eth_accounts") return this.accountsWait ?? [this.address];
     if (call.method === "eth_chainId") return this.chain;
     if (call.method === "eth_sendTransaction") return this.send(); throw Error("Unexpected method");
   }
@@ -218,4 +219,48 @@ test("wallet distinguishes explicit user rejection from uncertain provider failu
 test("invalid wallet hash is an uncertain send, never a proven rejection", async () => {
   const { provider, c } = await wallet(); provider.send = async () => "0x0";
   await assert.rejects(c.sendTransaction(A, tx), (error: unknown) => error instanceof WalletTransactionError && error.outcome === "unknown"); c.dispose();
+});
+
+test("guarded wallet transport invokes the durable boundary only after fresh account checks, immediately before send", async () => {
+  const { provider, c } = await wallet(), accountCheck = deferred<unknown>();
+  provider.accountsWait = accountCheck.promise; let boundaries = 0;
+  const run = c.sendTransactionWithGuard(A, tx, () => {
+    boundaries++;
+    assert.ok(provider.calls.some((call) => call.method === "eth_chainId"));
+    assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction"));
+  });
+  await new Promise((done) => setImmediate(done));
+  assert.equal(boundaries, 0); assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction"));
+  accountCheck.resolve([A]); assert.equal(await run, hash); assert.equal(boundaries, 1);
+  assert.equal(provider.calls.at(-1)?.method, "eth_sendTransaction"); c.dispose();
+});
+
+test("failure to persist the guarded broadcast boundary is proven not-sent and never reaches the provider", async () => {
+  const { provider, c } = await wallet();
+  await assert.rejects(c.sendTransactionWithGuard(A, tx, () => { throw Error("journal write failed"); }),
+    (error: unknown) => error instanceof WalletTransactionError && error.outcome === "not-sent");
+  assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction")); c.dispose();
+});
+
+test("an asynchronous boundary callback is rejected instead of racing the provider request", async () => {
+  const { provider, c } = await wallet();
+  await assert.rejects(c.sendTransactionWithGuard(A, tx, async () => {}),
+    (error: unknown) => error instanceof WalletTransactionError && error.outcome === "not-sent" && error.code === "INVALID_BROADCAST_GUARD");
+  assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction")); c.dispose();
+});
+
+test("fresh wallet guard failure never advances the broadcast journal boundary", async () => {
+  const { provider, c } = await wallet(); provider.chain = "0xa869"; let boundaries = 0;
+  await assert.rejects(c.sendTransactionWithGuard(A, tx, () => { boundaries++; }),
+    (error: unknown) => error instanceof WalletTransactionError && error.outcome === "not-sent");
+  assert.equal(boundaries, 0); assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction")); c.dispose();
+});
+
+test("a disposed wallet waiting on provider checks cannot later mark or submit a broadcast", async () => {
+  const { provider, c } = await wallet(), accountCheck = deferred<unknown>();
+  provider.accountsWait = accountCheck.promise; let boundaries = 0;
+  const run = c.sendTransactionWithGuard(A, tx, () => { boundaries++; });
+  c.dispose(); accountCheck.resolve([A]);
+  await assert.rejects(run, (error: unknown) => error instanceof WalletTransactionError && error.outcome === "not-sent");
+  assert.equal(boundaries, 0); assert.ok(!provider.calls.some((call) => call.method === "eth_sendTransaction"));
 });

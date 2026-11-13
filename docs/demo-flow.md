@@ -118,3 +118,26 @@ Các tình huống cần chạy khi triển khai xong: thanh toán ưu đãi; v�
 Q01 lưu log đo phí và độ trễ bằng tx hash thực. Q02 ghi kết quả tại `docs/demo-checklist.md` và lỗi còn chặn demo. Q04 chuẩn bị `docs/video-script.md`, `docs/demo-assets.md` và bộ offline; các file này thuộc task sau, chưa được tạo bởi P01.
 
 Điều kiện đưa kịch bản này vào bản nộp: một thành viên khác thao tác lại được từ checklist, kết quả giá/receipt/grant khớp bản deploy, phần thật/giả lập được ghi rõ và file offline mở được khi không có mạng. Mọi sai khác về dữ liệu đề xuất phải được sửa đồng bộ trong [scope.md](scope.md) trước khi quay.
+
+## 8. Chạy bảng voucher U05
+
+Sau khi U04 và API B05 cùng deployment đã ghép, mở **Voucher học bổng** trong
+Student View của ví beneficiary. Đối chiếu căn-tin/FOOD và số dư `5000 CAMPUS`,
+nhập `1000`, bấm **Chi FOOD bằng Core** rồi tự xác nhận trong Core. Giao dịch
+`spend` có `msg.value = 0`; ví cá nhân chỉ trả gas. Chỉ sau receipt B05 và
+`GrantSpent` khớp mới ghi nhận số dư mới `4000` và hash cho video.
+
+Không dùng ví issuer hoặc server để ký thay beneficiary. Nút chi khóa khi
+ngân sách/merchant chưa xác minh, sai mạng, vượt số dư hoặc khoản cũ chưa rõ kết
+quả. Nếu mất RPC sau ký, giữ hash và dùng **Đọc lại / Tra receipt**. Sau reload,
+app khôi phục intent theo ví/deployment; không tự gửi lại. Hash mất cần đối
+chiếu từ lịch sử Core, không xóa storage. Chi mới cần bấm nút xem lại số dư
+sau khi giao dịch trước đã xác minh thành công hoặc chắc chắn revert.
+
+App chỉ cho chọn căn-tin FOOD. Ca “ví cá nhân/sai category” ở mục 4 được ghi
+bằng kết quả preflight/contract test hoặc receipt revert trong môi trường thử;
+không bổ sung đường rút tiền tùy ý vào UI. Cần HTTPS, localStorage và Web Locks
+trên trình duyệt Core đã kiểm tra. [Runbook U05](u05-grants.md) mô tả API B05,
+điểm nối, phục hồi, hạn chế nhiều tab và checklist trước/sau. Manifest còn
+`unconfigured` thì bảng thông báo chưa đủ triển khai; không dùng fixture thay
+cho bằng chứng trên L1.

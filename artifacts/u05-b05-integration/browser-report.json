@@ -1,0 +1,129 @@
+{
+  "environment": "local-anvil",
+  "scope": "Actual current Student UI and B05 API with actual contract receipts; injected EIP-1193 adapter, one injected HTTP error; not Core/physical-device/Avalanche L1 acceptance",
+  "provenance": {
+    "environment": "local-anvil",
+    "sourceRevision": "8ede41e1f349d636b484a4adfef8e48903f54e55",
+    "sourceHashes": {
+      "frontend/app/student/GrantPanel.tsx": "d0ab8cf0afd453d204c0b8c9ff524a3797b18bc1a7009967e50f6ef965807721",
+      "frontend/lib/grants.ts": "00678929c97851040d85127c993feae30838f13e08818f586afb20792b5f1055",
+      "frontend/lib/wallet.ts": "23dda91678d2575af712b48e3ecde80d53ddb4d41ac05cfd52b2d8f5ed1e8290",
+      "frontend/next.config.ts": "4fe7411901c0c0fefa9dbbb434b274b0cb2ea89b4142702f3b360a9cf21cfb5d",
+      "packages/network/src/deployment.ts": "7fadec32a54d6f138db80c3a202d49c5071b05b5c82d5b5bbf30529d57c6fd3c"
+    },
+    "canonicalManifestSha256": "0698bcb38fd53e633ac5ea687b6401844406fbf2affc0af10e692588b32883fb",
+    "overrides": [
+      "Ignored source copy only: deployment manifest has local addresses with deployed environment shape for UI testing",
+      "Public loopback RPC/BACKEND_URL in copied .env.local",
+      "Injected EIP-1193 test wallet and visible local-test banner supplied by Python"
+    ],
+    "scope": "Actual current GrantPanel/controllers/proxy source. Not a production deployment or Core/physical-device/L1 acceptance."
+  },
+  "cases": [
+    {
+      "name": "Real Student reads 5000 through Next proxy/B05; overbalance and exponent inputs blocked"
+    },
+    {
+      "name": "Zero balance is verified zero; rapid account changes finish on the current beneficiary"
+    },
+    {
+      "name": "Wrong wallet chain blocks spending; correct chain restores readiness"
+    },
+    {
+      "name": "Injected API/RPC error marks balance stale and blocks spend; retry reads actual B05 again"
+    },
+    {
+      "name": "Rejected wallet request broadcasts nothing and preserves 5000 grant"
+    },
+    {
+      "name": "Actual spend value0: 5000 to 4000, canteen +1000; pending/confirmed reload does not resend",
+      "receipt": {
+        "schemaVersion": 1,
+        "status": "verified",
+        "chainId": 20261,
+        "beneficiary": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "vaultAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "category": {
+          "id": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
+          "label": "FOOD"
+        },
+        "balanceWei": "4000000000000000000000",
+        "block": {
+          "number": 14,
+          "hash": "0x41ad77dd476a3adf143e00c72ca6fed525dd36ac8e33dd29f0f75455bc3bb4a8"
+        },
+        "allowedMerchants": [
+          {
+            "id": "canteen",
+            "address": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+            "allowed": true
+          }
+        ],
+        "transaction": {
+          "hash": "0xe9fcd0675a10b23a0320f1c7e27cc9be8924d973f3eae88c595c7a422ced86bd",
+          "status": "verified",
+          "events": [
+            {
+              "event": "GrantSpent",
+              "transactionHash": "0xe9fcd0675a10b23a0320f1c7e27cc9be8924d973f3eae88c595c7a422ced86bd",
+              "blockNumber": 14,
+              "blockHash": "0x41ad77dd476a3adf143e00c72ca6fed525dd36ac8e33dd29f0f75455bc3bb4a8",
+              "logIndex": 0,
+              "beneficiary": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+              "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d",
+              "amountWei": "1000000000000000000000",
+              "balanceWei": "4000000000000000000000",
+              "merchant": "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Actual Web Lock blocks other-tab recovery; closing old tab permits prepared reconciliation without sending"
+    },
+    {
+      "name": "Unknown after real broadcast stays blocked through reload and changed balance; exact hash reconciles without resend",
+      "transactionHash": "0x5441f25f6817cb4f64509924f5bb43427c3bb4efe0ea28401f0012aa7d56723c"
+    },
+    {
+      "name": "Actual registry revocation disables spending and preserves remaining grant"
+    },
+    {
+      "name": "Disconnect clears wallet identity and disables new spending"
+    }
+  ],
+  "sends": [
+    {
+      "transaction": {
+        "from": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "data": "0xe2f7cbfa0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d00000000000000000000000000000000000000000000003635c9adc5dea00000",
+        "value": "0x0",
+        "chainId": "0x4f25"
+      },
+      "hash": "0xe9fcd0675a10b23a0320f1c7e27cc9be8924d973f3eae88c595c7a422ced86bd"
+    },
+    {
+      "transaction": {
+        "from": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+        "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "data": "0xe2f7cbfa0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d00000000000000000000000000000000000000000000003635c9adc5dea00000",
+        "value": "0x0",
+        "chainId": "0x4f25"
+      },
+      "hash": "0x08ec7f5f66be9659eb47691eae5ceabf3ab16ba25dfdb55fb24d1fdc036a8301"
+    },
+    {
+      "transaction": {
+        "from": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "to": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "data": "0xe2f7cbfa0000000000000000000000009965507d1a55bcc2695c58ba16fb37d819b0a4dc2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d00000000000000000000000000000000000000000000003635c9adc5dea00000",
+        "value": "0x0",
+        "chainId": "0x4f25"
+      },
+      "hash": "0x5441f25f6817cb4f64509924f5bb43427c3bb4efe0ea28401f0012aa7d56723c"
+    }
+  ],
+  "errors": []
+}
