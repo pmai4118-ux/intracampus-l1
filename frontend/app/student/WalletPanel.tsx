@@ -104,6 +104,6 @@ export function StudentWallet() {
       <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
       <InvoicePreview wallet={state} />
     </section>
-    <p className="wallet-live-note">Dữ liệu ví thật được đọc từ mạng đã cấu hình. Phần này không ký hoặc gửi giao dịch.</p>
+    <p className="wallet-live-note">Dữ liệu được đọc từ mạng đã cấu hình. Bạn chỉ yêu cầu giao dịch khi bấm thanh toán và xác nhận trong Core.</p>
   </div>;
 }

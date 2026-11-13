@@ -1,5 +1,5 @@
 "use client";
-import { formatWalletBalance } from "../../lib/chains";
+import { Receipt } from "./Receipt";
 import type { InvoiceStatusSnapshot } from "../../lib/invoice-status";
 import { CopyButton } from "../demo-controls";
 
@@ -21,21 +21,6 @@ export function InvoiceStatus({ state }: { state: InvoiceStatusSnapshot }) {
       ? "Giao dịch chưa xác minh; không gửi lại thanh toán."
       : lookup.transaction.status === "reverted" ? "Giao dịch đã revert; chưa thu được tiền." : "Event giao dịch không khớp hóa đơn; chưa xác nhận thanh toán."}</p>
       <code className="tx-hash-code">{lookup.transaction.txHash}</code></> : null}
-    {lookup?.status === "paid" ? <div className="invoice-verified-preview">
-      <span className="verified-badge">BIÊN NHẬN ĐÃ XÁC MINH</span>
-      <dl className="price-breakdown">
-        <div className="price-row"><dt>Mã hóa đơn</dt><dd>{lookup.receipt.invoiceCode}</dd></div>
-        <div className="price-row"><dt>Giá gốc</dt><dd>{formatWalletBalance(BigInt(lookup.receipt.originalAmount))}</dd></div>
-        <div className="price-row"><dt>Ưu đãi (tier {lookup.receipt.tier})</dt><dd>{formatWalletBalance(BigInt(lookup.receipt.discountAmount))}</dd></div>
-        <div className="price-row"><dt>Đã trả</dt><dd>{formatWalletBalance(BigInt(lookup.receipt.paidAmount))}</dd></div>
-        <div className="price-row"><dt>Gas (riêng)</dt><dd>{formatWalletBalance(BigInt(lookup.receipt.gasUsed) * BigInt(lookup.receipt.effectiveGasPrice))}</dd></div>
-        <div className="price-row"><dt>Block / log</dt><dd>{lookup.receipt.blockNumber} / {lookup.receipt.logIndex}</dd></div>
-      </dl>
-      <p>Người trả</p><code className="tx-hash-code">{lookup.receipt.payer}</code>
-      <p>Người nhận</p><code className="tx-hash-code">{lookup.receipt.merchant}</code>
-      <p>Hợp đồng · chain {lookup.receipt.chainId}</p><code className="tx-hash-code">{lookup.receipt.contractAddress}</code>
-      <p>Tx hash</p><code className="tx-hash-code">{lookup.receipt.txHash}</code>
-      <CopyButton label="Sao chép tx hash" value={lookup.receipt.txHash} />
-    </div> : null}
+    {lookup?.status === "paid" ? <Receipt receipt={lookup.receipt} /> : null}
   </section>;
 }

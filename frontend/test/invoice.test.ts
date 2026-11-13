@@ -104,6 +104,18 @@ test("rejects already-paid invoices before simulating a new payment", async () =
   } finally { globalThis.fetch = previousFetch; }
 });
 
+test("backend-known pending transaction blocks preflight without relying on this browser's journal", async () => {
+  const envelope = currentEnvelope(), previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ invoiceId: envelope.invoice.invoiceId,
+    status: "pending", envelope, transaction: { txHash: `0x${"ab".repeat(32)}`, status: "unverified" } }), { status: 200 });
+  const { rpc, calls } = mockRpc(envelope);
+  try {
+    await assert.rejects(verifyInvoicePreview(JSON.stringify(envelope), payer, trustedDeployment(envelope), rpc), (error: unknown) =>
+      error instanceof InvoicePreviewError && error.code === "PAYMENT_IN_PROGRESS");
+    assert.equal(calls.length, 0);
+  } finally { globalThis.fetch = previousFetch; }
+});
+
 test("rejects a payload that differs from the backend-stored invoice", async () => {
   const envelope = currentEnvelope();
   const altered = { ...envelope, invoice: { ...envelope.invoice, amount: (BigInt(envelope.invoice.amount) + BigInt(1)).toString() } };
