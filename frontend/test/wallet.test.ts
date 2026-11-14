@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Interface } from 'ethers';
-import { WalletController, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
+import { Interface, Signature, verifyMessage, Wallet } from 'ethers';
+import { WalletController, WalletTransactionError, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
 import { formatWalletBalance, validateWalletConfig, walletChainParameters } from '../lib/chains.ts';
 
 const A = `0x${'11'.repeat(20)}`, B = `0x${'22'.repeat(20)}`, SBT = `0x${'33'.repeat(20)}`;
@@ -19,6 +19,9 @@ class Provider implements WalletProvider {
   connectPending?: Promise<unknown>;
   switchPending?: Promise<unknown>;
   chainPending?: Promise<unknown>;
+  signPending?: Promise<unknown>;
+  signature = `0x${'ab'.repeat(65)}`;
+  signingAccount = A;
   listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
     this.calls.push(method);
@@ -27,6 +30,12 @@ class Provider implements WalletProvider {
     if (method === 'eth_requestAccounts') {
       if (this.reject) throw { code: this.reject };
       return this.connectPending ?? [...this.accounts];
+    }
+    if (method === 'personal_sign') {
+      assert.equal(typeof params?.[0], 'string');
+      assert.equal(params?.[1], this.signingAccount);
+      if (this.reject) throw { code: this.reject };
+      return this.signPending ?? this.signature;
     }
     if (method === 'wallet_switchEthereumChain') {
       assert.deepEqual(params, [{ chainId: '0x4f25' }]);
@@ -97,6 +106,50 @@ test('reads actual zero balance and tier1 at inclusive chain expiry using L03 AB
   assert.equal(s.status, 'ready'); assert.equal(s.address, A); assert.equal(s.balanceWei, BigInt(0));
   assert.equal(s.card.tier, 1); assert.equal(s.card.status, 'valid'); assert.equal(s.card.expiresAt, BigInt(100));
   assert.equal(s.canProceed, true); assert.ok(!provider.calls.some((m) => /sign|send/i.test(m))); c.dispose();
+});
+test('message signing uses UTF-8 personal_sign and rechecks selected wallet and chain', async (t) => {
+  const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
+  const message = 'IntraCampus Library session · 2026';
+  const expectedData = `0x${Array.from(new TextEncoder().encode(message), (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  const originalRequest = provider.request.bind(provider);
+  provider.request = async (args) => {
+    if (args.method === 'personal_sign') assert.equal(args.params?.[0], expectedData);
+    return originalRequest(args);
+  };
+  assert.equal(await c.signMessage(A, message), provider.signature);
+
+  await assert.rejects(c.signMessage(B, message), (error: unknown) =>
+    error instanceof WalletTransactionError && error.code === 'WALLET_SESSION_CHANGED');
+  provider.chain = '0x1';
+  await assert.rejects(c.signMessage(A, message), (error: unknown) =>
+    error instanceof WalletTransactionError && error.code === 'WRONG_CHAIN');
+});
+test('message signing accepts a valid compact 64-byte Ethereum signature', async (t) => {
+  const signer = new Wallet(`0x${'11'.repeat(32)}`);
+  const message = 'IntraCampus Library compact signature';
+  const signature = Signature.from(await signer.signMessage(message)).compactSerialized;
+  assert.equal((signature.length - 2) / 2, 64);
+  assert.equal(verifyMessage(message, signature).toLowerCase(), signer.address.toLowerCase());
+
+  const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
+  provider.accounts = [signer.address];
+  provider.signingAccount = signer.address;
+  provider.signature = signature;
+  const mutableController = c as unknown as { state: ReturnType<WalletController['getSnapshot']> };
+  mutableController.state = { ...c.getSnapshot(), address: signer.address, accounts: [signer.address.toLowerCase()] };
+
+  assert.equal(await c.signMessage(signer.address, message), signature);
+});
+test('account changes while the user approves a message discard that signature', async (t) => {
+  const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
+  const pending = deferred(); provider.signPending = pending.promise;
+  const signing = c.signMessage(A, 'sign-in');
+  await new Promise((resolve) => setImmediate(resolve));
+  provider.accounts = [B]; provider.emit('accountsChanged', [B]);
+  await waitFor(c, () => c.getSnapshot().address === B && c.getSnapshot().status === 'ready');
+  pending.resolve(provider.signature);
+  await assert.rejects(signing, (error: unknown) =>
+    error instanceof WalletTransactionError && error.code === 'WALLET_SESSION_CHANGED');
 });
 for (const scenario of [
   { tier: 0, tokenId: 0, expiry: 0, status: 'none' },

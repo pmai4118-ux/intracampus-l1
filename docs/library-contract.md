@@ -42,6 +42,7 @@ API tách status của request, loan, refund và transaction. Deposit đã xác 
 | Receipt deposit, `BEGIN IMMEDIATE` gán được copy | `PENDING_APPROVAL` | chưa có | `NONE` | đang giữ |
 | Receipt deposit nhưng hết copy do race | `REJECTED_NO_COPY` | chưa có | `REFUND_DUE` | không đổi |
 | Receipt thủ thư từ chối | `REJECTED` | chưa có | `REFUNDED` | chỉ nhả sau receipt |
+| Receipt thủ thư từ chối request đã nộp cọc nhưng không gán được copy | `REJECTED` | chưa có | `REFUNDED` | không đổi |
 | Đến deadline, chain time đã xác minh | `EXPIRED_REFUND_DUE` | chưa có | `REFUND_DUE` | nhả tại/sau deadline, không chờ claim |
 | Receipt `LoanApproved` | `APPROVED` | `ACTIVE` | `NONE` | đang mượn |
 | Sinh viên gửi yêu cầu trả | RETURN_REQUESTED | RETURN_REQUESTED | NONE | đang mượn |
@@ -50,7 +51,7 @@ API tách status của request, loan, refund và transaction. Deposit đã xác 
 | Receipt `LostSettled` còn thiếu tiền | `LOST_SHORTFALL_DUE` | `LOST_SHORTFALL_DUE` | `NONE` | mất |
 | Receipt `ShortfallPaid` | `LOST_SETTLED` | `LOST_SETTLED` | `NONE` | mất |
 
-Contract không đọc được tồn kho SQLite. Vì vậy staff queue chỉ cho duyệt request đã giữ copy; backend kiểm tra lại việc gán trước khi trả calldata approve và UI không có nút duyệt cho `REJECTED_NO_COPY`. Quyền contract vẫn thuộc ví librarian đã cấu hình.
+Contract không đọc được tồn kho SQLite. Staff queue gồm request đã giữ copy để duyệt và request `REJECTED_NO_COPY` để thủ thư hoàn cọc bằng `reject`; backend chỉ trả calldata `approve` khi copy đã được giữ, và không cho duyệt request không có copy. Request no-copy cũng có thể được borrower claim refund tại/sau approval deadline. Quyền contract vẫn thuộc ví librarian đã cấu hình.
 
 ## HTTP API
 
@@ -63,7 +64,7 @@ Express phục vụ các route sau qua proxy Next.js cùng origin. Trường ti�
 | `GET /api/auth/session` | session | Trả wallet, role server-resolved và hạn session. |
 | `POST /api/auth/logout` | session | Thu hồi session và xóa cookie. |
 | `GET /api/library/books?q=…` | session | Tìm theo title/author/ISBN đã seed; trả terms giá/cọc đã seal và số copy còn. |
-| `GET /api/library/requests` | session | Sinh viên chỉ thấy request mình; `?queue=true` chỉ librarian được xem hàng chờ có copy đã giữ. |
+| `GET /api/library/requests` | session | Sinh viên chỉ thấy request mình; `?queue=true` chỉ librarian được xem request đang giữ copy để duyệt và request `REJECTED_NO_COPY` cần xử lý hoàn cọc. |
 | `POST /api/library/requests` | `STUDENT` | `{ bookId, idempotencyKey }`; idempotent theo borrower/key, chỉ tạo intent nếu hiện có copy. Chưa giữ copy. Trả request ID và `depositIntent` (`chainId`, `to`, `data`, `valueWei`). |
 | `GET /api/library/requests/:requestId` | chủ sở hữu hoặc `LIBRARIAN` | Trả request, refund/transaction, event proof đã xác minh và loan nếu có. Người khác nhận `404` theo scope. |
 | POST /api/library/requests/:requestId/transactions | chủ sở hữu hoặc LIBRARIAN | { action, txHash }; confirmReturn chỉ cho LIBRARIAN và không cần intent; return/settle bắt buộc settlementIntentId để gắn receipt với audit intent. Server không broadcast. |
@@ -80,7 +81,7 @@ Mọi Library JSON `POST` dùng giới hạn parser `8kb` giống `POST /api/inv
 
 Backend kiểm tra chain ID, contract, sender/value/calldata và receipt canonical thành công trước khi chiếu trạng thái; event phải khớp request ID, borrower, book terms và action. Receipt đang chờ trả `202`; receipt revert giữ status `REVERTED`; RPC mơ hồ/không tới được để trạng thái chưa rõ và có thể retry cùng action/hash. Gửi lại cùng action/hash idempotent; hash mâu thuẫn với action đã ghi trả `409`. Không tự gửi lại giao dịch ví.
 
-Tại/sau approval deadline, đường đọc/reconcile lấy chain time tin cậy để cập nhật expiry và giải phóng copy; refund là vòng đời riêng. Chỉ có một backend instance, không phụ thuộc indexer/WebSocket. Invoice, grant và mượn mới dùng chung hold guard dựa trên chain time mới. Login, health/network, account status, return, refund, settlement và trả shortfall vẫn hoạt động khi hold.
+Tại/sau approval deadline, đường đọc/reconcile lấy chain time tin cậy để cập nhật expiry và giải phóng copy; refund là vòng đời riêng. Chỉ có một backend instance, không phụ thuộc indexer/WebSocket. Invoice, grant và mượn mới dùng chung hold guard dựa trên chain time mới. Student bị hold vẫn được đối chiếu receipt của grant đã gửi bằng chính `txHash` của mình; yêu cầu grant thông thường vẫn bị chặn. Login, health/network, account status, return, refund, settlement và trả shortfall vẫn hoạt động khi hold.
 
 ## Mã lỗi
 

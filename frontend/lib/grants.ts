@@ -98,8 +98,12 @@ export async function lookupGrant(fetcher: typeof fetch, config: GrantConfig, be
   if (!response.ok) {
     const body = object(data), error = object(body.error);
     check(body.status === "unverified" && body.chainId === 20261 && body.balanceWei === null && typeof error.retryable === "boolean");
-    const known = ["TX_REVERTED", "RECEIPT_MISMATCH", "DEPLOYMENT_NOT_CONFIGURED", "INVALID_DEPLOYMENT", "DEPLOYMENT_MISMATCH", "WRONG_CHAIN", "RPC_UNAVAILABLE", "CHAIN_CHANGED"];
-    check(known.includes(String(error.code)) && (response.status === 422 ? ["TX_REVERTED", "RECEIPT_MISMATCH"].includes(String(error.code)) : response.status === 503));
+    const known = ["TX_REVERTED", "RECEIPT_MISMATCH", "DEPLOYMENT_NOT_CONFIGURED", "INVALID_DEPLOYMENT", "DEPLOYMENT_MISMATCH",
+      "WRONG_CHAIN", "RPC_UNAVAILABLE", "CHAIN_CHANGED", "UNAUTHENTICATED", "FORBIDDEN", "STALE_CHAIN_STATE",
+      "CONFIGURATION_ERROR", "DATABASE_BUSY"];
+    const expectedStatus = ["TX_REVERTED", "RECEIPT_MISMATCH"].includes(String(error.code)) ? 422
+      : error.code === "UNAUTHENTICATED" ? 401 : error.code === "FORBIDDEN" ? 403 : 503;
+    check(known.includes(String(error.code)) && response.status === expectedStatus);
     throw new GrantUiError(String(error.code));
   }
   return parseGrantLookup(data, config, beneficiary, intent);
@@ -141,6 +145,14 @@ export function grantMessage(code: string): string {
     MERCHANT_NOT_ALLOWED: "Căn-tin không còn được phép nhận FOOD. Chưa gửi giao dịch, số dư voucher giữ nguyên.",
     WRONG_CHAIN: "Chuyển ví về IntraCampus L1, chain 20261, rồi thử đọc lại.",
     CHAIN_CHANGED: "Mạng thay đổi trong lúc kiểm tra. Đọc lại trước khi tiếp tục.",
+    UNAUTHENTICATED: "Đăng nhập bằng ví sinh viên để xem học bổng của tài khoản này.",
+    FORBIDDEN: "Tài khoản này chưa được phép xem học bổng.",
+    ACCOUNT_HELD: "Tài khoản đang bị Library hold. Xử lý khoản mượn trước khi chi FOOD.",
+    WALLET_SESSION_CHANGED: "Session Library và ví đang chọn không khớp. Đăng nhập lại bằng ví hiện tại.",
+    RATE_LIMITED: "Đã vượt ngưỡng đăng nhập. Chờ hết Retry-After rồi thử lại.",
+    STALE_CHAIN_STATE: "Chưa xác minh được trạng thái chain và Library hold mới nhất. Thử đọc lại sau.",
+    CONFIGURATION_ERROR: "Backend chưa cấu hình đầy đủ cho Library session và hold.",
+    DATABASE_BUSY: "Dữ liệu Library đang được cập nhật. Giữ nguyên giao dịch và thử lại.",
     INVALID_ACCOUNT: "Kết nối đúng ví được cấp học bổng trước khi chi.",
     SIMULATION_FAILED: "Chưa mô phỏng được khoản chi. Kiểm tra số dư, merchant và kết nối; chưa mở yêu cầu ký.",
     SIGNATURE_REJECTED: "Bạn đã từ chối ký. Chưa gửi khoản chi; có thể xem lại và thử lại.",
@@ -177,7 +189,8 @@ export class GrantController {
   private state: GrantState = { beneficiary: null, lookup: null, stale: false, busy: false, phase: "idle", intent: null, message: null, errorCode: null, storageBlocked: false };
   private listeners = new Set<() => void>(); private generation = 0; private disposed = false; private operation = false;
   private timer: ReturnType<typeof setTimeout> | undefined; private abort?: AbortController;
-  private options: { config: GrantConfig; rpc: WalletRpc; wallet: GrantSender; storage: Store; fetcher?: typeof fetch; lock?: Lock; pollMs?: number };
+  private options: { config: GrantConfig; rpc: WalletRpc; wallet: GrantSender; storage: Store; fetcher?: typeof fetch;
+    lock?: Lock; pollMs?: number; accountGuard?: (account: string) => Promise<void> };
   constructor(options: GrantController["options"]) { this.options = options; }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -273,6 +286,8 @@ export class GrantController {
         // with a recoverable prepared record.
         check(typeof this.options.wallet.sendTransactionWithGuard === "function", "WALLET_UPDATE_REQUIRED");
         check(this.readIntent(account) === null, "SPEND_IN_PROGRESS"); this.walletMatches(account);
+        await this.options.accountGuard?.(account);
+        check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
         const lookup = await lookupGrant(this.options.fetcher ?? fetch, this.options.config, account);
         check(lookup.allowed, "MERCHANT_NOT_ALLOWED"); check(BigInt(lookup.balanceWei) >= amount, "INSUFFICIENT_GRANT_BALANCE");
         check(this.active(generation), "WALLET_CHANGED");

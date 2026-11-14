@@ -46,6 +46,12 @@ const messageFor = (code: string) => ({
   WRONG_CHAIN: "Hãy chuyển ví và RPC về IntraCampus L1 · chain 20261.",
   INVALID_SIGNATURE: "Chữ ký hóa đơn chưa hợp lệ. Yêu cầu POS kiểm tra và tạo lại.",
   WALLET_SESSION_CHANGED: "Tài khoản hoặc mạng đã đổi. Kiểm tra lại hóa đơn bằng ví muốn trả tiền.",
+  UNAUTHENTICATED: "Đăng nhập bằng chữ ký ví sinh viên trước khi thanh toán.",
+  ACCOUNT_HELD: "Tài khoản đang bị Library hold. Xử lý khoản mượn trước khi thanh toán.",
+  FORBIDDEN: "Session hiện tại không có quyền Student để thanh toán.",
+  RATE_LIMITED: "Đã vượt ngưỡng đăng nhập. Chờ hết Retry-After rồi thử lại.",
+  STALE_CHAIN_STATE: "Chưa xác minh được trạng thái Library mới nhất. Thử lại sau.",
+  RPC_UNAVAILABLE: "Không đọc được trạng thái Library từ chain. Thử lại khi RPC hoạt động.",
   WALLET_REQUEST_PENDING: "Ví đang có yêu cầu chờ. Mở Core để xử lý yêu cầu cũ.",
   PAYMENT_SIMULATION_FAILED: "Mô phỏng thanh toán chưa thành công. Kiểm tra số dư, hạn hóa đơn và mạng rồi thử lại.",
 }[code] ?? "Chưa xác minh được điều kiện thanh toán. Kiểm tra kết nối rồi thử lại.");

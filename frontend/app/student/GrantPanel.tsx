@@ -3,17 +3,47 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { createWalletRpc } from "../../lib/wallet";
-import { GrantController, grantConfig, grantMessage, parseGrantAmount, type GrantConfig } from "../../lib/grants";
+import { GrantController, GrantUiError, grantConfig, grantMessage, parseGrantAmount, type GrantConfig } from "../../lib/grants";
+import { librarySessionMessage, LibrarySessionError, readLibraryStudentAccess, requireLibraryStudentNotHeld,
+  signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
 import { useCampusWallet } from "./WalletPanel";
 
-function GrantView({ controller, config }: { controller: GrantController; config: GrantConfig }) {
+function GrantView({ controller, config, access, onSignIn, onRefreshAccess, signingIn }: { controller: GrantController; config: GrantConfig;
+  access: LibraryStudentAccess; onSignIn: () => void; onRefreshAccess: () => void; signingIn: boolean }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const { state: wallet } = useCampusWallet();
   const [amount, setAmount] = useState("1000"), [recoveryHash, setRecoveryHash] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
-  useEffect(() => { void controller.bindWallet(wallet.address); }, [controller, wallet.address, wallet.chainId]);
-  const matching = wallet.address === state.beneficiary && wallet.chainId === BigInt(20261) && wallet.canProceed;
+  useEffect(() => { void controller.bindWallet(access.status === "ready" || access.status === "held" ? wallet.address : null); },
+    [controller, wallet.address, wallet.chainId, access.status]);
+  const matching = access.status === "ready" && wallet.address === state.beneficiary
+    && wallet.chainId === BigInt(20261) && wallet.canProceed;
   let amountWei: bigint | null = null; try { amountWei = parseGrantAmount(amount); } catch { /* Show validation on submit, keep typed text. */ }
+  if (access.status === "held") return <div className="wallet-warning" role="alert">
+    <p>{librarySessionMessage("ACCOUNT_HELD")}</p>
+    <p>Mã khoản mượn đang chặn: {access.accountStatus.blockingLoanIds.join(", ") || "chưa có"}</p>
+    {state.message ? <p role={state.errorCode ? "alert" : "status"}>{state.message}</p> : null}
+    {state.intent?.hash ? <div className="tx-proof-box"><strong>Giao dịch grant đã gửi · chỉ đối chiếu receipt</strong>
+      <code className="tx-hash-code">{state.intent.hash}</code>
+      <button type="button" className="secondary-btn" disabled={state.busy} onClick={() => void controller.refresh()}>Tra receipt cũ</button>
+    </div> : null}
+    {state.phase === "prepared" ? <button type="button" className="secondary-btn" disabled={state.busy || state.storageBlocked}
+      onClick={() => void controller.reconcilePrepared()}>Khôi phục lượt chưa gửi</button> : null}
+    {state.phase === "unknown" && !state.intent?.hash ? <form onSubmit={(event) => { event.preventDefault(); void controller.recoverHash(recoveryHash.trim()); }}>
+      <label htmlFor="grant-held-recovery-hash" className="field-label">Hash từ lịch sử giao dịch Core</label>
+      <input id="grant-held-recovery-hash" className="mono-textarea" value={recoveryHash} onChange={(event) => setRecoveryHash(event.target.value)} autoComplete="off" />
+      <button type="submit" className="secondary-btn" disabled={state.busy || !recoveryHash.trim()}>Đối chiếu hash đã gửi</button>
+    </form> : null}
+    <button type="button" className="secondary-btn" disabled={state.busy} onClick={onRefreshAccess}>Kiểm tra lại hold</button>
+  </div>;
+  if (access.status !== "ready") return <div className="wallet-warning" role={access.status === "error" ? "alert" : "status"}>
+    <p>{access.status === "error" ? librarySessionMessage(access.code)
+      : access.status === "sign-in-required" ? librarySessionMessage("UNAUTHENTICATED") : "Đang kiểm tra session Library…"}</p>
+    {access.status === "sign-in-required" || access.status === "error" ? <button type="button" className="secondary-btn"
+      disabled={!wallet.address || wallet.chainId !== BigInt(20261) || signingIn} onClick={onSignIn}>
+      {signingIn ? "Đang chờ ký trong Core…" : "Đăng nhập bằng ví sinh viên"}</button> : null}
+    <button type="button" className="secondary-btn" disabled={!wallet.address || signingIn} onClick={onRefreshAccess}>Kiểm tra session</button>
+  </div>;
   if (wallet.address !== state.beneficiary) return <p role="status">Đang đọc ngân sách của ví đang chọn…</p>;
   const balance = state.lookup ? BigInt(state.lookup.balanceWei) : null;
   const blocked = !matching || state.busy || state.stale || state.storageBlocked || !state.lookup?.allowed || state.intent !== null
@@ -76,22 +106,50 @@ function GrantView({ controller, config }: { controller: GrantController; config
 }
 
 export default function GrantPanel() {
-  const { controller: wallet } = useCampusWallet();
+  const { state: walletState, controller: wallet } = useCampusWallet();
   const [session, setSession] = useState<{ controller: GrantController; config: GrantConfig } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [access, setAccess] = useState<LibraryStudentAccess | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setAccess(null);
+    if (!walletState.address) return () => { active = false; };
+    void readLibraryStudentAccess(walletState.address).then((result) => { if (active) setAccess(result); });
+    return () => { active = false; };
+  }, [walletState.address]);
   useEffect(() => {
     let controller: GrantController | undefined;
     try {
       const config = grantConfig(), rpcUrl = browserWalletConfig().rpcUrl;
       if (!rpcUrl) throw new Error("RPC_UNAVAILABLE");
-      controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet, storage: window.localStorage });
+      controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet, storage: window.localStorage,
+        accountGuard: async (account) => {
+          try { await requireLibraryStudentNotHeld(account); }
+          catch (cause) { throw new GrantUiError(cause instanceof LibrarySessionError ? cause.code : "SESSION_UNAVAILABLE"); }
+        } });
       setSession({ controller, config });
     } catch (cause) { setError(grantMessage(cause instanceof Error ? cause.message : "DEPLOYMENT_NOT_CONFIGURED")); }
     return () => controller?.dispose();
   }, [wallet]);
+  async function signIn() {
+    if (!walletState.address || signingIn) return;
+    setSigningIn(true);
+    try {
+      setAccess(await signInLibraryStudent(walletState.address, (account, message) => wallet.signMessage(account, message)));
+    } catch (cause) {
+      setAccess({ status: "error", code: cause instanceof LibrarySessionError ? cause.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] });
+    } finally { setSigningIn(false); }
+  }
+  async function refreshAccess() {
+    if (!walletState.address) return;
+    setAccess(await readLibraryStudentAccess(walletState.address));
+  }
   return <section className="surface-panel" aria-labelledby="grant-title">
     <h2 id="grant-title">Voucher học bổng</h2>
     <p>Chi ngân sách FOOD tại căn-tin bằng ví được cấp.</p>
-    {error ? <p role="status">{error}</p> : session ? <GrantView controller={session.controller} config={session.config} /> : <p role="status">Đang kiểm tra cấu hình học bổng…</p>}
+    {error ? <p role="status">{error}</p> : session && access ? <GrantView controller={session.controller} config={session.config} access={access}
+      onSignIn={() => void signIn()} onRefreshAccess={() => void refreshAccess()} signingIn={signingIn} />
+      : <p role="status">Đang kiểm tra session và cấu hình học bổng…</p>}
   </section>;
 }
