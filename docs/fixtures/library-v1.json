@@ -1,0 +1,1386 @@
+{
+  "schemaVersion": 1,
+  "network": {
+    "chainId": 20261,
+    "nativeCurrency": {
+      "name": "CAMPUS",
+      "symbol": "CAMPUS",
+      "decimals": 18
+    }
+  },
+  "domain": {
+    "name": "IntraCampusLibrary",
+    "version": "1"
+  },
+  "policy": {
+    "depositWei": "50000000000000000000",
+    "approvalWindowSeconds": 86400,
+    "loanDurationSeconds": 1209600,
+    "gracePeriodSeconds": 259200,
+    "lateFeeIntervalSeconds": 86400,
+    "lateFeePerIntervalWei": "100000000000000000",
+    "maxLateFeeWei": "25000000000000000000",
+    "fullDepositRetentionAfterSeconds": 2592000,
+    "approveBeforeDeadlineOnly": true,
+    "depositReceiptRequiredBeforeCopyHold": true,
+    "expiryAtDeadlinePermitsRefund": true,
+    "lostSettlementIncludesLateFee": false,
+    "approvalComparison": "<",
+    "refundAtDeadlineComparison": ">=",
+    "requestIdNeverReusable": true,
+    "loanIdEqualsRequestId": true
+  },
+  "states": {
+    "request": [
+      "AWAITING_DEPOSIT",
+      "PENDING_APPROVAL",
+      "REJECTED_NO_COPY",
+      "REJECTED",
+      "EXPIRED_REFUND_DUE",
+      "APPROVED",
+      "RETURN_REQUESTED",
+      "SETTLEMENT_PENDING",
+      "RETURNED",
+      "LOST_SHORTFALL_DUE",
+      "LOST_SETTLED"
+    ],
+    "loan": [
+      "ACTIVE",
+      "RETURN_REQUESTED",
+      "SETTLEMENT_PENDING",
+      "RETURNED",
+      "LOST_SHORTFALL_DUE",
+      "LOST_SETTLED"
+    ],
+    "refund": [
+      "NONE",
+      "REFUND_DUE",
+      "REFUNDED"
+    ],
+    "transaction": [
+      "UNKNOWN",
+      "SUBMITTED",
+      "CONFIRMED",
+      "REVERTED"
+    ],
+    "escrow": [
+      "NONE",
+      "DEPOSITED",
+      "ACTIVE",
+      "REFUNDED",
+      "RETURN_SETTLED",
+      "LOST_SHORTFALL_DUE",
+      "LOST_SETTLED"
+    ],
+    "escrowStateCodes": {
+      "NONE": 0,
+      "DEPOSITED": 1,
+      "ACTIVE": 2,
+      "REFUNDED": 3,
+      "RETURN_SETTLED": 4,
+      "LOST_SHORTFALL_DUE": 5,
+      "LOST_SETTLED": 6
+    }
+  },
+  "transitions": [
+    {
+      "event": "DepositReceived",
+      "requestStatus": "PENDING_APPROVAL",
+      "loanStatus": "NONE",
+      "refundStatus": "NONE"
+    },
+    {
+      "event": "LoanApproved",
+      "requestStatus": "APPROVED",
+      "loanStatus": "ACTIVE",
+      "refundStatus": "NONE"
+    },
+    {
+      "event": "RequestRejected",
+      "requestStatus": "REJECTED",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUNDED"
+    },
+    {
+      "event": "NoCopyAfterVerifiedDeposit",
+      "requestStatus": "REJECTED_NO_COPY",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUND_DUE"
+    },
+    {
+      "event": "ApprovalDeadlineReached",
+      "requestStatus": "EXPIRED_REFUND_DUE",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUND_DUE",
+      "copyStatus": "RELEASED"
+    },
+    {
+      "event": "ExpiredRefundClaimed",
+      "requestStatus": "EXPIRED_REFUND_DUE",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUNDED"
+    },
+    {
+      "event": "ReturnSettled",
+      "requestStatus": "RETURNED",
+      "loanStatus": "RETURNED",
+      "refundStatus": "NONE"
+    },
+    {
+      "event": "LostSettledWithShortfall",
+      "requestStatus": "LOST_SHORTFALL_DUE",
+      "loanStatus": "LOST_SHORTFALL_DUE",
+      "refundStatus": "NONE"
+    },
+    {
+      "event": "ShortfallPaid",
+      "requestStatus": "LOST_SETTLED",
+      "loanStatus": "LOST_SETTLED",
+      "refundStatus": "NONE"
+    }
+  ],
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "administrator_",
+          "type": "address"
+        },
+        {
+          "name": "librarian_",
+          "type": "address"
+        },
+        {
+          "name": "treasury_",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "seedBookTerms",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "name": "depositWei",
+          "type": "uint256"
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "sealBookTerms",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "bookTerms",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depositWei",
+          "type": "uint256"
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256"
+        },
+        {
+          "name": "sealed",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "deposit",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        },
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "approve",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "reject",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "claimExpiredRefund",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "settleReturn",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        },
+        {
+          "name": "repairRequestedWei",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "settleLost",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "payShortfall",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "requestInfo",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "name": "depositWei",
+          "type": "uint256"
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256"
+        },
+        {
+          "name": "depositedAt",
+          "type": "uint64"
+        },
+        {
+          "name": "approvedAt",
+          "type": "uint64"
+        },
+        {
+          "name": "dueAt",
+          "type": "uint64"
+        },
+        {
+          "name": "state",
+          "type": "uint8"
+        },
+        {
+          "name": "shortfallWei",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "administrator",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "librarian",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "treasury",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "APPROVAL_WINDOW",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "LOAN_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "GRACE_PERIOD",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "LATE_FEE_INTERVAL",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "LATE_FEE_PER_INTERVAL",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_LATE_FEE",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "FULL_DEPOSIT_RETENTION_AFTER",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "DepositReceived",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "bookId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "depositedAt",
+          "type": "uint64",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LoanApproved",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approvedAt",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "dueAt",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RequestRejected",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "refundWei",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ExpiredRefundClaimed",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "refundWei",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ReturnSettled",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "returnedAt",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "lateFeeWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "repairFeeWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "overdueForfeitWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalRetainedWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "maintenanceRequired",
+          "type": "bool",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LostSettled",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "retainedWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "shortfallWei",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ShortfallPaid",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BookTermsSeeded",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "depositWei",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "replacementPriceWei",
+          "type": "uint256",
+          "indexed": false
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BookTermsSealed",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "InvalidConfiguration",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UnauthorizedAdministrator",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UnauthorizedLibrarian",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UnauthorizedBorrower",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidBookTerms",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BookTermsAlreadySealed",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "BookTermsNotSealed",
+      "inputs": [
+        {
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "RequestAlreadyUsed",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "RequestNotFound",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidRequestState",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        },
+        {
+          "name": "state",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ApprovalWindowExpired",
+      "inputs": [
+        {
+          "name": "deadline",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ApprovalWindowOpen",
+      "inputs": [
+        {
+          "name": "deadline",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidPayment",
+      "inputs": [
+        {
+          "name": "expectedWei",
+          "type": "uint256"
+        },
+        {
+          "name": "receivedWei",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "TransferFailed",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amountWei",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "ReentrantCall",
+      "inputs": []
+    }
+  ],
+  "returnVectors": [
+    {
+      "name": "on time",
+      "elapsedSinceDueSeconds": 0,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "0",
+      "expectedRetainedWei": "0",
+      "expectedRefundWei": "50000000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "grace expires exactly",
+      "elapsedSinceDueSeconds": 259200,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "0",
+      "expectedRetainedWei": "0",
+      "expectedRefundWei": "50000000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "one second before first late interval",
+      "elapsedSinceDueSeconds": 345599,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "0",
+      "expectedRetainedWei": "0",
+      "expectedRefundWei": "50000000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "first full late interval",
+      "elapsedSinceDueSeconds": 345600,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "100000000000000000",
+      "expectedRetainedWei": "100000000000000000",
+      "expectedRefundWei": "49900000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "exactly thirty days late",
+      "elapsedSinceDueSeconds": 2592000,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "2700000000000000000",
+      "expectedRetainedWei": "2700000000000000000",
+      "expectedRefundWei": "47300000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "thirty days late plus repair",
+      "elapsedSinceDueSeconds": 2592000,
+      "repairRequestedWei": "10000000000000000000",
+      "expectedLateFeeWei": "2700000000000000000",
+      "expectedRetainedWei": "12700000000000000000",
+      "expectedRefundWei": "37300000000000000000",
+      "expectedOverdue": false
+    },
+    {
+      "name": "one second beyond thirty-day threshold",
+      "elapsedSinceDueSeconds": 2592001,
+      "repairRequestedWei": "0",
+      "expectedLateFeeWei": "2700000000000000000",
+      "expectedRetainedWei": "50000000000000000000",
+      "expectedRefundWei": "0",
+      "expectedOverdue": true
+    },
+    {
+      "name": "repair plus one late fee exceeds deposit by 0.05",
+      "elapsedSinceDueSeconds": 345600,
+      "repairRequestedWei": "49950000000000000000",
+      "expectedLateFeeWei": "100000000000000000",
+      "expectedRetainedWei": "50000000000000000000",
+      "expectedRefundWei": "0",
+      "expectedOverdue": false
+    }
+  ],
+  "lostVectors": [
+    {
+      "name": "replacement below deposit",
+      "replacementPriceWei": "30000000000000000000",
+      "expectedRetainedWei": "30000000000000000000",
+      "expectedRefundWei": "20000000000000000000",
+      "expectedShortfallWei": "0",
+      "appliesLateFee": false
+    },
+    {
+      "name": "replacement equals deposit",
+      "replacementPriceWei": "50000000000000000000",
+      "expectedRetainedWei": "50000000000000000000",
+      "expectedRefundWei": "0",
+      "expectedShortfallWei": "0",
+      "appliesLateFee": false
+    },
+    {
+      "name": "replacement above deposit",
+      "replacementPriceWei": "80000000000000000000",
+      "expectedRetainedWei": "50000000000000000000",
+      "expectedRefundWei": "0",
+      "expectedShortfallWei": "30000000000000000000",
+      "appliesLateFee": false
+    }
+  ],
+  "api": {
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/auth/challenge",
+        "access": "public"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/verify",
+        "access": "public"
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/session",
+        "access": "session"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/logout",
+        "access": "session"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/books",
+        "access": "session"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/requests",
+        "access": "session"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/requests",
+        "access": "STUDENT"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/requests/:requestId",
+        "access": "owner-or-LIBRARIAN"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/requests/:requestId/transactions",
+        "access": "owner-or-LIBRARIAN"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/loans",
+        "access": "session"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/loans/:loanId/return-requests",
+        "access": "STUDENT"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/loans/:loanId/settlement-intents",
+        "access": "LIBRARIAN"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/account-status",
+        "access": "session"
+      }
+    ],
+    "createRequestFields": [
+      "bookId",
+      "idempotencyKey"
+    ],
+    "transactionActions": [
+      "deposit",
+      "approve",
+      "reject",
+      "refund",
+      "return",
+      "settle",
+      "payShortfall"
+    ],
+    "roleFromClient": false,
+    "priceFromClient": false,
+    "noCopyBeforeVerifiedDeposit": true,
+    "errorStatuses": {
+      "VALIDATION_ERROR": 400,
+      "UNAUTHENTICATED": 401,
+      "FORBIDDEN": 403,
+      "NOT_FOUND": 404,
+      "CONFLICT": 409,
+      "RPC_UNAVAILABLE": 503,
+      "WRONG_CHAIN": 503,
+      "STALE_CHAIN_STATE": 503,
+      "DATABASE_BUSY": 503,
+      "INTERNAL_ERROR": 500,
+      "CONFIGURATION_ERROR": 503,
+      "PAYLOAD_TOO_LARGE": 413
+    },
+    "loanFilterParameter": "borrowerWallet",
+    "loanFilterRole": "LIBRARIAN",
+    "transactionActionMethods": {
+      "settle": "settleLost",
+      "reject": "reject",
+      "deposit": "deposit",
+      "return": "settleReturn",
+      "payShortfall": "payShortfall",
+      "approve": "approve",
+      "refund": "claimExpiredRefund"
+    },
+    "transactionActionRoles": {
+      "settle": "LIBRARIAN",
+      "reject": "LIBRARIAN",
+      "deposit": "STUDENT_OWNER",
+      "return": "LIBRARIAN",
+      "payShortfall": "STUDENT_OWNER",
+      "approve": "LIBRARIAN",
+      "refund": "STUDENT_OWNER"
+    },
+    "settlementIntentRequestFields": {
+      "RETURNED": [
+        "outcome",
+        "condition",
+        "reason",
+        "repairRequestedWei"
+      ],
+      "LOST": [
+        "outcome",
+        "reason"
+      ]
+    },
+    "settlementIntentAudit": {
+      "conditionValues": [
+        "GOOD",
+        "DAMAGED"
+      ],
+      "reason": {
+        "type": "string",
+        "required": true,
+        "nonEmptyAfterTrim": true,
+        "maxBytes": 8192
+      },
+      "persistBeforeResponse": [
+        "intentId",
+        "requestId",
+        "loanId",
+        "outcome",
+        "librarianWallet",
+        "condition",
+        "reason",
+        "repairRequestedWei",
+        "createdAt"
+      ],
+      "reasonVisibility": "LIBRARIAN_ONLY",
+      "onChain": false,
+      "transactionLinkField": "settlementIntentId",
+      "transactionLinkRequiredFor": [
+        "return",
+        "settle"
+      ]
+    },
+    "idempotency": {
+      "sameKeyDifferentBookConflicts": true,
+      "keyScopedToBorrower": true,
+      "sameKeySameBookReturnsExisting": true
+    },
+    "settlementIntentResponseFields": [
+      "intentId",
+      "requestId",
+      "loanId",
+      "outcome",
+      "borrower",
+      "chainId",
+      "escrow",
+      "treasury",
+      "walletCall.to",
+      "walletCall.data",
+      "walletCall.valueWei",
+      "preview",
+      "chainTime"
+    ],
+    "loanResponseFields": [
+      "loanId",
+      "requestId",
+      "bookId",
+      "borrower",
+      "status",
+      "approvedAt",
+      "dueAt",
+      "returnRequestedAt",
+      "settlement"
+    ],
+    "settlementIntentPreviewFields": [
+      "RETURNED.returnedAt",
+      "RETURNED.lateFeeWei",
+      "RETURNED.repairFeeWei",
+      "RETURNED.overdueForfeitWei",
+      "RETURNED.totalRetainedWei",
+      "RETURNED.refundWei",
+      "RETURNED.maintenanceRequired",
+      "LOST.replacementPriceWei",
+      "LOST.totalRetainedWei",
+      "LOST.refundWei",
+      "LOST.shortfallWei"
+    ],
+    "requestBodyLimit": {
+      "bytes": 8192,
+      "source": "backend/src/modules/invoices/invoices.routes.ts express.json({ limit: '8kb' })",
+      "appliesTo": "all Library JSON POST routes",
+      "overLimit": {
+        "status": 413,
+        "code": "PAYLOAD_TOO_LARGE"
+      }
+    },
+    "requestBodyLimitVectors": [
+      {
+        "name": "one byte below the limit",
+        "sizeBytes": 8191,
+        "parserOutcome": "ACCEPT",
+        "status": null
+      },
+      {
+        "name": "at the limit",
+        "sizeBytes": 8192,
+        "parserOutcome": "ACCEPT",
+        "status": null
+      },
+      {
+        "name": "one byte above the limit",
+        "sizeBytes": 8193,
+        "parserOutcome": "REJECT",
+        "status": 413
+      }
+    ]
+  },
+  "callerMatrix": {
+    "deposit": {
+      "persistence": [
+        "request and idempotency record",
+        "transaction action/hash and verified event cursor",
+        "allocated copy or REJECTED_NO_COPY plus REFUND_DUE",
+        "audit state across restart"
+      ],
+      "oracle": "A hash or HTTP success alone never allocates a copy or creates an ACTIVE loan",
+      "contractConsumer": "LibraryEscrow.deposit validates the immutable terms and emits DepositReceived",
+      "verification": "docs/test/library-contract.test.mjs plus N-812 Foundry success/revert and N-5DF real app receipt/restart integration",
+      "backendConsumer": "N-5DF receipt verifier matches chain, contract, sender, requestId, bookId and value before SQLite projection",
+      "successTransition": "matching verified receipt and allocated copy => PENDING_APPROVAL / loan NONE",
+      "producer": "Student Core wallet calls deposit(requestId,bookId) with exactly the sealed deposit",
+      "endpoint": "POST /api/library/requests creates the idempotent intent; POST /api/library/requests/:requestId/transactions tracks action=deposit and txHash",
+      "verifiedProof": "DepositReceived event matching chain, escrow, requestId, borrower, bookId and exact sealed deposit"
+    },
+    "approve": {
+      "producer": "LIBRARIAN reviews the allocated-copy staff queue and signs approve(requestId) from the configured librarian wallet",
+      "endpoint": "POST /api/library/requests/:requestId/transactions with action=approve and txHash; server rejects no-copy and expired requests",
+      "contractConsumer": "LibraryEscrow.approve validates librarian role and the strict approval deadline, then emits LoanApproved",
+      "backendConsumer": "N-5DF verifies canonical receipt, chain, escrow, librarian sender, requestId, borrower and sealed terms before projection",
+      "verifiedProof": "LoanApproved event with matching requestId and borrower, approvedAt before deadline, and dueAt from chain",
+      "persistence": [
+        "action/hash and event cursor",
+        "request approval state",
+        "loan keyed by requestId with borrower, bookId, approvedAt and dueAt",
+        "copy remains allocated through loan lifecycle",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified LoanApproved => APPROVED / ACTIVE / refund NONE",
+      "verification": "N-812 Foundry deadline/role/duplicate tests; N-5DF receipt, restart and DB projection tests; N-696 staff queue browser flow"
+    },
+    "reject": {
+      "producer": "LIBRARIAN rejects a pending request from the staff queue and signs reject(requestId)",
+      "endpoint": "POST /api/library/requests/:requestId/transactions with action=reject and txHash; server requires LIBRARIAN role",
+      "contractConsumer": "LibraryEscrow.reject validates librarian role and pending state, refunds the original borrower and emits RequestRejected",
+      "backendConsumer": "N-5DF matches canonical RequestRejected receipt, configured escrow, librarian sender, requestId, borrower and refundWei",
+      "verifiedProof": "RequestRejected event for the request and original borrower with the actual refund amount",
+      "persistence": [
+        "action/hash and event cursor",
+        "request status REJECTED and refund status REFUNDED",
+        "release of allocated copy only after verified receipt",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified RequestRejected => REJECTED / loan NONE / REFUNDED and copy released",
+      "verification": "N-812 Foundry role/state/refund-recipient tests; N-5DF receipt/restart tests; N-696 staff reject queue flow"
+    },
+    "refund": {
+      "producer": "STUDENT borrower signs claimExpiredRefund(requestId) for the original borrower address",
+      "endpoint": "POST /api/library/requests/:requestId/transactions with action=refund and txHash; HTTP access is owner-scoped",
+      "contractConsumer": "LibraryEscrow.claimExpiredRefund returns escrowed CAMPUS only to the original borrower and emits ExpiredRefundClaimed",
+      "backendConsumer": "N-5DF validates borrower ownership, canonical receipt, chain/escrow, requestId, borrower and refund amount",
+      "verifiedProof": "ExpiredRefundClaimed event matching requestId, original borrower and escrow address",
+      "persistence": [
+        "action/hash and event cursor",
+        "refund status REFUNDED independently from expiry/copy release",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified ExpiredRefundClaimed => EXPIRED_REFUND_DUE / loan NONE / REFUNDED; copy was already released at deadline",
+      "verification": "N-812 Foundry deadline and recipient tests; N-5DF owner-scope, idempotency and restart tests; N-696 student refund flow"
+    },
+    "return": {
+      "producer": "LIBRARIAN submits condition=GOOD|DAMAGED and a required nonblank reason, reviews the chain-time preview, then signs settleReturn(requestId, repairRequestedWei)",
+      "endpoint": "POST /api/library/loans/:loanId/settlement-intents returns intentId; POST /api/library/requests/:requestId/transactions uses action=return, txHash and settlementIntentId",
+      "contractConsumer": "LibraryEscrow.settleReturn reads chain time, clamps fees to the deposit, pays the configured treasury and borrower, then emits ReturnSettled",
+      "backendConsumer": "N-5DF verifies canonical ReturnSettled receipt, librarian sender, requestId, borrower, returnedAt and every emitted amount",
+      "verifiedProof": "ReturnSettled event for requestId and borrower with matching fee/refund/retention breakdown and chain timestamp",
+      "persistence": [
+        "settlement intent audit (condition, reason, librarianWallet, repairRequestedWei, createdAt) before returning wallet calldata",
+        "settlement intent audit linked by settlementIntentId to action/hash",
+        "verified settlement amounts, maintenance state and event cursor",
+        "released or maintenance copy state",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified ReturnSettled => RETURNED / loan RETURNED / refund NONE; copy ready unless maintenanceRequired",
+      "verification": "N-812 Foundry late/repair/refund/treasury tests; N-5DF preview, event and restart tests; N-696 librarian return and breakdown UI flow"
+    },
+    "settle": {
+      "producer": "LIBRARIAN reports a loan lost with a required nonblank reason, reviews sealed replacement-price preview, then signs settleLost(requestId)",
+      "endpoint": "POST /api/library/loans/:loanId/settlement-intents with outcome=LOST returns intentId; transaction tracking with action=settle requires settlementIntentId",
+      "contractConsumer": "LibraryEscrow.settleLost uses the sealed replacement price, retains at most the deposit and emits LostSettled",
+      "backendConsumer": "N-5DF verifies canonical LostSettled receipt, librarian sender, requestId, borrower, replacement price, refund and shortfall",
+      "verifiedProof": "LostSettled event matching requestId/borrower and sealed replacement-price calculation",
+      "persistence": [
+        "loss reason and librarianWallet audit before returning wallet calldata",
+        "settlement intent audit linked by settlementIntentId to action/hash",
+        "event cursor",
+        "retained/refund/shortfall amounts and resulting hold state",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified LostSettled => LOST_SHORTFALL_DUE when shortfallWei > 0, otherwise LOST_SETTLED; lost copy stays unavailable",
+      "verification": "N-812 Foundry replacement-price and shortfall tests; N-5DF receipt/restart/hold tests; N-696 librarian lost-book preview flow"
+    },
+    "payShortfall": {
+      "producer": "STUDENT borrower signs payShortfall(requestId) with exactly the shortfall displayed by the verified LostSettled event",
+      "endpoint": "POST /api/library/requests/:requestId/transactions with action=payShortfall and txHash; server requires the original borrower",
+      "contractConsumer": "LibraryEscrow.payShortfall requires exact payment from the original borrower and emits ShortfallPaid",
+      "backendConsumer": "N-5DF verifies canonical ShortfallPaid receipt, borrower sender, requestId and exact shortfall amount",
+      "verifiedProof": "ShortfallPaid event matching requestId, original borrower and amount due",
+      "persistence": [
+        "action/hash and event cursor",
+        "shortfall settlement and hold release state",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified ShortfallPaid => LOST_SETTLED / hold released; copy remains lost",
+      "verification": "N-812 Foundry exact/wrong payment and recipient tests; N-5DF receipt/idempotency/restart tests; N-5DF student shortfall flow"
+    }
+  },
+  "approvalDeadlineVectors": [
+    {
+      "name": "one second before deadline",
+      "secondsFromDeadline": -1,
+      "approvalAllowed": true,
+      "refundClaimAllowed": false,
+      "copyStatus": "HELD",
+      "refundClaimed": false
+    },
+    {
+      "name": "exactly at deadline",
+      "secondsFromDeadline": 0,
+      "approvalAllowed": false,
+      "refundClaimAllowed": true,
+      "copyStatus": "RELEASED",
+      "requestStatus": "EXPIRED_REFUND_DUE",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUND_DUE",
+      "refundClaimed": false
+    },
+    {
+      "name": "one second after deadline",
+      "secondsFromDeadline": 1,
+      "approvalAllowed": false,
+      "refundClaimAllowed": true,
+      "copyStatus": "RELEASED",
+      "requestStatus": "EXPIRED_REFUND_DUE",
+      "loanStatus": "NONE",
+      "refundStatus": "REFUND_DUE",
+      "refundClaimed": false
+    }
+  ],
+  "runtimeConfig": {
+    "source": "operator-environment",
+    "productionDefaults": null,
+    "missingOrInvalid": {
+      "status": 503,
+      "code": "CONFIGURATION_ERROR"
+    },
+    "requiredSettings": {
+      "challengeTtlSeconds": {
+        "unit": "seconds",
+        "domain": "positiveSafeInteger"
+      },
+      "sessionTtlSeconds": {
+        "unit": "seconds",
+        "domain": "positiveSafeInteger"
+      },
+      "challengeRateLimit.maxRequests": {
+        "unit": "requests per window",
+        "domain": "positiveSafeInteger"
+      },
+      "challengeRateLimit.windowSeconds": {
+        "unit": "seconds",
+        "domain": "positiveSafeInteger"
+      },
+      "chainFreshness.maxStaleSeconds": {
+        "unit": "seconds",
+        "domain": "positiveSafeInteger"
+      },
+      "chainFreshness.maxFutureDriftSeconds": {
+        "unit": "seconds",
+        "domain": "nonnegativeSafeInteger"
+      },
+      "chainFreshness.minConfirmations": {
+        "unit": "blocks",
+        "domain": "positiveSafeInteger"
+      },
+      "verifyRateLimit.maxRequests": {
+        "unit": "requests per window",
+        "domain": "positiveSafeInteger"
+      },
+      "verifyRateLimit.windowSeconds": {
+        "unit": "seconds",
+        "domain": "positiveSafeInteger"
+      }
+    }
+  }
+}

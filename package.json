@@ -8,11 +8,12 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @intracampus/backend --filter @intracampus/frontend dev",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @intracampus/backend test && pnpm --filter @intracampus/frontend test && pnpm test:p02 && pnpm test:l04 && pnpm test:l06",
+    "test": "pnpm --filter @intracampus/backend test && pnpm --filter @intracampus/frontend test && pnpm test:p02 && pnpm test:library-contract && pnpm test:l04 && pnpm test:l06",
     "test:rpc": "node --test infra/test/rpc.test.mjs",
     "build": "pnpm --filter @intracampus/frontend build",
     "rpc:check": "pnpm --filter @intracampus/backend rpc:check",
     "test:p02": "node --test docs/test/invoice-contract.test.mjs",
+    "test:library-contract": "node --test docs/test/library-contract.test.mjs && pnpm --dir backend exec tsc --noEmit --strict --skipLibCheck --target ES2024 --module NodeNext --moduleResolution NodeNext --allowImportingTsExtensions ../packages/network/test/library-contract-types.ts",
     "test:l04": "node --test contracts/test/load-verified-artifact.test.mjs",
     "test:l06": "node --test contracts/test/export-deployment.test.mjs",
     "smoke:l06": "node contracts/script/smoke-deployment.mjs"
