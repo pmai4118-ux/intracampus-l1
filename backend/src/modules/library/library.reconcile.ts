@@ -16,6 +16,7 @@ const logRange = 1000;
 const rangesPerPass = 10;
 const maxLogsPerRange = 2000;
 const canonicalityBatch = 200;
+const eventVerificationConcurrency = 16;
 
 function tooManyLogs(error: unknown): boolean {
   const value = error && typeof error === "object" ? error as {
@@ -100,8 +101,42 @@ export class LibraryReconciler {
       passes++;
     }
     const caughtUp = cursor >= chain.safeBlock;
+    await this.reconcilePendingTransactions(chain);
     if (caughtUp) this.repository.expirePendingRequests(chain.chainTime);
     return { ...chain, caughtUp, applied, ignored };
+  }
+
+  private async reconcilePendingTransactions(chain: TrustedLibraryChain): Promise<void> {
+    const pending = this.repository.pendingTransactions(100);
+    if (pending.length === 0) return;
+    let receipts;
+    try {
+      receipts = await Promise.all(pending.map(async (transaction) => ({ transaction,
+        receipt: await this.rpc.getTransactionReceipt(transaction.txHash) })));
+    } catch (error) {
+      if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
+      throw new LibraryChainError("RPC_UNAVAILABLE");
+    }
+    const reverted = receipts.filter(({ receipt }) => receipt?.status === 0 && Number.isSafeInteger(receipt.blockNumber)
+      && receipt.blockNumber <= chain.safeBlock && typeof receipt.blockHash === "string");
+    let blocks;
+    try {
+      blocks = await Promise.all(reverted.map(({ receipt }) => this.rpc.getBlock(receipt!.blockNumber)));
+    } catch (error) {
+      if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
+      throw new LibraryChainError("RPC_UNAVAILABLE");
+    }
+    for (const [index, entry] of reverted.entries()) {
+      const block = blocks[index];
+      if (!block?.hash || block.hash.toLowerCase() !== entry.receipt!.blockHash.toLowerCase()) continue;
+      try {
+        this.repository.markTransactionReverted({ requestId: entry.transaction.requestId, action: entry.transaction.action,
+          txHash: entry.transaction.txHash, blockNumber: entry.receipt!.blockNumber, blockHash: block.hash, checkedAt: chain.checkedAt });
+      } catch (error) {
+        if (error instanceof Error && error.message === "LIBRARY_DATABASE_BUSY") throw error;
+        throw new LibraryChainError("RPC_UNAVAILABLE");
+      }
+    }
   }
 
   private async checkCanonicality(chain: TrustedLibraryChain): Promise<void> {
@@ -157,9 +192,10 @@ export class LibraryReconciler {
     logs.sort((left, right) => left.blockNumber - right.blockNumber || left.index - right.index);
     const events = [];
     try {
-      for (const log of logs) {
-        const event = await this.verifier.verify(log, chain.safeBlock, chain.checkedAt);
-        if (event) events.push(event);
+      for (let offset = 0; offset < logs.length; offset += eventVerificationConcurrency) {
+        const verified = await Promise.all(logs.slice(offset, offset + eventVerificationConcurrency)
+          .map((log) => this.verifier.verify(log, chain.safeBlock, chain.checkedAt)));
+        events.push(...verified.filter((event) => event !== null));
       }
     } catch (error) {
       if (error instanceof LibraryChainError) throw error;

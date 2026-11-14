@@ -64,9 +64,17 @@ export class LibraryReceiptVerifier {
     try { parsedLog = this.iface.parseLog({ topics: [...log.topics], data: log.data }); }
     catch { throw new LibraryRpcError(); }
     if (!parsedLog || !Object.hasOwn(eventAction, parsedLog.name)) return null;
-    const tx = await this.rpc.getTransaction(log.transactionHash);
-    const receipt = await this.rpc.getTransactionReceipt(log.transactionHash);
-    const block = await this.rpc.getBlock(log.blockNumber);
+    // Reconciliation limits verification to 16 logs per wave, so even deposits stay below the provider's 100-call JSON-RPC batch cap.
+    const depositBookId = parsedLog.name === "DepositReceived" ? String(parsedLog.args[2]).toLowerCase() : undefined;
+    const termsPromise = depositBookId
+      ? this.rpc.call({ to: escrow, data: this.iface.encodeFunctionData("bookTerms", [depositBookId]) }, safeHead)
+      : Promise.resolve(undefined);
+    const [tx, receipt, block, rawTerms] = await Promise.all([
+      this.rpc.getTransaction(log.transactionHash),
+      this.rpc.getTransactionReceipt(log.transactionHash),
+      this.rpc.getBlock(log.blockNumber),
+      termsPromise,
+    ]);
     if (!tx || !receipt || !block || receipt.status !== 1 || receipt.blockNumber !== log.blockNumber
       || !same(tx.to, escrow) || !same(receipt.to, escrow) || !same(receipt.hash, log.transactionHash)
       || !same(receipt.blockHash, log.blockHash) || !same(block.hash, log.blockHash)) throw new LibraryRpcError();
@@ -102,8 +110,7 @@ export class LibraryReceiptVerifier {
       case "DepositReceived": {
         const bookId = String(args[2]).toLowerCase();
         if (!same(txCall.args[1], bookId) || tx.value !== BigInt(decimal(args[3]))) throw new LibraryRpcError();
-        const termsData = this.iface.encodeFunctionData("bookTerms", [bookId]);
-        const rawTerms = await this.rpc.call({ to: escrow, data: termsData }, safeHead);
+        if (rawTerms === undefined) throw new LibraryRpcError();
         const [depositWei, replacementPriceWei, isSealed] = this.iface.decodeFunctionResult("bookTerms", rawTerms);
         const seeded = this.deployment.books.find((book) => book.bookId.toLowerCase() === bookId);
         const amount = decimal(args[3]);

@@ -537,9 +537,18 @@ export class LibraryRepository {
         const action = eventActions[event.eventName];
         const previousTx = this.db.prepare(`SELECT tx_hash, status, settlement_intent_id FROM library_transactions
           WHERE request_id = ? AND action = ?`).get(event.requestId, action);
-        if (previousTx && String(previousTx.tx_hash).toLowerCase() !== event.txHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+        const samePreviousTx = previousTx && String(previousTx.tx_hash).toLowerCase() === event.txHash;
+        const previousAttempt = this.db.prepare(`SELECT request_id, action, submitted_at, settlement_intent_id FROM library_transaction_attempts
+          WHERE tx_hash = ?`).get(event.txHash);
+        if (previousAttempt && (String(previousAttempt.request_id) !== event.requestId || String(previousAttempt.action) !== action)) {
+          throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+        }
+        if (previousTx && !samePreviousTx && String(previousTx.status) !== "REVERTED") {
+          throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+        }
+        const eventSettlementIntentId = samePreviousTx ? previousTx.settlement_intent_id : previousAttempt?.settlement_intent_id;
         const settlementIntentFor = (outcome: "RETURNED" | "LOST") => {
-          const intentId = previousTx?.settlement_intent_id;
+          const intentId = eventSettlementIntentId;
           if (typeof intentId !== "string") return undefined;
           const intent = this.db.prepare(`SELECT intent_id, reason FROM settlement_intents WHERE intent_id = ?
             AND request_id = ? AND outcome = ? AND librarian_account_id = ?`).get(intentId, event.requestId, outcome, Number(actor?.account_id));
@@ -683,12 +692,22 @@ export class LibraryRepository {
           }
         }
 
+        const submittedAt = Number(previousAttempt?.submitted_at ?? event.observedAt);
         this.db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, block_number,
           block_hash, log_index, event_name, settlement_intent_id) VALUES (?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?)
-          ON CONFLICT(request_id, action) DO UPDATE SET status = 'CONFIRMED', block_number = excluded.block_number,
-            block_hash = excluded.block_hash, log_index = excluded.log_index, event_name = excluded.event_name`)
-          .run(event.requestId, action, event.txHash, event.observedAt, event.blockNumber, event.blockHash, event.logIndex,
-            event.eventName, previousTx?.settlement_intent_id ?? null);
+          ON CONFLICT(request_id, action) DO UPDATE SET tx_hash = excluded.tx_hash, submitted_at = excluded.submitted_at,
+            status = 'CONFIRMED', block_number = excluded.block_number, block_hash = excluded.block_hash,
+            log_index = excluded.log_index, event_name = excluded.event_name, settlement_intent_id = excluded.settlement_intent_id`)
+          .run(event.requestId, action, event.txHash, submittedAt, event.blockNumber, event.blockHash, event.logIndex,
+            event.eventName, eventSettlementIntentId ?? null);
+        this.db.prepare(`INSERT INTO library_transaction_attempts(tx_hash, request_id, action, submitted_at, status,
+          block_number, block_hash, log_index, event_name, settlement_intent_id)
+          VALUES (?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?, ?)
+          ON CONFLICT(tx_hash) DO UPDATE SET status = 'CONFIRMED', block_number = excluded.block_number,
+            block_hash = excluded.block_hash, log_index = excluded.log_index, event_name = excluded.event_name,
+            settlement_intent_id = coalesce(library_transaction_attempts.settlement_intent_id, excluded.settlement_intent_id)`)
+          .run(event.txHash, event.requestId, action, submittedAt, event.blockNumber, event.blockHash, event.logIndex,
+            event.eventName, eventSettlementIntentId ?? null);
         if (actor) this.db.prepare(`INSERT INTO audit_log(actor_account_id, actor_role, action, target_type, target_id, created_at)
           VALUES (?, ?, ?, 'request', ?, ?)`).run(Number(actor.account_id), String(actor.role), event.eventName, event.requestId, event.blockTimestamp);
         applied++;
@@ -811,16 +830,36 @@ export class LibraryRepository {
         if (!intent) throw new Error("LIBRARY_SETTLEMENT_INTENT_MISMATCH");
         settlementIntent = { intentId: String(intent.intent_id), reason: String(intent.reason) };
       }
-      const existing = this.db.prepare("SELECT tx_hash, settlement_intent_id FROM library_transactions WHERE request_id = ? AND action = ?")
+      const existing = this.db.prepare("SELECT tx_hash, status, settlement_intent_id FROM library_transactions WHERE request_id = ? AND action = ?")
         .get(requestId, input.action);
-      if (existing && String(existing.tx_hash).toLowerCase() !== txHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
-      if (existing?.settlement_intent_id && existing.settlement_intent_id !== (settlementIntent?.intentId ?? null)) {
+      const sameCurrentTx = existing && String(existing.tx_hash).toLowerCase() === txHash;
+      const priorAttempt = this.db.prepare("SELECT request_id, action FROM library_transaction_attempts WHERE tx_hash = ?").get(txHash);
+      if (priorAttempt && (String(priorAttempt.request_id) !== requestId || String(priorAttempt.action) !== input.action)) {
+        throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      }
+      if (existing && !sameCurrentTx && (String(existing.status) !== "REVERTED" || priorAttempt)) {
+        throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      }
+      if (sameCurrentTx && existing?.settlement_intent_id
+        && existing.settlement_intent_id !== (settlementIntent?.intentId ?? null)) {
         throw new Error("LIBRARY_TRANSACTION_CONFLICT");
       }
       this.db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, settlement_intent_id)
         VALUES (?, ?, ?, ?, 'SUBMITTED', ?) ON CONFLICT(request_id, action) DO UPDATE
-        SET settlement_intent_id = coalesce(library_transactions.settlement_intent_id, excluded.settlement_intent_id)`)
+        SET tx_hash = excluded.tx_hash, submitted_at = excluded.submitted_at,
+          status = CASE WHEN library_transactions.tx_hash = excluded.tx_hash THEN library_transactions.status ELSE 'SUBMITTED' END,
+          block_number = CASE WHEN library_transactions.tx_hash = excluded.tx_hash THEN library_transactions.block_number ELSE NULL END,
+          block_hash = CASE WHEN library_transactions.tx_hash = excluded.tx_hash THEN library_transactions.block_hash ELSE NULL END,
+          log_index = CASE WHEN library_transactions.tx_hash = excluded.tx_hash THEN library_transactions.log_index ELSE NULL END,
+          event_name = CASE WHEN library_transactions.tx_hash = excluded.tx_hash THEN library_transactions.event_name ELSE NULL END,
+          settlement_intent_id = CASE WHEN library_transactions.tx_hash = excluded.tx_hash
+            THEN coalesce(library_transactions.settlement_intent_id, excluded.settlement_intent_id)
+            ELSE excluded.settlement_intent_id END`)
         .run(requestId, input.action, txHash, input.submittedAt, settlementIntent?.intentId ?? null);
+      this.db.prepare(`INSERT INTO library_transaction_attempts(tx_hash, request_id, action, submitted_at, status, settlement_intent_id)
+        VALUES (?, ?, ?, ?, 'SUBMITTED', ?) ON CONFLICT(tx_hash) DO UPDATE
+        SET settlement_intent_id = coalesce(library_transaction_attempts.settlement_intent_id, excluded.settlement_intent_id)`)
+        .run(txHash, requestId, input.action, input.submittedAt, settlementIntent?.intentId ?? null);
       if (settlementIntent) {
         const outcome = expectedOutcome!;
         const existingSettlement = this.db.prepare(`SELECT outcome, settlement_intent_id FROM settlements
@@ -868,12 +907,30 @@ export class LibraryRepository {
 
   pendingTransactions(limit = 100): LibraryStoredTransaction[] {
     safeInteger(limit, "INVALID_LIBRARY_BATCH_SIZE", 1);
-    const rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED'
-      ORDER BY submitted_at, request_id, action LIMIT ?`).all(limit);
-    return rows.map((row) => ({ requestId: String(row.request_id), action: String(row.action) as LibraryStoredTransaction["action"],
-      txHash: String(row.tx_hash), settlementIntentId: row.settlement_intent_id === null ? null : String(row.settlement_intent_id),
-      status: "SUBMITTED", submittedAt: Number(row.submitted_at), blockNumber: null,
-      blockHash: null, logIndex: null, eventName: null }));
+    beginImmediate(this.db);
+    try {
+      const cursor = String(this.db.prepare("SELECT pending_transaction_cursor FROM library_reconcile_state WHERE singleton = 1").get()
+        ?.pending_transaction_cursor ?? "");
+      let rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED' AND tx_hash > ?
+        ORDER BY tx_hash LIMIT ?`).all(cursor, limit);
+      if (rows.length === 0 && cursor !== "") {
+        rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED'
+          ORDER BY tx_hash LIMIT ?`).all(limit);
+      }
+      if (rows.length > 0) {
+        this.db.prepare("UPDATE library_reconcile_state SET pending_transaction_cursor = ? WHERE singleton = 1")
+          .run(String(rows.at(-1)!.tx_hash));
+      }
+      this.db.exec("COMMIT");
+      return rows.map((row) => ({ requestId: String(row.request_id), action: String(row.action) as LibraryStoredTransaction["action"],
+        txHash: String(row.tx_hash), settlementIntentId: row.settlement_intent_id === null ? null : String(row.settlement_intent_id),
+        status: "SUBMITTED", submittedAt: Number(row.submitted_at), blockNumber: null,
+        blockHash: null, logIndex: null, eventName: null }));
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
   }
 
   markTransactionReverted(input: { requestId: string; action: LibraryStoredTransaction["action"]; txHash: string;
@@ -891,6 +948,15 @@ export class LibraryRepository {
       if (changed.changes !== 1) {
         const existing = this.getTransaction(requestId, input.action);
         if (!existing || existing.txHash !== txHash || existing.status !== "REVERTED") throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      }
+      const attemptChanged = this.db.prepare(`UPDATE library_transaction_attempts SET status = 'REVERTED', block_number = ?,
+        block_hash = ? WHERE tx_hash = ? AND request_id = ? AND action = ? AND status = 'SUBMITTED'`)
+        .run(input.blockNumber, blockHash, txHash, requestId, input.action);
+      if (attemptChanged.changes !== 1) {
+        const attempt = this.db.prepare(`SELECT status, block_number, block_hash FROM library_transaction_attempts
+          WHERE tx_hash = ? AND request_id = ? AND action = ?`).get(txHash, requestId, input.action);
+        if (!attempt || attempt.status !== "REVERTED" || Number(attempt.block_number) !== input.blockNumber
+          || String(attempt.block_hash).toLowerCase() !== blockHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
       }
       const result = this.getTransaction(requestId, input.action);
       if (!result) throw new Error("LIBRARY_TRANSACTION_NOT_FOUND");

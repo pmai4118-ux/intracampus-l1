@@ -117,6 +117,184 @@ test("canonicality checks are bounded per pass and resume from a durable cursor"
   assert.equal(blockReads.filter((tag) => tag === 5).length, 2, "the next pass checks the next event batch position");
 });
 
+test("restart recovery rotates through pending transactions and marks only canonical failed receipts reverted", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "library-pending-recovery-"));
+  const path = join(directory, "library.sqlite");
+  let repository = new LibraryRepository(path);
+  t.after(() => { repository.close(); rmSync(directory, { recursive: true, force: true }); });
+  const student = "0x1111111111111111111111111111111111111111";
+  const librarian = "0x2222222222222222222222222222222222222222";
+  const bookId = `0x${"ab".repeat(32)}`;
+  const escrow = "0x4444444444444444444444444444444444444444";
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Pending recovery", author: "Test", isbn: null,
+    depositWei: "50000000000000000000", replacementPriceWei: "30000000000000000000",
+    copies: [{ copyId: "copy-1", barcode: "LR-001" }] }],
+    accounts: [{ wallet: student, role: "STUDENT" }, { wallet: librarian, role: "LIBRARIAN" }] });
+  const requests = Array.from({ length: 101 }, (_, index) => ({ requestId: hash(2000 + index), txHash: hash(3000 + index) }));
+  for (const [index, item] of requests.entries()) {
+    repository.createDepositRequest({ requestId: item.requestId, wallet: student, bookId, idempotencyKey: `pending-${index}`,
+      createdAt: 100, chainTime: 100, holdAfterSeconds: 2_592_000 });
+    repository.recordTransactionSubmission({ requestId: item.requestId, action: "deposit", txHash: item.txHash, submittedAt: 100 + index });
+  }
+  const receiptReads: string[] = [];
+  let recoveryRound = 1;
+  const rpc = {
+    async getNetwork() { return { chainId: 20261n }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 500 : tag;
+      return { number, timestamp: 1_800_000_000, hash: hash(number) };
+    },
+    async getLogs() { return []; },
+    async getTransaction() { return null; },
+    async getTransactionReceipt(txHash: string) {
+      receiptReads.push(txHash);
+      if (txHash === requests[1].txHash) return { status: 1, blockNumber: 400, blockHash: hash(400) };
+      if ((recoveryRound >= 2 && txHash === requests[100].txHash)
+        || (recoveryRound >= 3 && txHash === requests[0].txHash)) {
+        return { status: 0, blockNumber: 400, blockHash: hash(400) };
+      }
+      return null;
+    },
+    async getCode() { return "0x6000"; }, async call() { return "0x"; },
+  };
+  const deployment = {
+    schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+    verifiedAt: { blockNumber: 4, blockHash: hash(4) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: libraryFixture.abi },
+    roles: { deployer: librarian, administrator: librarian, librarian }, treasury: librarian,
+    policy: libraryFixture.policy, books: [{ bookId, depositWei: "50000000000000000000",
+      replacementPriceWei: "30000000000000000000", sealed: true }], seedTransactions: [],
+  } as unknown as DeployedLibraryDeployment;
+  const makeReconciler = () => new LibraryReconciler(repository, rpc as never, deployment,
+    { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, () => 1_800_000_000);
+
+  await makeReconciler().reconcile();
+  assert.equal(receiptReads.length, 100);
+  assert.equal(repository.getTransaction(requests[1].requestId, "deposit")?.status, "SUBMITTED",
+    "a successful receipt without its verified event remains pending");
+  assert.equal(repository.getTransaction(requests[0].requestId, "deposit")?.status, "SUBMITTED",
+    "the first pending page has no failure evidence yet");
+
+  repository.close();
+  repository = new LibraryRepository(path);
+  recoveryRound = 2;
+  await makeReconciler().reconcile();
+  assert.equal(receiptReads.length, 101);
+  assert.equal(receiptReads[100], requests[100].txHash, "the durable cursor advances to the next pending page after restart");
+  assert.equal(repository.getTransaction(requests[100].requestId, "deposit")?.status, "REVERTED",
+    "a status-zero receipt is resolved only after its block hash matches the safe canonical block");
+
+  recoveryRound = 3;
+  await makeReconciler().reconcile();
+  assert.equal(repository.getTransaction(requests[0].requestId, "deposit")?.status, "REVERTED",
+    "after reaching the end, the cursor wraps so the oldest pending transaction is not starved");
+});
+
+test("a safe head 10,001 blocks ahead catches up over two bounded passes", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "library-reconcile-pass-bound-"));
+  const path = join(directory, "library.sqlite");
+  const repository = new LibraryRepository(path);
+  t.after(() => { repository.close(); rmSync(directory, { recursive: true, force: true }); });
+  const student = "0x1111111111111111111111111111111111111111";
+  const librarian = "0x2222222222222222222222222222222222222222";
+  const bookId = `0x${"ab".repeat(32)}`;
+  const escrow = "0x4444444444444444444444444444444444444444";
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Pass bound", author: "Test", isbn: null,
+    depositWei: "50000000000000000000", replacementPriceWei: "30000000000000000000",
+    copies: [{ copyId: "copy-1", barcode: "LR-001" }] }],
+    accounts: [{ wallet: student, role: "STUDENT" }, { wallet: librarian, role: "LIBRARIAN" }] });
+  const ranges: Array<[number, number]> = [];
+  const rpc = {
+    async getNetwork() { return { chainId: 20261n }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 10_001 : tag;
+      return { number, timestamp: 1_800_000_000, hash: hash(number) };
+    },
+    async getLogs(filter: { fromBlock?: number; toBlock?: number }) {
+      ranges.push([Number(filter.fromBlock), Number(filter.toBlock)]);
+      return [];
+    },
+    async getTransaction() { return null; }, async getTransactionReceipt() { return null; },
+    async getCode() { return "0x6000"; }, async call() { return "0x"; },
+  };
+  const deployment = {
+    schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+    verifiedAt: { blockNumber: 4, blockHash: hash(4) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: libraryFixture.abi },
+    roles: { deployer: librarian, administrator: librarian, librarian }, treasury: librarian,
+    policy: libraryFixture.policy, books: [{ bookId, depositWei: "50000000000000000000",
+      replacementPriceWei: "30000000000000000000", sealed: true }], seedTransactions: [],
+  } as unknown as DeployedLibraryDeployment;
+  const reconciler = new LibraryReconciler(repository, rpc as never, deployment,
+    { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, () => 1_800_000_000);
+
+  const first = await reconciler.reconcile();
+  assert.equal(first.caughtUp, false);
+  assert.equal(repository.reconcileState().cursorBlock, 10_000);
+  assert.deepEqual(ranges, Array.from({ length: 10 }, (_, index) => [index * 1000 + 1, (index + 1) * 1000]));
+
+  const second = await reconciler.reconcile();
+  assert.equal(second.caughtUp, true);
+  assert.equal(repository.reconcileState().cursorBlock, 10_001);
+  assert.deepEqual(ranges.at(-1), [10_001, 10_001]);
+});
+
+test("event verification runs in bounded parallel waves", async (t) => {
+  const repository = new LibraryRepository(":memory:");
+  t.after(() => repository.close());
+  const student = "0x1111111111111111111111111111111111111111";
+  const librarian = "0x2222222222222222222222222222222222222222";
+  const bookId = `0x${"ab".repeat(32)}`;
+  const escrow = "0x4444444444444444444444444444444444444444";
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Verifier waves", author: "Test", isbn: null,
+    depositWei: "50000000000000000000", replacementPriceWei: "30000000000000000000",
+    copies: [{ copyId: "copy-1", barcode: "LR-001" }] }],
+    accounts: [{ wallet: student, role: "STUDENT" }, { wallet: librarian, role: "LIBRARIAN" }] });
+  const logs = Array.from({ length: 50 }, (_, index) => ({ address: escrow, blockNumber: 5, index,
+    transactionIndex: 0, transactionHash: hash(1000 + index), blockHash: hash(5), data: "0x", topics: [], removed: false })) as unknown as Log[];
+  let inFlight = 0;
+  let peakInFlight = 0;
+  let verified = 0;
+  const rpc = {
+    async getNetwork() { return { chainId: 20261n }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 500 : tag;
+      return { number, timestamp: 1_800_000_000, hash: hash(number) };
+    },
+    async getLogs() { return logs; },
+    async getTransaction() { return null; }, async getTransactionReceipt() { return null; },
+    async getCode() { return "0x6000"; }, async call() { return "0x"; },
+  };
+  const deployment = {
+    schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+    verifiedAt: { blockNumber: 4, blockHash: hash(4) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: libraryFixture.abi },
+    roles: { deployer: librarian, administrator: librarian, librarian }, treasury: librarian,
+    policy: libraryFixture.policy, books: [{ bookId, depositWei: "50000000000000000000",
+      replacementPriceWei: "30000000000000000000", sealed: true }], seedTransactions: [],
+  } as unknown as DeployedLibraryDeployment;
+  const reconciler = new LibraryReconciler(repository, rpc as never, deployment,
+    { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, () => 1_800_000_000);
+  reconciler.verifierInstance.verify = async () => {
+    inFlight++;
+    peakInFlight = Math.max(peakInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    inFlight--;
+    verified++;
+    return null;
+  };
+
+  await reconciler.reconcile();
+  assert.equal(verified, 50);
+  assert.equal(peakInFlight, 16, "all log verifications run concurrently, with the configured wave bound");
+});
+
 test("dense log ranges subdivide and keep a contiguous restartable cursor", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "library-reconcile-dense-"));
   const path = join(directory, "library.sqlite");

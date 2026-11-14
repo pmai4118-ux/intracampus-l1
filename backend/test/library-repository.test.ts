@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { LibraryRepository, applyLibraryMigrations } from "../src/modules/library/library.repository.ts";
+import { libraryMigrations } from "../src/modules/library/library.migrations.ts";
 import type { LibraryBookSeed, LibraryVerifiedChainEvent } from "../src/modules/library/library.types.ts";
 
 const studentA = "0x1111111111111111111111111111111111111111";
@@ -150,13 +151,13 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   const env = setup();
   t.after(env.cleanup);
   let repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 4);
+  assert.equal(repository.schemaVersion(), 5);
   assert.deepEqual(repository.sqliteSettings(), { foreignKeys: 1, journalMode: "wal", synchronous: 2, busyTimeoutMs: 5000 });
   assert.equal(repository.seedDemo(env.seed), "inserted");
   repository.close();
 
   repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 4);
+  assert.equal(repository.schemaVersion(), 5);
   assert.equal(repository.seedDemo(env.seed), "unchanged");
   assert.deepEqual(repository.listBooks()[0], {
     bookId, title: "Demo book", author: "Demo author", isbn: null, depositWei, replacementPriceWei: priceWei,
@@ -182,6 +183,37 @@ test("migration failure rolls back its schema and version", () => {
   } finally { db.close(); }
 });
 
+test("version 5 backfills existing transaction state into attempt history", (t) => {
+  const env = setup();
+  const requestId = `0x${"71".repeat(32)}`;
+  const txHash = `0x${"72".repeat(32)}`;
+  const blockHash = `0x${"73".repeat(32)}`;
+  const db = new DatabaseSync(env.path);
+  try {
+    applyLibraryMigrations(db, libraryMigrations.slice(0, 4));
+    db.prepare("INSERT INTO accounts(wallet, role, created_at) VALUES (?, 'STUDENT', 1)").run(studentA);
+    const accountId = Number(db.prepare("SELECT account_id FROM accounts WHERE wallet = ?").get(studentA)?.account_id);
+    db.prepare(`INSERT INTO books(book_id, title, author, replacement_price_wei, deposit_wei, seed_version, created_at)
+      VALUES (?, 'Migrated', 'Test', ?, ?, 1, 1)`).run(bookId, priceWei, depositWei);
+    db.prepare(`INSERT INTO borrow_requests(request_id, account_id, book_id, idempotency_key, status, refund_status, created_at, updated_at)
+      VALUES (?, ?, ?, 'migration-attempt', 'AWAITING_DEPOSIT', 'NONE', 1, 1)`).run(requestId, accountId, bookId);
+    db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, block_number, block_hash)
+      VALUES (?, 'deposit', ?, 2, 'REVERTED', 5, ?)`).run(requestId, txHash, blockHash);
+  } finally { db.close(); }
+
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  assert.equal(repository.schemaVersion(), 5);
+  const migrated = new DatabaseSync(env.path);
+  try {
+    const attempt = migrated.prepare(`SELECT tx_hash, request_id, action, status, block_number, block_hash
+      FROM library_transaction_attempts WHERE tx_hash = ?`).get(txHash);
+    assert.deepEqual(Object.assign({}, attempt), {
+      tx_hash: txHash, request_id: requestId, action: "deposit", status: "REVERTED", block_number: 5, block_hash: blockHash,
+    });
+  } finally { migrated.close(); }
+});
+
 test("two independent startup processes migrate a new file database once", async (t) => {
   const env = setup();
   t.after(env.cleanup);
@@ -189,15 +221,16 @@ test("two independent startup processes migrate a new file database once", async
     initializeDatabaseInWorker(env.path),
     initializeDatabaseInWorker(env.path),
   ]);
-  assert.deepEqual(versions, [4, 4]);
+  assert.deepEqual(versions, [5, 5]);
   const repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 4);
+  assert.equal(repository.schemaVersion(), 5);
   const db = new DatabaseSync(env.path);
   try {
-    for (const table of ["library_reconcile_state", "library_transactions", "library_event_canonicality"]) {
+    for (const table of ["library_reconcile_state", "library_transactions", "library_transaction_attempts", "library_event_canonicality"]) {
       assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
     }
     assert.ok(db.prepare("PRAGMA table_info(library_transactions)").all().some((column) => column.name === "settlement_intent_id"));
+    assert.ok(db.prepare("PRAGMA table_info(library_reconcile_state)").all().some((column) => column.name === "pending_transaction_cursor"));
     assert.ok(db.prepare("PRAGMA table_info(settlements)").all().some((column) => column.name === "settlement_intent_id"));
     assert.deepEqual(Object.assign({}, db.prepare("SELECT cursor_block, health FROM library_reconcile_state WHERE singleton = 1").get()),
       { cursor_block: 0, health: "HEALTHY" });
@@ -396,20 +429,21 @@ test("reconcile skips untracked logs, atomically advances after projections, and
   assert.equal(repository.reconcileState().cursorBlock, 125);
 });
 
-test("settlement receipt stays linked to its intent when another intent exists or reconciliation wins the race", (t) => {
+test("settlement retries preserve reverted attempts and link each successful receipt to its exact intent", (t) => {
   const env = setup();
   const repository = new LibraryRepository(env.path);
   t.after(() => { repository.close(); env.cleanup(); });
   repository.seedDemo({ ...env.seed, books: [{ ...env.seed.books[0], copies: [
     { copyId: "copy-001", barcode: "LC-001" }, { copyId: "copy-002", barcode: "LC-002" },
+    { copyId: "copy-003", barcode: "LC-003" }, { copyId: "copy-004", barcode: "LC-004" },
   ] }] });
 
-  const addIntentPair = (requestId: string, createdAt: number) => {
-    repository.createSettlementIntent({ intentId: `${requestId}:first`, loanId: requestId, librarianWallet: librarian,
+  const addIntentPair = (requestId: string, createdAt: number, label = "first") => {
+    repository.createSettlementIntent({ intentId: `${requestId}:${label}`, loanId: requestId, librarianWallet: librarian,
       outcome: "LOST", reason: "Reason for submitted settlement", createdAt });
-    repository.createSettlementIntent({ intentId: `${requestId}:later`, loanId: requestId, librarianWallet: librarian,
+    repository.createSettlementIntent({ intentId: `${requestId}:${label}:later`, loanId: requestId, librarianWallet: librarian,
       outcome: "LOST", reason: "Later unused intent reason", createdAt: createdAt + 1 });
-    return `${requestId}:first`;
+    return `${requestId}:${label}`;
   };
   const lostEvent = (requestId: string, txByte: string, block: number, blockTimestamp: number): LibraryVerifiedChainEvent => ({
     chainId: 20261, contractAddress: "0x4444444444444444444444444444444444444444",
@@ -435,6 +469,34 @@ test("settlement receipt stays linked to its intent when another intent exists o
   repository.recordTransactionSubmission({ requestId: racedRequest, action: "settle", txHash: racedHash,
     submittedAt: 1_705_000_040, settlementIntentId: racedIntent, librarianWallet: librarian });
 
+  const retriedRequest = `0x${"83".repeat(32)}`;
+  recordActiveLoan(repository, retriedRequest, 205, 1_706_000_000);
+  const revertedIntent = addIntentPair(retriedRequest, 1_708_000_000, "reverted");
+  const revertedHash = `0x${"93".repeat(32)}`;
+  repository.recordTransactionSubmission({ requestId: retriedRequest, action: "settle", txHash: revertedHash,
+    submittedAt: 1_708_000_010, settlementIntentId: revertedIntent, librarianWallet: librarian });
+  repository.markTransactionReverted({ requestId: retriedRequest, action: "settle", txHash: revertedHash,
+    blockNumber: 206, blockHash: `0x${"a6".repeat(32)}`, checkedAt: 1_708_000_020 });
+  const retryIntent = addIntentPair(retriedRequest, 1_709_000_000, "retry");
+  const retryHash = `0x${"94".repeat(32)}`;
+  repository.recordTransactionSubmission({ requestId: retriedRequest, action: "settle", txHash: retryHash,
+    submittedAt: 1_709_000_010, settlementIntentId: retryIntent, librarianWallet: librarian });
+  repository.recordVerifiedChainEvents([lostEvent(retriedRequest, "94", 207, 1_709_000_020)], 207, 1_709_000_030, "{}");
+
+  const eventFirstRequest = `0x${"84".repeat(32)}`;
+  recordActiveLoan(repository, eventFirstRequest, 208, 1_710_000_000);
+  const eventFirstOldIntent = addIntentPair(eventFirstRequest, 1_712_000_000, "reverted");
+  const eventFirstOldHash = `0x${"95".repeat(32)}`;
+  repository.recordTransactionSubmission({ requestId: eventFirstRequest, action: "settle", txHash: eventFirstOldHash,
+    submittedAt: 1_712_000_010, settlementIntentId: eventFirstOldIntent, librarianWallet: librarian });
+  repository.markTransactionReverted({ requestId: eventFirstRequest, action: "settle", txHash: eventFirstOldHash,
+    blockNumber: 209, blockHash: `0x${"a9".repeat(32)}`, checkedAt: 1_712_000_020 });
+  const eventFirstRetryIntent = addIntentPair(eventFirstRequest, 1_713_000_000, "retry");
+  const eventFirstRetryHash = `0x${"96".repeat(32)}`;
+  repository.recordVerifiedChainEvents([lostEvent(eventFirstRequest, "96", 210, 1_713_000_010)], 210, 1_713_000_020, "{}");
+  repository.recordTransactionSubmission({ requestId: eventFirstRequest, action: "settle", txHash: eventFirstRetryHash,
+    submittedAt: 1_713_000_030, settlementIntentId: eventFirstRetryIntent, librarianWallet: librarian });
+
   const db = new DatabaseSync(env.path);
   try {
     const tracked = db.prepare("SELECT reason, settlement_intent_id FROM settlements WHERE loan_id = ?").get(trackedRequest);
@@ -448,6 +510,17 @@ test("settlement receipt stays linked to its intent when another intent exists o
       reason: "Reason for submitted settlement", settlement_intent_id: racedIntent,
     }, "a later POST must attach its exact intent when reconciliation already confirmed the event");
     assert.equal(repository.getTransaction(racedRequest, "settle")?.settlementIntentId, racedIntent);
+
+    const attempts = db.prepare(`SELECT tx_hash, status, settlement_intent_id FROM library_transaction_attempts
+      WHERE request_id = ? AND action = 'settle' ORDER BY submitted_at`).all(retriedRequest);
+    assert.deepEqual(attempts.map((row) => ({ tx_hash: row.tx_hash, status: row.status, settlement_intent_id: row.settlement_intent_id })), [
+      { tx_hash: revertedHash, status: "REVERTED", settlement_intent_id: revertedIntent },
+      { tx_hash: retryHash, status: "CONFIRMED", settlement_intent_id: retryIntent },
+    ], "a retry keeps the reverted tx and binds its successful attempt to the new intent");
+    const eventFirst = db.prepare("SELECT reason, settlement_intent_id FROM settlements WHERE loan_id = ?").get(eventFirstRequest);
+    assert.deepEqual(Object.assign({}, eventFirst), {
+      reason: "Reason for submitted settlement", settlement_intent_id: eventFirstRetryIntent,
+    }, "a successful event arriving before its POST must not inherit the reverted attempt's intent");
   } finally { db.close(); }
 });
 

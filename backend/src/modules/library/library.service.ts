@@ -123,7 +123,9 @@ export class LibraryService {
 
   async getRequest(account: LibraryAccount, requestId: string): Promise<LibraryRequest> {
     await this.reconciled();
-    const record = this.repository.getRequest(requestId);
+    let record: LibraryRequestRecord | undefined;
+    try { record = this.repository.getRequest(requestId); }
+    catch (error) { throw serviceFailure(error); }
     if (!record || (account.role !== "LIBRARIAN" && record.wallet.toLowerCase() !== account.wallet.toLowerCase())) {
       throw new LibraryServiceError("NOT_FOUND", 404);
     }
@@ -163,7 +165,9 @@ export class LibraryService {
     if (account.role !== "LIBRARIAN") throw new LibraryServiceError("FORBIDDEN", 403);
     const deployment = this.deploymentOrThrow();
     if (account.wallet.toLowerCase() !== deployment.roles.librarian.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
-    const loan = this.repository.loanForSettlement(loanId);
+    let loan: ReturnType<LibraryRepository["loanForSettlement"]>;
+    try { loan = this.repository.loanForSettlement(loanId); }
+    catch (error) { throw serviceFailure(error); }
     if (!loan) throw new LibraryServiceError("NOT_FOUND", 404);
     const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
     const intentId = randomBytes(32).toString("hex");
@@ -172,6 +176,9 @@ export class LibraryService {
     try {
       if (input.outcome === "RETURNED") {
         if (loan.returnReceivedAt === null) throw new Error("LIBRARY_INVALID_LOAN_STATE");
+        if (!/^(0|[1-9][0-9]*)$/.test(input.repairRequestedWei) || BigInt(input.repairRequestedWei) >= 2n ** 256n) {
+          throw new Error("INVALID_LIBRARY_WEI");
+        }
         const repair = BigInt(input.repairRequestedWei);
         if ((input.condition === "DAMAGED") !== (repair > 0n)) throw new Error("INVALID_LIBRARY_SETTLEMENT_INTENT");
         const policy = deployment.policy;
@@ -215,7 +222,9 @@ export class LibraryService {
     action: LibraryTransactionAction; txHash: string; settlementIntentId?: string;
   }): Promise<{ request: LibraryRequest; transaction: LibraryTransaction | null }> {
     const chain = await this.reconciled();
-    const record = this.repository.getRequest(requestId);
+    let record: LibraryRequestRecord | undefined;
+    try { record = this.repository.getRequest(requestId); }
+    catch (error) { throw serviceFailure(error); }
     if (!record || (account.role !== "LIBRARIAN" && record.wallet.toLowerCase() !== account.wallet.toLowerCase())) {
       throw new LibraryServiceError("NOT_FOUND", 404);
     }
@@ -228,7 +237,7 @@ export class LibraryService {
       throw new LibraryServiceError("FORBIDDEN", 403);
     }
     const confirmed = this.repository.getTransaction(record.requestId, action);
-    if (confirmed && confirmed.txHash.toLowerCase() !== input.txHash.toLowerCase()) {
+    if (confirmed && confirmed.txHash.toLowerCase() !== input.txHash.toLowerCase() && confirmed.status !== "REVERTED") {
       throw new LibraryServiceError("CONFLICT", 409);
     }
     if (confirmed?.status === "CONFIRMED" && !settlementAction) {
@@ -263,7 +272,9 @@ export class LibraryService {
         throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
       }
       const existing = this.repository.getTransaction(record.requestId, action);
-      if (existing && existing.txHash.toLowerCase() !== input.txHash.toLowerCase()) throw new LibraryServiceError("CONFLICT", 409);
+      if (existing && existing.txHash.toLowerCase() !== input.txHash.toLowerCase() && existing.status !== "REVERTED") {
+        throw new LibraryServiceError("CONFLICT", 409);
+      }
       return { request: await this.getRequest(account, record.requestId), transaction: existing ? this.publicTransaction(existing, record) : null };
     }
     const iface = new Interface(deployment.escrow.abi as InterfaceAbi);

@@ -258,4 +258,35 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
     ALTER TABLE settlements
       ADD COLUMN settlement_intent_id TEXT REFERENCES settlement_intents(intent_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
   `,
+}, {
+  version: 5,
+  sql: `
+    ALTER TABLE library_reconcile_state
+      ADD COLUMN pending_transaction_cursor TEXT NOT NULL DEFAULT ''
+        CHECK (pending_transaction_cursor = '' OR length(pending_transaction_cursor) = 66);
+
+    CREATE TABLE library_transaction_attempts (
+      tx_hash TEXT PRIMARY KEY CHECK (length(tx_hash) = 66),
+      request_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN ('deposit', 'approve', 'reject', 'refund', 'confirmReturn', 'return', 'settle', 'payShortfall')),
+      submitted_at INTEGER NOT NULL CHECK (submitted_at >= 0),
+      status TEXT NOT NULL CHECK (status IN ('SUBMITTED', 'CONFIRMED', 'REVERTED')),
+      block_number INTEGER CHECK (block_number IS NULL OR block_number >= 0),
+      block_hash TEXT CHECK (block_hash IS NULL OR length(block_hash) = 66),
+      log_index INTEGER CHECK (log_index IS NULL OR log_index >= 0),
+      event_name TEXT,
+      settlement_intent_id TEXT REFERENCES settlement_intents(intent_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      FOREIGN KEY (request_id, action) REFERENCES library_transactions(request_id, action) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      CHECK ((status = 'SUBMITTED' AND block_number IS NULL AND block_hash IS NULL AND log_index IS NULL AND event_name IS NULL)
+        OR (status IN ('CONFIRMED', 'REVERTED') AND block_number IS NOT NULL AND block_hash IS NOT NULL))
+    ) STRICT;
+    CREATE INDEX ix_library_transaction_attempts_action
+      ON library_transaction_attempts(request_id, action, submitted_at, tx_hash);
+    CREATE INDEX ix_library_transaction_attempts_pending
+      ON library_transaction_attempts(status, tx_hash);
+    INSERT INTO library_transaction_attempts(tx_hash, request_id, action, submitted_at, status, block_number,
+      block_hash, log_index, event_name, settlement_intent_id)
+      SELECT tx_hash, request_id, action, submitted_at, status, block_number, block_hash, log_index, event_name, settlement_intent_id
+      FROM library_transactions;
+  `,
 }];

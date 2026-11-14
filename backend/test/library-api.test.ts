@@ -136,6 +136,13 @@ async function studentCookie(state: ReturnType<typeof setup>): Promise<string> {
   return `library_session=${session.token}`;
 }
 
+async function librarianCookie(state: ReturnType<typeof setup>): Promise<string> {
+  const challenge = state.authService.createChallenge({ wallet: librarian.address, remoteAddress: "127.0.0.1" });
+  const signature = await librarian.signMessage(challenge.message);
+  const session = state.authService.verifyChallenge({ challengeId: challenge.challengeId, signature, remoteAddress: "127.0.0.1" });
+  return `library_session=${session.token}`;
+}
+
 function makeOverdueLoan(repository: LibraryRepository) {
   const requestId = hash(90);
   const depositedAt = 1_700_000_000;
@@ -218,6 +225,37 @@ test("request creation fails closed when sealed live book terms differ from the 
   assert.equal((await response.json()).error.code, "CONFIGURATION_ERROR");
   assert.equal(state.rpc.termsReads, 1, "the configured safe block is read before issuing a deposit intent");
   assert.deepEqual(state.repository.listRequests(student.address), []);
+});
+
+test("malformed Library request and settlement inputs return validation errors", async (t) => {
+  const state = setup(t);
+  const requestId = makeOverdueLoan(state.repository);
+  const returnedAt = 1_700_100_000;
+  state.repository.recordVerifiedChainEvents([{
+    chainId: 20261, contractAddress: escrow, txHash: hash(99), logIndex: 0, blockNumber: 12, blockHash: hash(12),
+    blockTimestamp: returnedAt, transactionFrom: librarian.address, observedAt: returnedAt + 1,
+    eventName: "PhysicalReturnConfirmed", requestId, borrower: student.address, returnedAt,
+  }], 12, returnedAt + 1, JSON.stringify(policy));
+  const api = await serve(t, state.app);
+  const cookie = await studentCookie(state);
+  const malformedRequest = await fetch(`${api}/api/library/requests/not-a-bytes32-id`, { headers: { cookie } });
+  assert.equal(malformedRequest.status, 400);
+  assert.equal((await malformedRequest.json()).error.code, "VALIDATION_ERROR");
+
+  const librarianAuth = await librarianCookie(state);
+  const malformedLoan = await fetch(`${api}/api/library/loans/not-a-bytes32-id/settlement-intents`, { method: "POST", headers: {
+    cookie: librarianAuth, origin: authConfig.origin, "content-type": "application/json" },
+    body: JSON.stringify({ outcome: "LOST", reason: "Demo loss" }) });
+  assert.equal(malformedLoan.status, 400);
+  assert.equal((await malformedLoan.json()).error.code, "VALIDATION_ERROR");
+
+  for (const repairRequestedWei of ["01", "-1", "1.1", "1e20", (2n ** 256n).toString()]) {
+    const response = await fetch(`${api}/api/library/loans/${requestId}/settlement-intents`, { method: "POST", headers: {
+      cookie: librarianAuth, origin: authConfig.origin, "content-type": "application/json" },
+      body: JSON.stringify({ outcome: "RETURNED", condition: "GOOD", reason: "No damage", repairRequestedWei }) });
+    assert.equal(response.status, 400, `repair amount ${repairRequestedWei} should be rejected`);
+    assert.equal((await response.json()).error.code, "VALIDATION_ERROR");
+  }
 });
 
 test("transaction submission is idempotent when reconciliation sees the mined event first", async (t) => {
