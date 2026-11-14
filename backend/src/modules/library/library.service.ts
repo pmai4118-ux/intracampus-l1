@@ -88,9 +88,10 @@ export class LibraryService {
   }
 
   async listBooks(_wallet: string, query = ""): Promise<LibraryBook[]> {
-    await this.reconciled();
+    const chain = await this.reconciled();
+    const catalog = this.repository.listBooks();
+    await this.assertLiveTermsMatchDeployment(chain.safeBlock, catalog);
     const books = this.repository.listBooks(query);
-    this.assertSeedMatchesDeployment(books);
     return books.map((book) => ({ ...book, bookId: book.bookId as `0x${string}` }));
   }
 
@@ -101,7 +102,7 @@ export class LibraryService {
     const bookId = input.bookId.toLowerCase();
     const book = this.repository.listBooks().find((item) => item.bookId === bookId);
     if (!book) throw new LibraryServiceError("NOT_FOUND", 404);
-    this.assertSeedMatchesDeployment(this.repository.listBooks());
+    await this.assertLiveTermsMatchDeployment(chain.safeBlock, this.repository.listBooks());
     let request: LibraryRequestRecord;
     try {
       request = this.repository.createDepositRequest({ requestId: `0x${randomBytes(32).toString("hex")}`,
@@ -225,13 +226,21 @@ export class LibraryService {
     if (librarianAction && account.wallet.toLowerCase() !== deployment.roles.librarian.toLowerCase()) {
       throw new LibraryServiceError("FORBIDDEN", 403);
     }
+    const confirmed = this.repository.getTransaction(record.requestId, action);
+    if (confirmed && confirmed.txHash.toLowerCase() !== input.txHash.toLowerCase()) {
+      throw new LibraryServiceError("CONFLICT", 409);
+    }
+    if (confirmed?.status === "CONFIRMED") {
+      return { request: await this.getRequest(account, record.requestId), transaction: this.publicTransaction(confirmed, record) };
+    }
     const expectedFunctions: Record<LibraryTransactionAction, string> = {
       deposit: "deposit", approve: "approve", reject: "reject", refund: "claimExpiredRefund",
       confirmReturn: "confirmPhysicalReturn", return: "settleReturn", settle: "settleLost", payShortfall: "payShortfall",
     };
     if (action === "approve" && (record.status !== "PENDING_APPROVAL" || record.copyId === null
       || record.approvalDeadline === null || chain.chainTime >= record.approvalDeadline)) throw new LibraryServiceError("CONFLICT", 409);
-    if (action === "reject" && (record.status !== "PENDING_APPROVAL" || record.copyId === null)) throw new LibraryServiceError("CONFLICT", 409);
+    if (action === "reject" && !((record.status === "PENDING_APPROVAL" && record.copyId !== null)
+      || (record.status === "REJECTED_NO_COPY" && record.copyId === null))) throw new LibraryServiceError("CONFLICT", 409);
     if (action === "deposit" && record.status !== "AWAITING_DEPOSIT") throw new LibraryServiceError("CONFLICT", 409);
     if (action === "refund" && (!(["EXPIRED_REFUND_DUE", "REJECTED_NO_COPY"].includes(record.status))
       || record.approvalDeadline === null || chain.chainTime < record.approvalDeadline)) throw new LibraryServiceError("CONFLICT", 409);
@@ -342,7 +351,32 @@ export class LibraryService {
     if (books.length !== deployed.length || books.some((book) => {
       const terms = deployed.find((item) => item.bookId.toLowerCase() === book.bookId.toLowerCase());
       return !terms || terms.depositWei !== book.depositWei || terms.replacementPriceWei !== book.replacementPriceWei;
-    })) throw new LibraryConfigurationError();
+    })) throw new LibraryServiceError("CONFIGURATION_ERROR", 503);
+  }
+
+  private async assertLiveTermsMatchDeployment(safeBlock: number, books: LibraryBookRecord[]): Promise<void> {
+    this.assertSeedMatchesDeployment(books);
+    const deployment = this.deploymentOrThrow();
+    const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
+    const rpc = this.rpcClient();
+    for (const expected of deployment.books) {
+      let raw: string;
+      try {
+        raw = await rpc.call({ to: deployment.escrow.address,
+          data: iface.encodeFunctionData("bookTerms", [expected.bookId]) }, safeBlock);
+      } catch (error) {
+        if (error instanceof LibraryRpcError) throw new LibraryServiceError(error.code, 503, true, 2);
+        throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
+      }
+      try {
+        const [depositWei, replacementPriceWei, isSealed] = iface.decodeFunctionResult("bookTerms", raw);
+        if (!isSealed || depositWei.toString() !== expected.depositWei
+          || replacementPriceWei.toString() !== expected.replacementPriceWei) throw new LibraryServiceError("CONFIGURATION_ERROR", 503);
+      } catch (error) {
+        if (error instanceof LibraryServiceError) throw error;
+        throw new LibraryServiceError("CONFIGURATION_ERROR", 503);
+      }
+    }
   }
 
   private findBook(bookId: string): LibraryBookRecord {

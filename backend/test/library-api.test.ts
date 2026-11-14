@@ -25,7 +25,7 @@ const depositWei = libraryFixture.policy.depositWei;
 const replacementPriceWei = "30000000000000000000";
 const now = 1_800_000_000;
 const address = (n: number) => `0x${n.toString(16).padStart(40, "0")}`;
-const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+const hash = (n: number): `0x${string}` => `0x${n.toString(16).padStart(64, "0")}`;
 const policy = {
   depositWei: libraryFixture.policy.depositWei,
   approvalWindowSeconds: libraryFixture.policy.approvalWindowSeconds,
@@ -80,6 +80,8 @@ class FakeLibraryRpc implements LibraryRpcClient {
   available = true;
   transactions = new Map<string, TransactionResponse>();
   receipts = new Map<string, TransactionReceipt>();
+  liveReplacementPriceWei = replacementPriceWei;
+  termsReads = 0;
 
   async getNetwork() {
     if (!this.available) throw new Error("rpc down");
@@ -97,7 +99,7 @@ class FakeLibraryRpc implements LibraryRpcClient {
   async getTransaction(txHash: string) { return this.transactions.get(txHash.toLowerCase()) ?? null; }
   async getTransactionReceipt(txHash: string) { return this.receipts.get(txHash.toLowerCase()) ?? null; }
   async getCode() { return "0x6000"; }
-  async call() { return iface.encodeFunctionResult("bookTerms", [depositWei, replacementPriceWei, true]); }
+  async call() { this.termsReads++; return iface.encodeFunctionResult("bookTerms", [depositWei, this.liveReplacementPriceWei, true]); }
 }
 
 function setup(t: TestContext) {
@@ -204,6 +206,78 @@ test("Library HTTP requires a session, validates same-origin creation, and keeps
   assert.equal(transaction.request.status, "AWAITING_DEPOSIT", "a successful receipt without a verified lifecycle event is not a deposit");
 });
 
+test("request creation fails closed when sealed live book terms differ from the manifest and SQLite seed", async (t) => {
+  const state = setup(t);
+  state.rpc.liveReplacementPriceWei = "99000000000000000000";
+  const api = await serve(t, state.app);
+  const cookie = await studentCookie(state);
+  const response = await fetch(`${api}/api/library/requests`, { method: "POST", headers: {
+    cookie, origin: authConfig.origin, "content-type": "application/json" },
+    body: JSON.stringify({ bookId, idempotencyKey: "untrusted-terms" }) });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, "CONFIGURATION_ERROR");
+  assert.equal(state.rpc.termsReads, 1, "the configured safe block is read before issuing a deposit intent");
+  assert.deepEqual(state.repository.listRequests(student.address), []);
+});
+
+test("transaction submission is idempotent when reconciliation sees the mined event first", async (t) => {
+  const state = setup(t);
+  const account = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await state.libraryService.createRequest({ account, bookId, idempotencyKey: "mined-before-submit" });
+  const txHash = hash(198);
+  state.repository.recordVerifiedChainEvents([{
+    chainId: 20261,
+    contractAddress: escrow,
+    txHash,
+    logIndex: 0,
+    blockNumber: 500,
+    blockHash: hash(500),
+    blockTimestamp: now,
+    transactionFrom: student.address,
+    observedAt: now,
+    eventName: "DepositReceived",
+    requestId: request.requestId,
+    borrower: student.address,
+    bookId,
+    amountWei: depositWei,
+    depositedAt: now,
+    approvalDeadline: now + policy.approvalWindowSeconds,
+  }], 500, now, JSON.stringify(policy));
+  assert.equal(state.repository.getRequest(request.requestId)?.status, "PENDING_APPROVAL");
+  state.rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: student.address,
+    data: iface.encodeFunctionData("deposit", [request.requestId, bookId]), value: BigInt(depositWei) } as unknown as TransactionResponse);
+
+  const submitted = await state.libraryService.submitTransaction(account, request.requestId, { action: "deposit", txHash });
+  assert.equal(submitted.request.status, "PENDING_APPROVAL");
+  assert.equal(submitted.transaction?.txHash, txHash);
+  assert.equal(submitted.transaction?.status, "CONFIRMED");
+});
+
+test("librarian queue and reject action include deposited requests that had no copy to assign", async (t) => {
+  const state = setup(t);
+  const firstRequestId = hash(95), noCopyRequestId = hash(96);
+  for (const [requestId, borrower, byte] of [[firstRequestId, student.address, 97], [noCopyRequestId, secondStudent.address, 98]] as const) {
+    state.repository.createDepositRequest({ requestId, wallet: borrower, bookId, idempotencyKey: `queue-${byte}`,
+      createdAt: now - 1, chainTime: now - 1, holdAfterSeconds: 2_592_000 });
+  }
+  for (const [requestId, borrower, byte] of [[firstRequestId, student.address, 97], [noCopyRequestId, secondStudent.address, 98]] as const) {
+    state.repository.recordVerifiedDeposit({ requestId, borrower, bookId, depositWei, approvalDeadline: now + 86_400,
+      chainId: 20261, contractAddress: escrow, txHash: hash(byte), logIndex: 0, blockNumber: 10 + byte,
+      blockHash: hash(10 + byte), eventName: "DepositReceived", occurredAt: now - 1 });
+  }
+  assert.equal(state.repository.getRequest(noCopyRequestId)?.status, "REJECTED_NO_COPY");
+  const librarianAccount = { wallet: librarian.address as `0x${string}`, role: "LIBRARIAN" as const };
+  const queue = await state.libraryService.listRequests(librarianAccount, true);
+  assert.ok(queue.some((request) => request.requestId === noCopyRequestId && request.status === "REJECTED_NO_COPY"));
+
+  const txHash = hash(99);
+  state.rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: librarian.address,
+    data: iface.encodeFunctionData("reject", [noCopyRequestId]), value: BigInt(0) } as unknown as TransactionResponse);
+  const result = await state.libraryService.submitTransaction(librarianAccount, noCopyRequestId, { action: "reject", txHash });
+  assert.equal(result.transaction?.status, "SUBMITTED");
+  assert.equal(result.request.status, "REJECTED_NO_COPY", "the on-chain refund receipt remains authoritative");
+});
+
 test("overdue hold blocks new Library and grants calls while account and return recovery stay available", async (t) => {
   const state = setup(t);
   const retryRequestId = hash(89);
@@ -233,6 +307,8 @@ test("overdue hold blocks new Library and grants calls while account and return 
   const grants = await fetch(`${api}/api/grants/${student.address}`, { headers: { cookie } });
   assert.equal(grants.status, 403);
   assert.equal((await grants.json()).error.code, "FORBIDDEN");
+  const grantRecovery = await fetch(`${api}/api/grants/${student.address}?txHash=${hash(188)}`, { headers: { cookie } });
+  assert.equal(grantRecovery.status, 200, "a held student can reconcile their own previously sent grant transaction");
 
   const returned = await fetch(`${api}/api/library/loans/${requestId}/return-requests`, { method: "POST", headers,
     body: "{}" });

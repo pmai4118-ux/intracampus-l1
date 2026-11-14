@@ -3,7 +3,9 @@
 import { useEffect, useId, useState } from "react";
 import { requireDeployment } from "@intracampus/network";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
-import { verifyInvoicePreview } from "../../lib/invoice";
+import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
+import { librarySessionMessage, LibrarySessionError, readLibraryStudentAccess, requireLibraryStudentNotHeld,
+  signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
 import { PaymentController, restorePaymentPreview, type InvoicePreview, type PaymentSnapshot } from "../../lib/payment";
 import { createWalletRpc } from "../../lib/wallet";
 import { Receipt } from "../pos/Receipt";
@@ -16,7 +18,16 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
   const [payment, setPayment] = useState<PaymentSnapshot | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [manualHash, setManualHash] = useState("");
+  const [access, setAccess] = useState<LibraryStudentAccess | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const id = useId();
+  useEffect(() => {
+    let active = true;
+    setAccess(null);
+    if (!wallet.address) return () => { active = false; };
+    void readLibraryStudentAccess(wallet.address).then((result) => { if (active) setAccess(result); });
+    return () => { active = false; };
+  }, [wallet.address]);
   useEffect(() => {
     if (!wallet.address) return;
     let session: PaymentController;
@@ -31,7 +42,11 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
       if (!config.rpcUrl || !navigator.locks) throw Error();
       const rpc = createWalletRpc(config.rpcUrl);
       session = new PaymentController({ preview, account: wallet.address, storage: window.localStorage, wallet: walletController,
-        preflight: (payload, account, signal) => verifyInvoicePreview(payload, account, config, rpc, signal),
+        preflight: async (payload, account, signal) => {
+          try { await requireLibraryStudentNotHeld(account); }
+          catch (error) { throw new InvoicePreviewError(error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE"); }
+          return verifyInvoicePreview(payload, account, config, rpc, signal);
+        },
         exclusive: async (key, run) => { await navigator.locks.request(key, { mode: "exclusive", ifAvailable: true }, async (lock) => {
           if (!lock) throw Error("PAYMENT_LOCKED");
           await run();
@@ -55,7 +70,21 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
   }, [payment?.receipt?.txHash, walletController]);
 
   const quote = payment?.preview.quote ?? preview.quote;
-  const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261);
+  const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261) || access?.status !== "ready";
+  async function signIn() {
+    if (!wallet.address || signingIn) return;
+    setSigningIn(true);
+    try {
+      const result = await signInLibraryStudent(wallet.address, (account, message) => walletController.signMessage(account, message));
+      setAccess(result);
+    } catch (error) {
+      setAccess({ status: "error", code: error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] });
+    } finally { setSigningIn(false); }
+  }
+  async function refreshAccess() {
+    if (!wallet.address) return;
+    setAccess(await readLibraryStudentAccess(wallet.address));
+  }
   return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>
     <h4 id={`${id}-title`}>Thanh toán bằng ví sinh viên</h4>
     <p>Core sẽ yêu cầu xác nhận giao dịch tới payment registry. Gas được tính riêng.</p>
@@ -67,6 +96,18 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
       <div className="price-row"><dt>Ưu đãi hiện tại</dt><dd>{formatWalletBalance(quote.discountAmount)}</dd></div>
     </dl> : null}
     {setupError ? <p className="wallet-warning" role="alert">{setupError}</p> : null}
+    {access?.status !== "ready" ? <div className="wallet-warning" role={access?.status === "held" || access?.status === "error" ? "alert" : "status"}>
+      <p>{access?.status === "held" ? librarySessionMessage("ACCOUNT_HELD")
+        : access?.status === "error" ? librarySessionMessage(access.code)
+          : access?.status === "sign-in-required" ? librarySessionMessage("UNAUTHENTICATED") : "Đang kiểm tra session và Library hold…"}</p>
+      {access?.status === "held" ? <p>Mã khoản mượn đang chặn: {access.accountStatus.blockingLoanIds.join(", ") || "chưa có"}</p> : null}
+      <div className="inline-actions">
+        {access?.status === "sign-in-required" || access?.status === "error" ? <button type="button" className="secondary-btn"
+          disabled={!wallet.address || wallet.chainId !== BigInt(20261) || signingIn}
+          onClick={() => void signIn()}>{signingIn ? "Đang chờ ký trong Core…" : "Đăng nhập bằng ví sinh viên"}</button> : null}
+        <button type="button" className="secondary-btn" disabled={!wallet.address || signingIn} onClick={() => void refreshAccess()}>Kiểm tra session và hold</button>
+      </div>
+    </div> : null}
     {payment?.message ? <p className="wallet-status" role="status">{payment.message}</p> : null}
     {payment?.txHash ? <><p>Tx hash</p><code className="tx-hash-code">{payment.txHash}</code>
       <CopyButton label="Sao chép hash thanh toán" value={payment.txHash} /></> : null}

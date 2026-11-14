@@ -52,6 +52,7 @@ function mockRpc(overrides: Record<string, unknown> = {}, calls: Array<{ method:
 }
 function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: GrantSender["sendTransactionWithGuard"]; db?: Map<string, string>;
   beforeBoundary?: () => Promise<void>;
+  accountGuard?: (account: string) => Promise<void>;
   store?: Pick<Storage, "getItem" | "setItem" | "removeItem">; lock?: (name: string, run: () => Promise<void>) => Promise<void> } = {}) {
   const db = options.db ?? new Map<string, string>();
   const store = options.store ?? { getItem: (key: string) => db.get(key) ?? null, setItem: (key: string, value: string) => { db.set(key, value); }, removeItem: (key: string) => { db.delete(key); } };
@@ -65,7 +66,8 @@ function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: Gran
     return options.send ? options.send(account, tx, beforeBroadcast) : hash;
   } };
   const fetcher: typeof fetch = options.fetcher ?? (async (url) => response(body(BigInt(4000) * unit, String(url).includes("txHash") ? "verified" : "none")));
-  const controller = new GrantController({ config, rpc: options.rpc ?? mockRpc(), wallet, storage: store, fetcher, lock: options.lock ?? (async (_name, run) => run()), pollMs: 100_000 });
+  const controller = new GrantController({ config, rpc: options.rpc ?? mockRpc(), wallet, storage: store, fetcher,
+    accountGuard: options.accountGuard, lock: options.lock ?? (async (_name, run) => run()), pollMs: 100_000 });
   return { controller, db, walletState, sends: () => sends };
 }
 
@@ -170,6 +172,21 @@ test("a sender without the guarded broadcast API cannot open a wallet request", 
   fetcher: async () => response(body()), lock: async (_name, run) => run() });
   t.after(() => h.dispose()); await h.bindWallet(beneficiary); await h.spend(amount);
   assert.equal(sends, 0);
+});
+
+test("Library account guard blocks held and unauthenticated students before grant lookup or wallet signing", async (t) => {
+  for (const code of ["ACCOUNT_HELD", "UNAUTHENTICATED"] as const) {
+    let lookups = 0;
+    const h = harness({ fetcher: async () => { lookups++; return response(body()); },
+      accountGuard: async () => { throw new GrantUiError(code); } });
+    t.after(() => h.controller.dispose());
+    await h.controller.bindWallet(beneficiary);
+    const before = lookups;
+    await h.controller.spend(amount);
+    assert.equal(lookups, before, "the fresh Library gate runs before the grant lookup");
+    assert.equal(h.sends(), 0);
+    assert.equal(h.controller.getSnapshot().errorCode, code);
+  }
 });
 
 test("failure to save the unknown boundary prevents provider submission and only removes the prepared intent", async (t) => {

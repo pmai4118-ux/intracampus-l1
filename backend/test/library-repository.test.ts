@@ -300,6 +300,44 @@ test("verified event replay is idempotent and a chain event key cannot confirm a
     { message: "LIBRARY_EVENT_CONFLICT" });
 });
 
+test("a librarian can refund a verified no-copy deposit through the reject event and queue", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const first = `0x${"61".repeat(32)}`, noCopy = `0x${"62".repeat(32)}`;
+  repository.createDepositRequest({ requestId: first, wallet: studentA, bookId, idempotencyKey: "no-copy-first",
+    createdAt: 100, chainTime: 100, holdAfterSeconds: 2_592_000 });
+  repository.createDepositRequest({ requestId: noCopy, wallet: studentB, bookId, idempotencyKey: "no-copy-second",
+    createdAt: 100, chainTime: 100, holdAfterSeconds: 2_592_000 });
+  repository.recordVerifiedDeposit(deposit(first, studentA, "a1"));
+  assert.equal(repository.recordVerifiedDeposit(deposit(noCopy, studentB, "b2")).status, "REJECTED_NO_COPY");
+  assert.deepEqual(repository.listRequests(librarian, true).map((request) => request.requestId).sort(), [first, noCopy]);
+
+  const rejected = { chainId: 20261 as const, contractAddress: "0x4444444444444444444444444444444444444444",
+    txHash: `0x${"63".repeat(32)}`, logIndex: 0, blockNumber: 124, blockHash: `0x${"64".repeat(32)}`,
+    blockTimestamp: 200, transactionFrom: librarian, observedAt: 200, eventName: "RequestRejected" as const,
+    requestId: noCopy, borrower: studentB, refundWei: depositWei };
+  repository.recordVerifiedChainEvents([rejected], 124, 200, "{}");
+
+  assert.deepEqual(repository.listRequests(librarian, true).map((request) => request.requestId), [first]);
+  assert.deepEqual(repository.getRequest(noCopy), {
+    requestId: noCopy, wallet: studentB, bookId, copyId: null, status: "REJECTED", refundStatus: "REFUNDED",
+    depositWei, approvalDeadline: 1_800_000_000, createdAt: 100, updatedAt: 200,
+  });
+  assert.equal(repository.listBooks()[0].copiesAvailable, 0, "no-copy refund must not release another request's copy");
+});
+
+test("idempotency keys are limited by the 8 KB request body rather than an undocumented 200-character cap", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const request = repository.createDepositRequest({ requestId: `0x${"65".repeat(32)}`, wallet: studentA, bookId,
+    idempotencyKey: "k".repeat(201), createdAt: 100, chainTime: 100, holdAfterSeconds: 2_592_000 });
+  assert.equal(request.status, "AWAITING_DEPOSIT");
+});
+
 test("reconcile skips untracked logs, atomically advances after projections, and applies approval before late expiry", (t) => {
   const env = setup();
   const repository = new LibraryRepository(env.path);

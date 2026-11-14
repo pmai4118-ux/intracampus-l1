@@ -17,6 +17,12 @@ const rangesPerPass = 10;
 const maxLogsPerRange = 2000;
 const canonicalityBatch = 200;
 
+function tooManyLogs(error: unknown): boolean {
+  const value = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
+  return value.code === -32005 || value.code === "-32005"
+    || (typeof value.message === "string" && /too many|more than \d+ results|response size exceeded/i.test(value.message));
+}
+
 export class LibraryReconciler {
   private readonly repository: LibraryRepository;
   private readonly rpc: LibraryRpcClient;
@@ -76,33 +82,9 @@ export class LibraryReconciler {
     while (cursor < chain.safeBlock && passes < rangesPerPass) {
       const fromBlock = cursor + 1;
       const toBlock = Math.min(chain.safeBlock, fromBlock + logRange - 1);
-      let logs;
-      try {
-        logs = await this.rpc.getLogs({ address: this.deployment.escrow.address, fromBlock, toBlock,
-          topics: [this.verifier.lifecycleTopics()] });
-      } catch { throw new LibraryChainError("RPC_UNAVAILABLE"); }
-      if (logs.length > maxLogsPerRange) throw new LibraryChainError("RPC_UNAVAILABLE");
-      const events = [];
-      try {
-        for (const log of logs) {
-          const event = await this.verifier.verify(log, chain.safeBlock, chain.checkedAt);
-          if (event) events.push(event);
-        }
-      } catch (error) {
-        if (error instanceof LibraryChainError) throw error;
-        if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
-        throw new LibraryChainError("RPC_UNAVAILABLE");
-      }
-      try {
-        const result = this.repository.recordVerifiedChainEvents(events, toBlock, chain.checkedAt,
-          JSON.stringify(this.deployment.policy));
-        applied += result.applied;
-        ignored += result.ignored;
-      } catch (error) {
-        if (error instanceof Error && error.message === "LIBRARY_REORG_DETECTED") throw new LibraryChainError("STALE_CHAIN_STATE");
-        if (error instanceof Error && error.message === "LIBRARY_DATABASE_BUSY") throw error;
-        throw new LibraryChainError("RPC_UNAVAILABLE");
-      }
+      const result = await this.reconcileLogRange(fromBlock, toBlock, chain);
+      applied += result.applied;
+      ignored += result.ignored;
       cursor = toBlock;
       passes++;
     }
@@ -116,14 +98,21 @@ export class LibraryReconciler {
     let candidates = this.repository.eventCanonicalityCandidates(canonicalityBatch, cursor);
     if (candidates.length === 0 && cursor > 0) candidates = this.repository.eventCanonicalityCandidates(canonicalityBatch, 0);
     if (candidates.length === 0) return;
+    const blockNumbers = [...new Set(candidates.map((candidate) => candidate.blockNumber))];
+    if (blockNumbers.some((blockNumber) => blockNumber > chain.safeBlock)) throw new LibraryChainError("STALE_CHAIN_STATE");
     const blockHashes = new Map<number, string>();
-    for (const candidate of candidates) {
-      if (candidate.blockNumber > chain.safeBlock) throw new LibraryChainError("STALE_CHAIN_STATE");
-      if (!blockHashes.has(candidate.blockNumber)) {
-        const block = await this.rpc.getBlock(candidate.blockNumber);
+    try {
+      const blocks = await Promise.all(blockNumbers.map((blockNumber) => this.rpc.getBlock(blockNumber)));
+      for (const [index, block] of blocks.entries()) {
         if (!block?.hash) throw new LibraryChainError("RPC_UNAVAILABLE");
-        blockHashes.set(candidate.blockNumber, block.hash.toLowerCase());
+        blockHashes.set(blockNumbers[index], block.hash.toLowerCase());
       }
+    } catch (error) {
+      if (error instanceof LibraryChainError) throw error;
+      if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
+      throw new LibraryChainError("RPC_UNAVAILABLE");
+    }
+    for (const candidate of candidates) {
       const observedHash = blockHashes.get(candidate.blockNumber)!;
       if (observedHash !== candidate.blockHash.toLowerCase()) {
         this.repository.markEventOrphaned({ eventId: candidate.eventId, observedBlockHash: observedHash, checkedAt: chain.checkedAt });
@@ -131,6 +120,49 @@ export class LibraryReconciler {
       }
     }
     this.repository.advanceCanonicalityCursor(candidates[candidates.length - 1].eventId);
+  }
+
+  private async reconcileLogRange(fromBlock: number, toBlock: number, chain: TrustedLibraryChain): Promise<{ applied: number; ignored: number }> {
+    let logs;
+    try {
+      logs = await this.rpc.getLogs({ address: this.deployment.escrow.address, fromBlock, toBlock,
+        topics: [this.verifier.lifecycleTopics()] });
+    } catch (error) {
+      if (!tooManyLogs(error) || fromBlock === toBlock) {
+        if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
+        throw new LibraryChainError("RPC_UNAVAILABLE");
+      }
+      const midpoint = Math.floor((fromBlock + toBlock) / 2);
+      const left = await this.reconcileLogRange(fromBlock, midpoint, chain);
+      const right = await this.reconcileLogRange(midpoint + 1, toBlock, chain);
+      return { applied: left.applied + right.applied, ignored: left.ignored + right.ignored };
+    }
+    if (logs.length > maxLogsPerRange && fromBlock < toBlock) {
+      const midpoint = Math.floor((fromBlock + toBlock) / 2);
+      const left = await this.reconcileLogRange(fromBlock, midpoint, chain);
+      const right = await this.reconcileLogRange(midpoint + 1, toBlock, chain);
+      return { applied: left.applied + right.applied, ignored: left.ignored + right.ignored };
+    }
+    logs.sort((left, right) => left.blockNumber - right.blockNumber || left.index - right.index);
+    const events = [];
+    try {
+      for (const log of logs) {
+        const event = await this.verifier.verify(log, chain.safeBlock, chain.checkedAt);
+        if (event) events.push(event);
+      }
+    } catch (error) {
+      if (error instanceof LibraryChainError) throw error;
+      if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
+      throw new LibraryChainError("RPC_UNAVAILABLE");
+    }
+    try {
+      return this.repository.recordVerifiedChainEvents(events, toBlock, chain.checkedAt,
+        JSON.stringify(this.deployment.policy));
+    } catch (error) {
+      if (error instanceof Error && error.message === "LIBRARY_REORG_DETECTED") throw new LibraryChainError("STALE_CHAIN_STATE");
+      if (error instanceof Error && error.message === "LIBRARY_DATABASE_BUSY") throw error;
+      throw new LibraryChainError("RPC_UNAVAILABLE");
+    }
   }
 
   get verifierInstance(): LibraryReceiptVerifier { return this.verifier; }

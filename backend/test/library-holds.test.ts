@@ -71,3 +71,52 @@ test("overdue admission uses the strict retention boundary and blocks under the 
     held: true, checkedAt: boundary + 1, blockingLoanIds: [historicalRequestId],
   });
 });
+
+test("overdue hold remains through physical return review and releases only on verified settlement", (t) => {
+  const { repository, cleanup } = setup();
+  t.after(cleanup);
+  const requestId = `0x${"34".repeat(32)}`;
+  const depositedAt = 1_700_000_000, approvedAt = depositedAt + 1;
+  const dueAt = approvedAt + 1_209_600, returnAt = dueAt + retentionSeconds + 1;
+  const common = { chainId: 20261 as const, contractAddress: "0x4444444444444444444444444444444444444444",
+    logIndex: 0, observedAt: returnAt };
+  repository.createDepositRequest({ requestId, wallet: student, bookId, idempotencyKey: "overdue-return-settlement",
+    createdAt: depositedAt - 1, chainTime: depositedAt - 1, holdAfterSeconds: retentionSeconds });
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"71".repeat(32)}`, blockNumber: 10, blockHash: `0x${"81".repeat(32)}`,
+    blockTimestamp: depositedAt, transactionFrom: student, eventName: "DepositReceived", requestId, borrower: student,
+    bookId, amountWei: depositWei, depositedAt, approvalDeadline: depositedAt + 86_400,
+  }], 10, returnAt, "{}");
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"72".repeat(32)}`, blockNumber: 11, blockHash: `0x${"82".repeat(32)}`,
+    blockTimestamp: approvedAt, transactionFrom: librarian, eventName: "LoanApproved", requestId, borrower: student,
+    approvedAt, dueAt, replacementPriceWei: priceWei,
+  }], 11, returnAt, "{}");
+  assert.equal(repository.accountStatus(student, returnAt, retentionSeconds).held, true);
+
+  const requested = repository.requestReturn({ loanId: requestId, wallet: student, requestedAt: returnAt });
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"73".repeat(32)}`, blockNumber: 12, blockHash: `0x${"83".repeat(32)}`,
+    blockTimestamp: returnAt, transactionFrom: librarian, eventName: "PhysicalReturnConfirmed", requestId, borrower: student,
+    returnedAt: returnAt,
+  }], 12, returnAt, "{}");
+  assert.equal(repository.getRequest(requestId)?.status, "SETTLEMENT_PENDING");
+  assert.equal(repository.accountStatus(student, returnAt, retentionSeconds).held, true,
+    "physical receipt must not clear the hold while refund/forfeit remains unsettled");
+  assert.deepEqual(repository.requestReturn({ loanId: requestId, wallet: student, requestedAt: returnAt + 10 }), requested,
+    "retries return the original request after physical return has advanced the loan state");
+
+  repository.createSettlementIntent({ intentId: "return-settlement-1", loanId: requestId, librarianWallet: librarian,
+    outcome: "RETURNED", condition: "GOOD", reason: "Verified overdue return", repairRequestedWei: "0", createdAt: returnAt });
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"74".repeat(32)}`, blockNumber: 13, blockHash: `0x${"84".repeat(32)}`,
+    blockTimestamp: returnAt + 1, transactionFrom: librarian, eventName: "ReturnSettled", requestId, borrower: student,
+    returnedAt: returnAt, lateFeeWei: "0", repairFeeWei: "0", overdueForfeitWei: depositWei,
+    totalRetainedWei: depositWei, refundWei: "0", maintenanceRequired: false,
+  }], 13, returnAt + 1, "{}");
+  assert.equal(repository.getRequest(requestId)?.status, "RETURNED");
+  assert.equal(repository.accountStatus(student, returnAt + 1, retentionSeconds).held, false,
+    "the overdue hold releases after the verified settlement transition");
+  assert.deepEqual(repository.requestReturn({ loanId: requestId, wallet: student, requestedAt: returnAt + 20 }), requested,
+    "the original return request remains idempotent after settlement");
+});

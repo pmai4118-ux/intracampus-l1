@@ -27,7 +27,7 @@ export class HttpLibraryRpc implements LibraryRpcClient {
       if (!(parsed.protocol === "https:" || parsed.protocol === "http:") || parsed.username || parsed.password) throw new Error();
       const request = new FetchRequest(parsed.href);
       request.timeout = 5000;
-      this.provider = new JsonRpcProvider(request, 20261, { staticNetwork: true, cacheTimeout: -1, batchMaxCount: 1 });
+      this.provider = new JsonRpcProvider(request, 20261, { staticNetwork: true, cacheTimeout: -1, batchMaxCount: 100 });
     } catch { throw new LibraryRpcError(); }
   }
   async getNetwork(): Promise<{ chainId: bigint }> {

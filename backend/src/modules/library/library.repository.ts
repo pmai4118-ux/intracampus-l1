@@ -301,7 +301,7 @@ export class LibraryRepository {
     const wallet = canonicalWallet(input.wallet);
     const bookId = canonicalBytes32(input.bookId, "INVALID_LIBRARY_BOOK_ID");
     safeInteger(input.createdAt, "INVALID_LIBRARY_TIMESTAMP");
-    if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200) throw new Error("INVALID_LIBRARY_IDEMPOTENCY_KEY");
+    if (!input.idempotencyKey.trim()) throw new Error("INVALID_LIBRARY_IDEMPOTENCY_KEY");
     safeInteger(input.chainTime, "INVALID_LIBRARY_TIMESTAMP");
     safeInteger(input.holdAfterSeconds, "INVALID_LIBRARY_HOLD_POLICY", 1);
     beginImmediate(this.db);
@@ -321,7 +321,7 @@ export class LibraryRepository {
       const holdAfterSeconds = input.holdAfterSeconds;
       this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
         SELECT l.account_id, l.loan_id, 'OVERDUE', ? FROM loans l
-        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED') AND ? > l.due_at + ?
+        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED', 'SETTLEMENT_PENDING') AND ? > l.due_at + ?
         ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`)
         .run(chainTime, accountId, chainTime, holdAfterSeconds);
       this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
@@ -329,7 +329,7 @@ export class LibraryRepository {
         WHERE l.account_id = ? AND l.status = 'LOST_SHORTFALL_DUE'
         ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, accountId);
       this.db.prepare(`UPDATE account_holds SET released_at = ? WHERE account_id = ? AND released_at IS NULL AND (
-        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED'))
+        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED', 'SETTLEMENT_PENDING'))
         OR (hold_type = 'LOST_SHORTFALL' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) <> 'LOST_SHORTFALL_DUE'))`)
         .run(chainTime, accountId);
       const blockingHold = this.db.prepare(`SELECT 1 AS found FROM account_holds h
@@ -576,10 +576,12 @@ export class LibraryRepository {
             break;
           }
           case "RequestRejected": {
-            if (request.status !== "PENDING_APPROVAL" || request.copy_id === null || String(request.deposit_wei) !== event.refundWei) {
+            const hasHeldCopy = request.status === "PENDING_APPROVAL" && request.copy_id !== null;
+            const isNoCopyRefund = request.status === "REJECTED_NO_COPY" && request.copy_id === null;
+            if ((!hasHeldCopy && !isNoCopyRefund) || String(request.deposit_wei) !== event.refundWei) {
               throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
             }
-            releaseCopy(request.copy_id, "PENDING_APPROVAL");
+            if (hasHeldCopy) releaseCopy(request.copy_id!, "PENDING_APPROVAL");
             this.db.prepare("UPDATE borrow_requests SET status = 'REJECTED', refund_status = 'REFUNDED', updated_at = ? WHERE request_id = ?")
               .run(event.blockTimestamp, event.requestId);
             break;
@@ -852,7 +854,8 @@ export class LibraryRepository {
     const wallet = canonicalWallet(walletInput);
     const rows = queue
       ? this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
-        WHERE r.status = 'PENDING_APPROVAL' AND r.copy_id IS NOT NULL ORDER BY r.created_at, r.request_id`).all()
+        WHERE (r.status = 'PENDING_APPROVAL' AND r.copy_id IS NOT NULL)
+          OR (r.status = 'REJECTED_NO_COPY' AND r.copy_id IS NULL) ORDER BY r.created_at, r.request_id`).all()
       : this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE a.wallet = ? COLLATE NOCASE ORDER BY r.created_at DESC, r.request_id`).all(wallet);
     return rows.map((row) => rowToRequest(row)!).filter(Boolean);
@@ -961,7 +964,7 @@ export class LibraryRepository {
       const loan = this.db.prepare(`SELECT l.request_id, l.status, l.return_requested_at, a.wallet, a.account_id
         FROM loans l JOIN accounts a USING(account_id) WHERE l.loan_id = ?`).get(loanId);
       if (!loan || String(loan.wallet).toLowerCase() !== wallet) throw new Error("LIBRARY_REQUEST_NOT_FOUND");
-      if (loan.status === "RETURN_REQUESTED" && loan.return_requested_at !== null) {
+      if (loan.return_requested_at !== null) {
         this.db.exec("COMMIT");
         return { loanId, requestId: String(loan.request_id), status: "RETURN_REQUESTED", requestedAt: Number(loan.return_requested_at) };
       }
@@ -1016,14 +1019,14 @@ export class LibraryRepository {
       if (!account) throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
       this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
         SELECT l.account_id, l.loan_id, 'OVERDUE', ? FROM loans l
-        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED') AND ? > l.due_at + ?
+        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED', 'SETTLEMENT_PENDING') AND ? > l.due_at + ?
         ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, Number(account.account_id), chainTime, holdAfterSeconds);
       this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
         SELECT l.account_id, l.loan_id, 'LOST_SHORTFALL', ? FROM loans l
         WHERE l.account_id = ? AND l.status = 'LOST_SHORTFALL_DUE'
         ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, Number(account.account_id));
       this.db.prepare(`UPDATE account_holds SET released_at = ? WHERE account_id = ? AND released_at IS NULL AND (
-        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED'))
+        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED', 'SETTLEMENT_PENDING'))
         OR (hold_type = 'LOST_SHORTFALL' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) <> 'LOST_SHORTFALL_DUE'))`)
         .run(chainTime, Number(account.account_id));
       const rows = this.db.prepare(`SELECT DISTINCT h.loan_id FROM account_holds h

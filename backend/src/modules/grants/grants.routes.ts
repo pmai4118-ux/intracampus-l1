@@ -38,7 +38,9 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
         const accountStatus = await libraryService.accountStatus({
           wallet: session.account.wallet as `0x${string}`, role: session.account.role,
         });
-        if (accountStatus.held) {
+        // Held students cannot start grant activity; their own transaction hash
+        // remains readable so an already-sent spend can still be reconciled.
+        if (accountStatus.held && hash === undefined) {
           res.status(403).json({ status: "unverified", chainId: 20261, balanceWei: null,
             error: { code: "FORBIDDEN", retryable: false } });
           return;
