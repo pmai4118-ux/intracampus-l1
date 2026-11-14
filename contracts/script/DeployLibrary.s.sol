@@ -61,8 +61,10 @@ abstract contract LibraryScriptBase {
     }
 }
 
-/// @notice Deploy LibraryDepositEscrow and seed/seal initial book terms with an external Forge signer.
+/// @notice Deploy LibraryDepositEscrow and seed/seal initial book terms with a single Foundry signer.
 contract DeployLibrary is LibraryScriptBase {
+    error DistinctDeployerAndAdministratorUnsupported(address deployer, address administrator);
+
     struct Config {
         address deployer;
         address administrator;
@@ -80,15 +82,15 @@ contract DeployLibrary is LibraryScriptBase {
             treasury: vm.envAddress("LIBRARY_TREASURY_ADDRESS"),
             books: _loadBooksFromEnv()
         });
-        validate(config);
+        return runWithConfig(config);
+    }
+
+    function runWithConfig(Config memory config) public returns (LibraryDepositEscrow escrow) {
         if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        validate(config);
 
         vm.startBroadcast(config.deployer);
         escrow = new LibraryDepositEscrow(config.administrator, config.librarian, config.treasury);
-        if (config.administrator != config.deployer) {
-            vm.stopBroadcast();
-            vm.startBroadcast(config.administrator);
-        }
         for (uint256 i; i < config.books.length; ++i) {
             BookTermSeed memory book = config.books[i];
             escrow.seedBookTerms(book.bookId, book.depositWei, book.replacementPriceWei);
@@ -105,6 +107,9 @@ contract DeployLibrary is LibraryScriptBase {
                 || config.treasury == address(0)
         ) {
             revert InvalidDeploymentConfig();
+        }
+        if (config.administrator != config.deployer) {
+            revert DistinctDeployerAndAdministratorUnsupported(config.deployer, config.administrator);
         }
         if (
             config.treasury == config.deployer || config.treasury == config.administrator
@@ -144,6 +149,11 @@ contract SeedLibraryBooks is LibraryScriptBase {
         address escrowAddress = vm.envAddress("LIBRARY_ESCROW_ADDRESS");
         address administrator = vm.envAddress("LIBRARY_ADMIN_ADDRESS");
         BookTermSeed[] memory books = _loadBooksFromEnv();
+        runWithConfig(escrowAddress, administrator, books);
+    }
+
+    function runWithConfig(address escrowAddress, address administrator, BookTermSeed[] memory books) public {
+        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
         if (escrowAddress == address(0) || escrowAddress.code.length == 0 || administrator == address(0)) {
             revert InvalidDeploymentConfig();
         }

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -426,16 +426,65 @@ test("library template and export safety protect canonical deployments/intracamp
   const result = await exportLibraryDeployment({ contractsDir: dir, outputPath, template: true });
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), result);
 
+  // Allow ordinary nested destinations (including isolated temp junctions).
+  const nestedOutputPath = join(dir, "nested", "subdir", "library-deployment.json");
+  const nestedResult = await exportLibraryDeployment({ contractsDir: dir, outputPath: nestedOutputPath, template: true });
+  assert.deepEqual(JSON.parse(await readFile(nestedOutputPath, "utf8")), nestedResult);
+
+  const safeTargetDir = join(dir, "safe-target");
+  const safeAliasDir = join(dir, "safe-alias");
+  await mkdir(safeTargetDir, { recursive: true });
+  await symlink(safeTargetDir, safeAliasDir, process.platform === "win32" ? "junction" : "dir");
+  const aliasedAllowedPath = join(safeAliasDir, "nested", "library-deployment.json");
+  const aliasedAllowedResult = await exportLibraryDeployment({
+    contractsDir: dir,
+    outputPath: aliasedAllowedPath,
+    template: true,
+  });
+  assert.deepEqual(JSON.parse(await readFile(join(safeTargetDir, "nested", "library-deployment.json"), "utf8")), aliasedAllowedResult);
+
   // Refuse overwriting an existing deployed manifest without --replace.
   await writeFile(outputPath, JSON.stringify({ status: "deployed", library: { status: "deployed" } }));
   await assert.rejects(exportLibraryDeployment({ contractsDir: dir, outputPath, template: true }), /overwrite/);
 
-  // Refuse writing onto canonical deployments/intracampus.json.
+  // Refuse writing onto canonical deployments/intracampus.json directly or via junction/symlink aliases.
   const canonicalPath = resolve(root, "deployments/intracampus.json");
+  const canonicalBefore = await readFile(canonicalPath, "utf8");
   await assert.rejects(
     exportLibraryDeployment({ contractsDir: dir, outputPath: canonicalPath, template: true, replace: true }),
     /canonical/,
   );
+  assert.equal(await readFile(canonicalPath, "utf8"), canonicalBefore);
+
+  const canonicalAliasDir = join(dir, "deployments-alias");
+  try {
+    await symlink(resolve(root, "deployments"), canonicalAliasDir, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    if (process.platform === "win32" && ["EPERM", "ENOTSUP", "EINVAL"].includes(error?.code)) {
+      await symlink(resolve(root, "deployments"), canonicalAliasDir, "dir");
+    } else {
+      throw error;
+    }
+  }
+  await assert.rejects(
+    exportLibraryDeployment({
+      contractsDir: dir,
+      outputPath: join(canonicalAliasDir, "intracampus.json"),
+      template: true,
+      replace: true,
+    }),
+    /canonical/,
+  );
+  await assert.rejects(
+    exportLibraryDeployment({
+      contractsDir: dir,
+      outputPath: join(canonicalAliasDir, "missing-subdir", "..", "intracampus.json"),
+      template: true,
+      replace: true,
+    }),
+    /canonical/,
+  );
+  assert.equal(await readFile(canonicalPath, "utf8"), canonicalBefore);
 
   // Refuse stale build artifact.
   await writeFile(join(dir, "src", `${LIBRARY_CONTRACT_NAME}.sol`), "changed after build");

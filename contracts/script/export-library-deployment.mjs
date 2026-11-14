@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { lstat, mkdir, readFile, readlink, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -598,16 +598,54 @@ export async function verifyLibraryBroadcast({ provider, broadcast, artifact, ar
   return manifest;
 }
 
-function isCanonicalDeploymentPath(targetPath) {
-  const canonical = resolve(root, "deployments/intracampus.json");
-  const resolved = resolve(targetPath);
-  if (process.platform === "win32") return resolved.toLowerCase() === canonical.toLowerCase();
-  return resolved === canonical;
+function normalizePathForComparison(targetPath) {
+  const withoutExtendedPrefix = process.platform === "win32" ? targetPath.replace(/^\\\\\?\\/, "") : targetPath;
+  return process.platform === "win32" ? withoutExtendedPrefix.toLowerCase() : withoutExtendedPrefix;
+}
+
+async function resolveCanonicalPath(targetPath) {
+  let current = resolve(targetPath);
+  const remainder = [];
+  for (let depth = 0; depth < 64; depth += 1) {
+    try {
+      const existingReal = await realpath(current);
+      return remainder.reduceRight((acc, segment) => join(acc, segment), existingReal);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      const linkStats = await lstat(current).catch((statErr) => {
+        if (statErr.code === "ENOENT") return null;
+        throw statErr;
+      });
+      if (linkStats?.isSymbolicLink()) {
+        const linkTarget = await readlink(current);
+        current = resolve(dirname(current), linkTarget);
+        continue;
+      }
+      const parent = dirname(current);
+      if (parent === current) {
+        return remainder.reduceRight((acc, segment) => join(acc, segment), current);
+      }
+      remainder.push(basename(current));
+      current = parent;
+    }
+  }
+  throw new Error(`Exceeded symlink resolution depth for ${targetPath}`);
+}
+
+async function isCanonicalDeploymentPath(targetPath) {
+  const [canonical, resolved] = await Promise.all([
+    resolveCanonicalPath(resolve(root, "deployments/intracampus.json")),
+    resolveCanonicalPath(targetPath),
+  ]);
+  return normalizePathForComparison(resolved) === normalizePathForComparison(canonical);
 }
 
 async function saveManifest(outputPath, manifest, replace) {
   const resolved = resolve(outputPath);
-  assert(!isCanonicalDeploymentPath(resolved), "Refusing to write onto canonical deployments/intracampus.json");
+  assert(
+    !(await isCanonicalDeploymentPath(resolved)),
+    "Refusing to write onto canonical deployments/intracampus.json",
+  );
   try {
     const previous = JSON.parse(await readFile(resolved, "utf8"));
     assert(

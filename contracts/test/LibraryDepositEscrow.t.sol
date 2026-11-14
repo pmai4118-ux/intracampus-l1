@@ -65,7 +65,7 @@ contract ReenteringBorrower {
     }
 
     receive() external payable {
-        (,,,,,,, observedState,) = escrow.requestInfo(requestId);
+        (,,,,,,, observedState,,) = escrow.requestInfo(requestId);
         bytes memory data;
         if (mode == Mode.REJECT) {
             (reentrySucceeded, data) = address(escrow).call(abi.encodeCall(escrow.reject, (requestId)));
@@ -107,7 +107,7 @@ contract ReenteringTreasury {
     }
 
     receive() external payable {
-        (,,,,,,, observedState,) = escrow.requestInfo(requestId);
+        (,,,,,,, observedState,,) = escrow.requestInfo(requestId);
         bytes memory data;
         if (mode == Mode.SETTLE_RETURN) {
             (reentrySucceeded, data) = address(escrow).call(abi.encodeCall(escrow.settleReturn, (requestId, 0)));
@@ -311,12 +311,13 @@ contract LibraryDepositEscrowTest {
             uint64 approvedAt,
             uint64 dueAt,
             uint8 state,
-            uint256 shortfall
+            uint256 shortfall,
+            uint64 returnReceivedAt
         ) = escrow.requestInfo(req1);
         require(
             borrower == BORROWER && bookId == BOOK_EXACT && dep == DEPOSIT_WEI && price == 50 ether
                 && depositedAt == uint64(block.timestamp) && approvedAt == 0 && dueAt == 0 && state == 1
-                && shortfall == 0,
+                && shortfall == 0 && returnReceivedAt == 0,
             "deposited snapshot"
         );
         require(address(escrow).balance == DEPOSIT_WEI, "escrow balance");
@@ -336,6 +337,8 @@ contract LibraryDepositEscrowTest {
         // Return-settled request cannot be reused either.
         bytes32 req2 = keccak256("REQ-2");
         _depositAndApprove(req2, BOOK_CHEAP, BORROWER);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(req2);
         vm.prank(LIBRARIAN);
         escrow.settleReturn(req2, 0);
         vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.RequestAlreadyUsed.selector, req2));
@@ -370,8 +373,12 @@ contract LibraryDepositEscrowTest {
                 vm.prank(LIBRARIAN);
                 escrow.approve(reqId);
 
-                (,,,,, uint64 approvedAt, uint64 dueAt, uint8 state,) = escrow.requestInfo(reqId);
-                require(approvedAt == uint64(targetTs) && dueAt == expectedDue && state == 2, "approved");
+                (,,,,, uint64 approvedAt, uint64 dueAt, uint8 state,, uint64 returnReceivedAt) =
+                    escrow.requestInfo(reqId);
+                require(
+                    approvedAt == uint64(targetTs) && dueAt == expectedDue && state == 2 && returnReceivedAt == 0,
+                    "approved"
+                );
             } else {
                 require(refundClaimAllowed, "fixture expectation");
                 vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.ApprovalWindowExpired.selector, deadline));
@@ -387,7 +394,7 @@ contract LibraryDepositEscrowTest {
 
                 require(BORROWER.balance == borrowerBefore + DEPOSIT_WEI, "refunded original borrower");
                 require(OTHER_USER.balance == claimantBefore, "claimant cannot divert");
-                (,,,,,,, uint8 state,) = escrow.requestInfo(reqId);
+                (,,,,,,, uint8 state,,) = escrow.requestInfo(reqId);
                 require(state == 3, "refunded state");
             }
         }
@@ -482,6 +489,17 @@ contract LibraryDepositEscrowTest {
         uint256 treasuryBefore = TREASURY.balance;
         uint256 borrowerBefore = BORROWER.balance;
 
+        {
+            vm.expectEmit(true, true, false, true, address(escrow));
+            emit LibraryDepositEscrow.PhysicalReturnConfirmed(reqId, BORROWER, returnedAt);
+            vm.prank(LIBRARIAN);
+            escrow.confirmPhysicalReturn(reqId);
+
+            (,,,,,,, uint8 confirmState,, uint64 returnReceivedAt) = escrow.requestInfo(reqId);
+            require(confirmState == 7 && returnReceivedAt == returnedAt, "RETURN_RECEIVED stored");
+            require(TREASURY.balance == treasuryBefore && BORROWER.balance == borrowerBefore, "confirm moves no funds");
+        }
+
         vm.expectEmit(true, true, false, true, address(escrow));
         emit LibraryDepositEscrow.ReturnSettled(
             reqId,
@@ -500,8 +518,10 @@ contract LibraryDepositEscrowTest {
         require(TREASURY.balance - treasuryBefore == v.expectedRetained, "treasury return delta");
         require(BORROWER.balance - borrowerBefore == v.expectedRefund, "borrower return delta");
         require(address(escrow).balance == 0, "escrow cleared");
-        (,,,,,,, uint8 state,) = escrow.requestInfo(reqId);
-        require(state == 4, "RETURN_SETTLED");
+        {
+            (,,,,,,, uint8 state,, uint64 settledReturnAt) = escrow.requestInfo(reqId);
+            require(state == 4 && settledReturnAt == returnedAt, "RETURN_SETTLED");
+        }
 
         // Cannot settle twice.
         vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqId, uint8(4)));
@@ -509,16 +529,123 @@ contract LibraryDepositEscrowTest {
         escrow.settleReturn(reqId, 0);
     }
 
+    function testConfirmPhysicalReturnFreezesLateFeesAndExcludesLost() public {
+        string memory json = _fixture();
+        uint256 returnedElapsed = vm.parseJsonUint(json, ".returnTimingVectors[0].returnedAtElapsedSinceDueSeconds");
+        uint256 settleElapsed = vm.parseJsonUint(json, ".returnTimingVectors[0].settlementAtElapsedSinceDueSeconds");
+        uint256 expectedLate = vm.parseJsonUint(json, ".returnTimingVectors[0].expectedLateFeeWei");
+        uint256 expectedRefund = vm.parseJsonUint(json, ".returnTimingVectors[0].expectedRefundWei");
+        uint256 expectedForfeit = vm.parseJsonUint(json, ".returnTimingVectors[0].expectedOverdueForfeitWei");
+
+        // 1. Confirm physical return on exact day 30; settle at day 30 + 1 sec (late fees remain frozen at day 30).
+        bytes32 reqFrozen = keccak256("RETURN-TIMING-FREEZE");
+        (, uint64 dueAt) = _depositAndApprove(reqFrozen, BOOK_EXACT, BORROWER);
+        uint64 confirmedAt = uint64(uint256(dueAt) + returnedElapsed);
+        vm.warp(confirmedAt);
+
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit LibraryDepositEscrow.PhysicalReturnConfirmed(reqFrozen, BORROWER, confirmedAt);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqFrozen);
+
+        // Once confirmed returned: settleLost and duplicate confirmPhysicalReturn must revert.
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqFrozen, uint8(7)));
+        vm.prank(LIBRARIAN);
+        escrow.settleLost(reqFrozen);
+
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqFrozen, uint8(7)));
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqFrozen);
+
+        // Advance past day 30 (+ 1 sec and verify against fixture returnTimingVectors[0]).
+        vm.warp(uint256(dueAt) + settleElapsed);
+        uint256 treasuryBefore = TREASURY.balance;
+        uint256 borrowerBefore = BORROWER.balance;
+
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit LibraryDepositEscrow.ReturnSettled(
+            reqFrozen,
+            BORROWER,
+            confirmedAt,
+            expectedLate,
+            0,
+            expectedForfeit,
+            DEPOSIT_WEI - expectedRefund,
+            expectedRefund,
+            false
+        );
+        vm.prank(LIBRARIAN);
+        escrow.settleReturn(reqFrozen, 0);
+
+        require(BORROWER.balance - borrowerBefore == 47.3 ether, "frozen refund preserves 47.3 CAMPUS");
+        require(TREASURY.balance - treasuryBefore == 2.7 ether, "frozen late fee remains 2.7 CAMPUS");
+        (,,,,,,, uint8 frozenState,, uint64 storedReturnedAt) = escrow.requestInfo(reqFrozen);
+        require(frozenState == 4 && storedReturnedAt == confirmedAt, "settled with preserved returnReceivedAt");
+
+        // 2. Confirm AFTER day 30 retains full deposit regardless of settlement time.
+        bytes32 reqAfter30 = keccak256("RETURN-CONFIRMED-AFTER-30");
+        (, uint64 dueAt2) = _depositAndApprove(reqAfter30, BOOK_EXACT, BORROWER);
+        uint64 lateConfirmedAt = uint64(uint256(dueAt2) + 30 days + 1);
+        vm.warp(lateConfirmedAt);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqAfter30);
+        vm.warp(uint256(lateConfirmedAt) + 10 days);
+
+        treasuryBefore = TREASURY.balance;
+        borrowerBefore = BORROWER.balance;
+        vm.expectEmit(true, true, false, true, address(escrow));
+        emit LibraryDepositEscrow.ReturnSettled(
+            reqAfter30, BORROWER, lateConfirmedAt, 2.7 ether, 0, 47.3 ether, DEPOSIT_WEI, 0, false
+        );
+        vm.prank(LIBRARIAN);
+        escrow.settleReturn(reqAfter30, 0);
+        require(TREASURY.balance - treasuryBefore == DEPOSIT_WEI && BORROWER.balance == borrowerBefore, "full forfeit");
+
+        // 3. confirmPhysicalReturn role/replay/missing checks and direct settleReturn-from-ACTIVE rejection.
+        bytes32 reqActive = keccak256("ACTIVE-NO-CONFIRM");
+        _depositAndApprove(reqActive, BOOK_EXACT, BORROWER);
+
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
+        vm.prank(BORROWER);
+        escrow.confirmPhysicalReturn(reqActive);
+
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
+        vm.prank(ADMIN);
+        escrow.confirmPhysicalReturn(reqActive);
+
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
+        vm.prank(OTHER_USER);
+        escrow.confirmPhysicalReturn(reqActive);
+
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqActive, uint8(2)));
+        vm.prank(LIBRARIAN);
+        escrow.settleReturn(reqActive, 0);
+
+        // Once settled lost, confirmPhysicalReturn must revert.
+        vm.prank(LIBRARIAN);
+        escrow.settleLost(reqActive);
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqActive, uint8(6)));
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqActive);
+
+        bytes32 missingReq = keccak256("MISSING-CONFIRM");
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.RequestNotFound.selector, missingReq));
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(missingReq);
+    }
+
     function testReturnEarlyAndDamagedPastThirtyDaysPreservesMaintenanceAndCap() public {
         // Early return (before dueAt): zero fee, full refund.
         bytes32 reqEarly = keccak256("RETURN-EARLY");
         (uint64 approvedAt,) = _depositAndApprove(reqEarly, BOOK_EXACT, BORROWER);
         vm.warp(approvedAt + 1 days);
+        uint64 earlyReturnedAt = uint64(block.timestamp);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqEarly);
+
         uint256 borrowerBefore = BORROWER.balance;
         vm.expectEmit(true, true, false, true, address(escrow));
-        emit LibraryDepositEscrow.ReturnSettled(
-            reqEarly, BORROWER, uint64(block.timestamp), 0, 0, 0, 0, DEPOSIT_WEI, false
-        );
+        emit LibraryDepositEscrow.ReturnSettled(reqEarly, BORROWER, earlyReturnedAt, 0, 0, 0, 0, DEPOSIT_WEI, false);
         vm.prank(LIBRARIAN);
         escrow.settleReturn(reqEarly, 0);
         require(BORROWER.balance == borrowerBefore + DEPOSIT_WEI, "early full refund");
@@ -527,10 +654,14 @@ contract LibraryDepositEscrowTest {
         bytes32 reqOverdueDamaged = keccak256("RETURN-OVERDUE-DAMAGED");
         (, uint64 dueAt) = _depositAndApprove(reqOverdueDamaged, BOOK_EXACT, BORROWER);
         vm.warp(uint256(dueAt) + 30 days + 1);
+        uint64 overdueReturnedAt = uint64(block.timestamp);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqOverdueDamaged);
+
         uint256 treasuryBefore = TREASURY.balance;
         vm.expectEmit(true, true, false, true, address(escrow));
         emit LibraryDepositEscrow.ReturnSettled(
-            reqOverdueDamaged, BORROWER, uint64(block.timestamp), 2.7 ether, 0, 47.3 ether, DEPOSIT_WEI, 0, true
+            reqOverdueDamaged, BORROWER, overdueReturnedAt, 2.7 ether, 0, 47.3 ether, DEPOSIT_WEI, 0, true
         );
         vm.prank(LIBRARIAN);
         escrow.settleReturn(reqOverdueDamaged, 10 ether);
@@ -540,9 +671,13 @@ contract LibraryDepositEscrowTest {
         bytes32 reqVeryLate = keccak256("RETURN-VERY-LATE");
         (, uint64 dueAt2) = _depositAndApprove(reqVeryLate, BOOK_EXACT, BORROWER);
         vm.warp(uint256(dueAt2) + 400 days);
+        uint64 veryLateReturnedAt = uint64(block.timestamp);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqVeryLate);
+
         vm.expectEmit(true, true, false, true, address(escrow));
         emit LibraryDepositEscrow.ReturnSettled(
-            reqVeryLate, BORROWER, uint64(block.timestamp), 25 ether, 0, 25 ether, DEPOSIT_WEI, 0, false
+            reqVeryLate, BORROWER, veryLateReturnedAt, 25 ether, 0, 25 ether, DEPOSIT_WEI, 0, false
         );
         vm.prank(LIBRARIAN);
         escrow.settleReturn(reqVeryLate, 0);
@@ -554,11 +689,19 @@ contract LibraryDepositEscrowTest {
 
         vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
         vm.prank(BORROWER);
+        escrow.confirmPhysicalReturn(reqPending);
+
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
+        vm.prank(BORROWER);
         escrow.settleReturn(reqPending, 0);
 
         vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
         vm.prank(ADMIN);
         escrow.settleLost(reqPending);
+
+        vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqPending, uint8(1)));
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqPending);
 
         vm.expectRevert(abi.encodeWithSelector(LibraryDepositEscrow.InvalidRequestState.selector, reqPending, uint8(1)));
         vm.prank(LIBRARIAN);
@@ -598,7 +741,7 @@ contract LibraryDepositEscrowTest {
             require(BORROWER.balance - borrowerBefore == expectedRefund, "lost borrower refund");
             require(address(escrow).balance == 0, "escrow balance cleared");
 
-            (,,,,,,, uint8 state, uint256 storedShortfall) = escrow.requestInfo(reqId);
+            (,,,,,,, uint8 state, uint256 storedShortfall,) = escrow.requestInfo(reqId);
             require(storedShortfall == expectedShortfall, "stored shortfall");
 
             if (expectedShortfall == 0) {
@@ -642,7 +785,7 @@ contract LibraryDepositEscrowTest {
                 escrow.payShortfall{value: expectedShortfall}(reqId);
 
                 require(TREASURY.balance - treasuryBeforeShortfall == expectedShortfall, "treasury shortfall");
-                (,,,,,,, state, storedShortfall) = escrow.requestInfo(reqId);
+                (,,,,,,, state, storedShortfall,) = escrow.requestInfo(reqId);
                 require(state == 6 && storedShortfall == 0, "shortfall cleared");
 
                 // Replay payShortfall and settleReturn/settleLost revert.
@@ -676,7 +819,7 @@ contract LibraryDepositEscrowTest {
         );
         vm.prank(LIBRARIAN);
         escrow.reject(reqReject);
-        (,,,,,,, uint8 state,) = escrow.requestInfo(reqReject);
+        (,,,,,,, uint8 state,,) = escrow.requestInfo(reqReject);
         require(state == 1 && address(escrow).balance == DEPOSIT_WEI, "reject rolled back");
 
         // 2. claimExpiredRefund revert
@@ -688,7 +831,7 @@ contract LibraryDepositEscrowTest {
         );
         vm.prank(OTHER_USER);
         escrow.claimExpiredRefund(reqReject);
-        (,,,,,,, state,) = escrow.requestInfo(reqReject);
+        (,,,,,,, state,,) = escrow.requestInfo(reqReject);
         require(state == 1 && address(escrow).balance == DEPOSIT_WEI, "claim rolled back");
 
         // 3. settleReturn revert when borrower refund fails (treasury must NOT receive partial fee!)
@@ -697,14 +840,16 @@ contract LibraryDepositEscrowTest {
         escrow.deposit{value: DEPOSIT_WEI}(reqReturn, BOOK_EXACT);
         vm.prank(LIBRARIAN);
         escrow.approve(reqReturn);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqReturn);
         uint256 treasuryBefore = TREASURY.balance;
         vm.expectRevert(
             abi.encodeWithSelector(LibraryDepositEscrow.TransferFailed.selector, address(rejectingBorrower), 40 ether)
         );
         vm.prank(LIBRARIAN);
         escrow.settleReturn(reqReturn, 10 ether);
-        (,,,,,,, state,) = escrow.requestInfo(reqReturn);
-        require(state == 2 && TREASURY.balance == treasuryBefore, "settleReturn atomic rollback");
+        (,,,,,,, state,,) = escrow.requestInfo(reqReturn);
+        require(state == 7 && TREASURY.balance == treasuryBefore, "settleReturn atomic rollback");
 
         // 4. settleLost revert when borrower surplus refund fails
         bytes32 reqLost = keccak256("FAIL-LOST");
@@ -717,7 +862,7 @@ contract LibraryDepositEscrowTest {
         );
         vm.prank(LIBRARIAN);
         escrow.settleLost(reqLost);
-        (,,,,,,, state,) = escrow.requestInfo(reqLost);
+        (,,,,,,, state,,) = escrow.requestInfo(reqLost);
         require(state == 2 && TREASURY.balance == treasuryBefore, "settleLost atomic rollback");
     }
 
@@ -734,22 +879,29 @@ contract LibraryDepositEscrowTest {
         badEscrow.deposit{value: DEPOSIT_WEI}(reqReturn, BOOK_EXPENSIVE);
         vm.prank(LIBRARIAN);
         badEscrow.approve(reqReturn);
+        vm.prank(LIBRARIAN);
+        badEscrow.confirmPhysicalReturn(reqReturn);
         uint256 borrowerBefore = BORROWER.balance;
         vm.expectRevert(
             abi.encodeWithSelector(LibraryDepositEscrow.TransferFailed.selector, address(badTreasury), 10 ether)
         );
         vm.prank(LIBRARIAN);
         badEscrow.settleReturn(reqReturn, 10 ether);
-        (,,,,,,, uint8 state,) = badEscrow.requestInfo(reqReturn);
-        require(state == 2 && BORROWER.balance == borrowerBefore, "treasury return fail rollback");
+        (,,,,,,, uint8 state,,) = badEscrow.requestInfo(reqReturn);
+        require(state == 7 && BORROWER.balance == borrowerBefore, "treasury return fail rollback");
 
+        bytes32 reqLost = keccak256("TREASURY-FAIL-LOST");
+        vm.prank(BORROWER);
+        badEscrow.deposit{value: DEPOSIT_WEI}(reqLost, BOOK_EXPENSIVE);
+        vm.prank(LIBRARIAN);
+        badEscrow.approve(reqLost);
         vm.expectRevert(
             abi.encodeWithSelector(LibraryDepositEscrow.TransferFailed.selector, address(badTreasury), DEPOSIT_WEI)
         );
         vm.prank(LIBRARIAN);
-        badEscrow.settleLost(reqReturn);
-        (,,,,,,, state,) = badEscrow.requestInfo(reqReturn);
-        require(state == 2 && address(badEscrow).balance == DEPOSIT_WEI, "treasury lost fail rollback");
+        badEscrow.settleLost(reqLost);
+        (,,,,,,, state,,) = badEscrow.requestInfo(reqLost);
+        require(state == 2 && address(badEscrow).balance == 2 * DEPOSIT_WEI, "treasury lost fail rollback");
 
         // Shortfall payment revert when treasury rejects
         LibraryDepositEscrow goodEscrow = new LibraryDepositEscrow(ADMIN, LIBRARIAN, address(badTreasury));
@@ -763,7 +915,7 @@ contract LibraryDepositEscrowTest {
         goodEscrow.deposit{value: DEPOSIT_WEI}(reqReject, BOOK_EXPENSIVE);
         vm.prank(LIBRARIAN);
         goodEscrow.reject(reqReject);
-        (,,,,,,, state,) = goodEscrow.requestInfo(reqReject);
+        (,,,,,,, state,,) = goodEscrow.requestInfo(reqReject);
         require(state == 3, "reject independent of treasury");
     }
 
@@ -797,6 +949,8 @@ contract LibraryDepositEscrowTest {
         attacker.placeDeposit{value: DEPOSIT_WEI}(escrow, req3, BOOK_EXACT);
         vm.prank(LIBRARIAN);
         escrow.approve(req3);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(req3);
         attacker.arm(ReenteringBorrower.Mode.SETTLE_RETURN);
         vm.prank(LIBRARIAN);
         escrow.settleReturn(req3, 1 ether);
@@ -829,6 +983,8 @@ contract LibraryDepositEscrowTest {
         treasuryEscrow.deposit{value: DEPOSIT_WEI}(req5, BOOK_EXPENSIVE);
         vm.prank(LIBRARIAN);
         treasuryEscrow.approve(req5);
+        vm.prank(LIBRARIAN);
+        treasuryEscrow.confirmPhysicalReturn(req5);
         badTreasury.arm(treasuryEscrow, req5, ReenteringTreasury.Mode.SETTLE_RETURN);
         vm.prank(LIBRARIAN);
         treasuryEscrow.settleReturn(req5, 5 ether);
@@ -886,7 +1042,11 @@ contract LibraryDepositEscrowTest {
 
         bytes32 reqReturn = keccak256(abi.encodePacked("FUZZ-RET", elapsedAfterDue, repairRequestedWei));
         (, uint64 dueAt) = _depositAndApprove(reqReturn, fuzzBook, BORROWER);
-        vm.warp(uint256(dueAt) + uint256(elapsedAfterDue));
+        uint256 confirmAt = uint256(dueAt) + uint256(elapsedAfterDue);
+        vm.warp(confirmAt);
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(reqReturn);
+        vm.warp(confirmAt + (repairRequestedWei % 15 days) + 1);
 
         uint256 treasuryBefore = TREASURY.balance;
         uint256 borrowerBefore = BORROWER.balance;
@@ -896,6 +1056,8 @@ contract LibraryDepositEscrowTest {
         uint256 retained = TREASURY.balance - treasuryBefore;
         uint256 refunded = BORROWER.balance - borrowerBefore;
         require(retained + refunded == DEPOSIT_WEI, "return conserves deposit");
+        (,,,,,,, uint8 retState,, uint64 storedReturnedAt) = escrow.requestInfo(reqReturn);
+        require(retState == 4 && storedReturnedAt == uint64(confirmAt), "fuzz return preserves confirmation timestamp");
         if (uint256(elapsedAfterDue) > escrow.FULL_DEPOSIT_RETENTION_AFTER()) {
             require(retained == DEPOSIT_WEI && refunded == 0, "overdue retains full deposit");
         }
@@ -909,7 +1071,7 @@ contract LibraryDepositEscrowTest {
 
         retained = TREASURY.balance - treasuryBefore;
         refunded = BORROWER.balance - borrowerBefore;
-        (,,,,,,, uint8 state, uint256 shortfall) = escrow.requestInfo(reqLost);
+        (,,,,,,, uint8 state, uint256 shortfall,) = escrow.requestInfo(reqLost);
         require(retained + refunded == DEPOSIT_WEI, "lost deposit split conserves deposit");
         require(retained + shortfall == clampedPrice, "lost settlement matches replacement price");
         require(state == (shortfall > 0 ? 5 : 6), "lost state matches shortfall");
@@ -963,8 +1125,30 @@ contract LibraryDepositEscrowDeployTest {
         require(vm.getNonce(DEPLOYER) == nonce, "no deployment on wrong chain");
     }
 
+    function testDeployLibraryRefusesDistinctAdministratorBeforeBroadcast() public {
+        DeployLibrary.Config memory cfg = _validConfig();
+        cfg.administrator = LIBRARIAN;
+        uint64 nonce = vm.getNonce(DEPLOYER);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeployLibrary.DistinctDeployerAndAdministratorUnsupported.selector, DEPLOYER, LIBRARIAN
+            )
+        );
+        deployScript.runWithConfig(cfg);
+        require(vm.getNonce(DEPLOYER) == nonce, "no deployment when deployer != administrator");
+    }
+
     function testDeployLibraryRejectsInvalidRolesTreasuryAndTerms() public {
         DeployLibrary.Config memory cfg = _validConfig();
+        cfg.administrator = LIBRARIAN;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeployLibrary.DistinctDeployerAndAdministratorUnsupported.selector, DEPLOYER, LIBRARIAN
+            )
+        );
+        deployScript.validate(cfg);
+
+        cfg = _validConfig();
         cfg.treasury = address(0);
         vm.expectRevert(LibraryScriptBase.InvalidDeploymentConfig.selector);
         deployScript.validate(cfg);
@@ -992,23 +1176,31 @@ contract LibraryDepositEscrowDeployTest {
 
     function testSeedBooksRerunIsIdempotentAndRejectsMismatchedSealedTerms() public {
         LibraryDepositEscrow escrow = deployScript.run();
-        vm.setEnv("LIBRARY_ESCROW_ADDRESS", _toHexAddress(address(escrow)));
+        LibraryScriptBase.BookTermSeed[] memory books = new LibraryScriptBase.BookTermSeed[](2);
+        bytes32 book1 = bytes32(uint256(0x1111111111111111111111111111111111111111111111111111111111111111));
+        bytes32 book2 = bytes32(uint256(0x2222222222222222222222222222222222222222222222222222222222222222));
+        books[0] = LibraryScriptBase.BookTermSeed(book1, 50 ether, 30 ether);
+        books[1] = LibraryScriptBase.BookTermSeed(book2, 50 ether, 80 ether);
 
-        // Re-running with identical sealed terms emits zero transactions and succeeds.
+        // Re-running with identical sealed terms emits zero transactions and succeeds via env entrypoint.
+        vm.setEnv("LIBRARY_ESCROW_ADDRESS", _toHexAddress(address(escrow)));
         vm.recordLogs();
         seedScript.run();
         EscrowVm.Log[] memory logs = vm.getRecordedLogs();
         require(logs.length == 0, "idempotent rerun emits no events");
 
+        // Wrong signer/administrator must be rejected before broadcast.
+        vm.expectRevert(LibraryScriptBase.InvalidDeploymentConfig.selector);
+        seedScript.runWithConfig(address(escrow), LIBRARIAN, books);
+
         // Changing a sealed replacement price in config must fail closed without overwriting.
-        vm.setEnv("LIBRARY_BOOK_REPLACEMENT_PRICES_WEI", "31000000000000000000,80000000000000000000");
-        bytes32 book1 = bytes32(uint256(0x1111111111111111111111111111111111111111111111111111111111111111));
+        books[0].replacementPriceWei = 31 ether;
         vm.expectRevert(
             abi.encodeWithSelector(
                 SeedLibraryBooks.SealedBookTermsMismatch.selector, book1, 50 ether, 30 ether, 50 ether, 31 ether
             )
         );
-        seedScript.run();
+        seedScript.runWithConfig(address(escrow), DEPLOYER, books);
     }
 
     function _validConfig() private pure returns (DeployLibrary.Config memory) {

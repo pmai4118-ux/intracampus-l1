@@ -57,7 +57,7 @@ contract LibraryDepositEscrowHandler {
     function approve(uint256 indexSeed) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (,,,, uint64 depositedAt,,, uint8 state,) = escrow.requestInfo(requestId);
+        (,,,, uint64 depositedAt,,, uint8 state,,) = escrow.requestInfo(requestId);
         if (state != 1 || block.timestamp >= depositedAt + escrow.APPROVAL_WINDOW()) return;
         vm.prank(LIBRARIAN);
         escrow.approve(requestId);
@@ -66,7 +66,7 @@ contract LibraryDepositEscrowHandler {
     function reject(uint256 indexSeed) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (,,,,,,, uint8 state,) = escrow.requestInfo(requestId);
+        (,,,,,,, uint8 state,,) = escrow.requestInfo(requestId);
         if (state != 1) return;
         vm.prank(LIBRARIAN);
         escrow.reject(requestId);
@@ -75,17 +75,26 @@ contract LibraryDepositEscrowHandler {
     function claimExpiredRefund(uint256 indexSeed) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (,,,, uint64 depositedAt,,, uint8 state,) = escrow.requestInfo(requestId);
+        (,,,, uint64 depositedAt,,, uint8 state,,) = escrow.requestInfo(requestId);
         if (state != 1 || block.timestamp < depositedAt + escrow.APPROVAL_WINDOW()) return;
         vm.prank(CLAIMANT);
         escrow.claimExpiredRefund(requestId);
     }
 
+    function confirmPhysicalReturn(uint256 indexSeed) external {
+        if (requestIds.length == 0) return;
+        bytes32 requestId = requestIds[indexSeed % requestIds.length];
+        (,,,,,,, uint8 state,,) = escrow.requestInfo(requestId);
+        if (state != 2) return;
+        vm.prank(LIBRARIAN);
+        escrow.confirmPhysicalReturn(requestId);
+    }
+
     function settleReturn(uint256 indexSeed, uint256 repairWei) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (,,,,,,, uint8 state,) = escrow.requestInfo(requestId);
-        if (state != 2) return;
+        (,,,,,,, uint8 state,,) = escrow.requestInfo(requestId);
+        if (state != 7) return;
         vm.prank(LIBRARIAN);
         escrow.settleReturn(requestId, repairWei % 100 ether);
     }
@@ -93,7 +102,7 @@ contract LibraryDepositEscrowHandler {
     function settleLost(uint256 indexSeed) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (,,,,,,, uint8 state,) = escrow.requestInfo(requestId);
+        (,,,,,,, uint8 state,,) = escrow.requestInfo(requestId);
         if (state != 2) return;
         vm.prank(LIBRARIAN);
         escrow.settleLost(requestId);
@@ -102,7 +111,7 @@ contract LibraryDepositEscrowHandler {
     function payShortfall(uint256 indexSeed) external {
         if (requestIds.length == 0) return;
         bytes32 requestId = requestIds[indexSeed % requestIds.length];
-        (address borrower,,,,,,, uint8 state, uint256 shortfallWei) = escrow.requestInfo(requestId);
+        (address borrower,,,,,,, uint8 state, uint256 shortfallWei,) = escrow.requestInfo(requestId);
         if (state != 5) return;
         vm.prank(borrower);
         escrow.payShortfall{value: shortfallWei}(requestId);
@@ -123,8 +132,8 @@ contract LibraryDepositEscrowHandler {
 
     function expectedEscrowLiability() external view returns (uint256 total) {
         for (uint256 i; i < requestIds.length; ++i) {
-            (,, uint256 depWei,,,,, uint8 state,) = escrow.requestInfo(requestIds[i]);
-            if (state == 1 || state == 2) {
+            (,, uint256 depWei,,,,, uint8 state,,) = escrow.requestInfo(requestIds[i]);
+            if (state == 1 || state == 2 || state == 7) {
                 total += depWei;
             }
         }
@@ -153,7 +162,7 @@ contract LibraryDepositEscrowInvariantTest {
     function invariant_escrowBalanceCoversUnresolvedLiabilities() public view {
         require(
             address(handler.escrow()).balance == handler.expectedEscrowLiability(),
-            "escrow balance must equal unresolved DEPOSITED + ACTIVE liabilities"
+            "escrow balance must equal unresolved DEPOSITED + ACTIVE + RETURN_RECEIVED liabilities"
         );
     }
 
@@ -168,14 +177,19 @@ contract LibraryDepositEscrowInvariantTest {
         LibraryDepositEscrow escrow = handler.escrow();
         uint256 count = handler.requestCount();
         for (uint256 i; i < count; ++i) {
-            (,, uint256 depWei, uint256 priceWei,,,, uint8 state, uint256 shortfallWei) =
+            (,, uint256 depWei, uint256 priceWei,,,, uint8 state, uint256 shortfallWei, uint64 returnReceivedAt) =
                 escrow.requestInfo(handler.requestIdAt(i));
             require(depWei == handler.DEPOSIT_WEI() && priceWei > 0, "snapshotted terms");
-            require(state >= 1 && state <= 6, "valid used state");
+            require(state >= 1 && state <= 7, "valid used state");
             if (state != 5) {
                 require(shortfallWei == 0, "shortfall only nonzero in LOST_SHORTFALL_DUE");
             } else {
                 require(shortfallWei > 0, "LOST_SHORTFALL_DUE requires positive shortfall");
+            }
+            if (state == 4 || state == 7) {
+                require(returnReceivedAt > 0, "confirmed/settled return requires returnReceivedAt");
+            } else {
+                require(returnReceivedAt == 0, "returnReceivedAt only set on confirmed/settled return");
             }
         }
     }

@@ -150,21 +150,31 @@ chứng `environment: "local-anvil"`.
   `LIBRARY_LIBRARIAN_ADDRESS`, `LIBRARY_TREASURY_ADDRESS` (khác địa chỉ 0 và
   khác ba role trên), `LIBRARY_BOOK_IDS` (chuỗi `bytes32` cách nhau bằng dấu
   phẩy) và `LIBRARY_BOOK_REPLACEMENT_PRICES_WEI` (chuỗi `uint256` đơn vị wei,
-  cách nhau bằng dấu phẩy, khớp số lượng ID). Script từ chối `block.chainid != 20261`
-  trước broadcast, deploy `LibraryDepositEscrow`, gọi cặp `seedBookTerms` (với
-  `DEPOSIT_WEI = 50 ether`) rồi `sealBookTerms` cho từng sách bằng `LIBRARY_ADMIN_ADDRESS`,
-  và đọc kiểm tra lại toàn bộ role, hằng số policy cùng `bookTerms(bookId)`.
+  cách nhau bằng dấu phẩy, khớp số lượng ID). Vì `forge script` chỉ nhận một
+  keystore signer mỗi lần chạy (`--account ... --sender ...`), `DeployLibrary`
+  bắt buộc `LIBRARY_ADMIN_ADDRESS == DEPLOYER_ADDRESS` để deploy,
+  `seedBookTerms` và `sealBookTerms` cùng dùng một signer hợp lệ; nếu hai địa
+  chỉ khác nhau script sẽ fail-fast trước broadcast với lỗi
+  `DistinctDeployerAndAdministratorUnsupported`. Script cũng từ chối
+  `block.chainid != 20261` trước broadcast, deploy `LibraryDepositEscrow`, gọi
+  cặp `seedBookTerms` (với `DEPOSIT_WEI = 50 ether`) rồi `sealBookTerms` cho
+  từng sách bằng `LIBRARY_ADMIN_ADDRESS`, và đọc kiểm tra lại toàn bộ role,
+  hằng số policy cùng `bookTerms(bookId)` (`isSealed == true`).
 - `SeedLibraryBooks`: đọc `LIBRARY_ESCROW_ADDRESS`, `LIBRARY_ADMIN_ADDRESS`,
   `LIBRARY_BOOK_IDS`, `LIBRARY_BOOK_REPLACEMENT_PRICES_WEI`. Nếu sách đã niêm
-  phong (`sealed`) và khớp điều khoản thì bỏ qua không phát giao dịch; nếu lệch
-  điều khoản đã niêm phong sẽ revert `SealedBookTermsMismatch`.
+  phong (`isSealed == true`) và khớp điều khoản thì bỏ qua không phát giao dịch;
+  nếu lệch điều khoản đã niêm phong sẽ revert `SealedBookTermsMismatch`. Khi
+  chạy riêng sau deploy, phải truyền keystore của chính `LIBRARY_ADMIN_ADDRESS`
+  (khớp `escrow.administrator()` on-chain).
 
 Ví dụ mô phỏng rồi broadcast trên Anvil local (`chainId = 20261`) trong `contracts/`
-với keystore/tài khoản riêng biệt (không đưa private key vào CLI hay manifest):
+với một keystore deployer/admin (`LIBRARY_ADMIN_ADDRESS == DEPLOYER_ADDRESS`,
+không đưa private key vào CLI hay manifest):
 
 ```sh
 forge script script/DeployLibrary.s.sol:DeployLibrary --rpc-url "$INTRACAMPUS_RPC_URL" --account library-deployer --sender "$DEPLOYER_ADDRESS"
 forge script script/DeployLibrary.s.sol:DeployLibrary --rpc-url "$INTRACAMPUS_RPC_URL" --account library-deployer --sender "$DEPLOYER_ADDRESS" --broadcast --slow
+forge script script/DeployLibrary.s.sol:SeedLibraryBooks --rpc-url "$INTRACAMPUS_RPC_URL" --account library-admin --sender "$LIBRARY_ADMIN_ADDRESS" --broadcast --slow
 ```
 
 Luôn truyền `--slow` cùng `--broadcast` để từng giao dịch xác nhận tuần tự,

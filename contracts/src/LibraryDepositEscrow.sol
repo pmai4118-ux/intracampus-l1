@@ -10,7 +10,8 @@ contract LibraryDepositEscrow {
         REFUNDED,
         RETURN_SETTLED,
         LOST_SHORTFALL_DUE,
-        LOST_SETTLED
+        LOST_SETTLED,
+        RETURN_RECEIVED
     }
 
     struct BookTerms {
@@ -29,6 +30,7 @@ contract LibraryDepositEscrow {
         uint64 dueAt;
         EscrowState state;
         uint256 shortfallWei;
+        uint64 returnReceivedAt;
     }
 
     event DepositReceived(
@@ -43,6 +45,7 @@ contract LibraryDepositEscrow {
     );
     event RequestRejected(bytes32 indexed requestId, address indexed borrower, uint256 refundWei);
     event ExpiredRefundClaimed(bytes32 indexed requestId, address indexed borrower, uint256 refundWei);
+    event PhysicalReturnConfirmed(bytes32 indexed requestId, address indexed borrower, uint64 returnedAt);
     event ReturnSettled(
         bytes32 indexed requestId,
         address indexed borrower,
@@ -229,14 +232,28 @@ contract LibraryDepositEscrow {
         emit ExpiredRefundClaimed(requestId, borrower, refundWei);
     }
 
-    /// @notice Settles a physically returned loan using chain time, capped fees, and full retention past day 30.
-    function settleReturn(bytes32 requestId, uint256 repairRequestedWei) external nonReentrant {
+    /// @notice Confirms physical return in chain time and freezes late-fee accrual prior to settlement.
+    function confirmPhysicalReturn(bytes32 requestId) external nonReentrant {
         if (msg.sender != librarian) revert UnauthorizedLibrarian();
         RequestRecord storage req = _requests[requestId];
         if (req.state == EscrowState.NONE) revert RequestNotFound(requestId);
         if (req.state != EscrowState.ACTIVE) revert InvalidRequestState(requestId, uint8(req.state));
 
         uint64 returnedAt = _timestamp();
+        req.returnReceivedAt = returnedAt;
+        req.state = EscrowState.RETURN_RECEIVED;
+
+        emit PhysicalReturnConfirmed(requestId, req.borrower, returnedAt);
+    }
+
+    /// @notice Settles a confirmed physical return using stored returnReceivedAt, capped fees, and full retention past day 30.
+    function settleReturn(bytes32 requestId, uint256 repairRequestedWei) external nonReentrant {
+        if (msg.sender != librarian) revert UnauthorizedLibrarian();
+        RequestRecord storage req = _requests[requestId];
+        if (req.state == EscrowState.NONE) revert RequestNotFound(requestId);
+        if (req.state != EscrowState.RETURN_RECEIVED) revert InvalidRequestState(requestId, uint8(req.state));
+
+        uint64 returnedAt = req.returnReceivedAt;
         uint256 depositWei = req.depositWei;
         uint256 elapsedSinceDue = returnedAt > req.dueAt ? returnedAt - req.dueAt : 0;
         uint256 lateFeeWei = _calculateLateFee(elapsedSinceDue);
@@ -332,7 +349,8 @@ contract LibraryDepositEscrow {
             uint64 approvedAt,
             uint64 dueAt,
             uint8 state,
-            uint256 shortfallWei
+            uint256 shortfallWei,
+            uint64 returnReceivedAt
         )
     {
         RequestRecord storage req = _requests[requestId];
@@ -345,7 +363,8 @@ contract LibraryDepositEscrow {
             req.approvedAt,
             req.dueAt,
             uint8(req.state),
-            req.shortfallWei
+            req.shortfallWei,
+            req.returnReceivedAt
         );
     }
 
