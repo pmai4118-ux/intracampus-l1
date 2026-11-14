@@ -1,5 +1,9 @@
 # Nhật ký quyết định
 
+## N-812 · Đóng băng phí trễ tại xác nhận nhận sách vật lý · 2026-11-14
+
+Peer review phát hiện settleReturn gộp xác nhận nhận sách và chuyển tiền nên độ trễ giữa nhận vật lý và settlement có thể đổi số tiền trả; điều này không đáp ứng yêu cầu plan rằng lúc xác nhận nhận sách đóng băng phí. Thêm confirmPhysicalReturn(requestId) do LIBRARIAN ký, lưu chain timestamp và phát PhysicalReturnConfirmed; trạng thái escrow chuyển sang RETURN_RECEIVED. settleReturn chỉ chạy sau receipt này và dùng timestamp đã lưu, không dùng thời điểm settlement. Bản sách ở RETURN_REVIEW đến receipt quyết toán; sau receipt mới thành AVAILABLE hoặc MAINTENANCE. API action confirmReturn và LibraryLoan.returnReceivedAt chuyển cùng mốc timestamp sang backend/UI. ABI fixture và caller matrix Phase 1 được cập nhật trước khi Phase 2 tiếp tục; ABI thay đổi chỉ trong module thư viện, không ảnh hưởng payment/grants.
+
 ## D015 · B04: ghép cấu hình canonical và POS receipt · 2026-11-12
 
 B04 ghép source L05/L06 với main U02/U03/B01/B02, giữ toàn bộ test scripts. Khi manifest đã deploy, B01 lấy merchant/signer/SBT từ L06, kiểm tra getter/allowlist cùng block trước phát hành; U02/U03 dùng cùng địa chỉ public và chặn override lệch. Giữ cấu hình thủ công khi manifest unconfigured cho local/fixture; không coi đó là nghiệm thu L1. Không đổi P02, ABI hoặc quyền ký giao dịch của U04. Xem [bàn giao B04](b04-integration.md).

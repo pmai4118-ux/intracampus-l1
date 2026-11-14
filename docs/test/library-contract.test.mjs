@@ -31,10 +31,11 @@ const EXPECTED_ABI_SURFACE = [
   "function approve(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
   "function reject(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
   "function claimExpiredRefund(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
+  "function confirmPhysicalReturn(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
   "function settleReturn(bytes32,uint256):nonpayable:inputs(requestId:bytes32|repairRequestedWei:uint256):outputs(-)",
   "function settleLost(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
   "function payShortfall(bytes32):payable:inputs(requestId:bytes32):outputs(-)",
-  "function requestInfo(bytes32):view:inputs(requestId:bytes32):outputs(borrower:address|bookId:bytes32|depositWei:uint256|replacementPriceWei:uint256|depositedAt:uint64|approvedAt:uint64|dueAt:uint64|state:uint8|shortfallWei:uint256)",
+  "function requestInfo(bytes32):view:inputs(requestId:bytes32):outputs(borrower:address|bookId:bytes32|depositWei:uint256|replacementPriceWei:uint256|depositedAt:uint64|approvedAt:uint64|dueAt:uint64|state:uint8|shortfallWei:uint256|returnReceivedAt:uint64)",
   "function administrator():view:inputs():outputs(:address)",
   "function librarian():view:inputs():outputs(:address)",
   "function treasury():view:inputs():outputs(:address)",
@@ -49,6 +50,7 @@ const EXPECTED_ABI_SURFACE = [
   "event LoanApproved(bytes32,address,uint64,uint64,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|approvedAt:uint64|dueAt:uint64|replacementPriceWei:uint256)",
   "event RequestRejected(bytes32,address,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|refundWei:uint256)",
   "event ExpiredRefundClaimed(bytes32,address,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|refundWei:uint256)",
+  "event PhysicalReturnConfirmed(bytes32,address,uint64):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|returnedAt:uint64)",
   "event ReturnSettled(bytes32,address,uint64,uint256,uint256,uint256,uint256,uint256,bool):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|returnedAt:uint64|lateFeeWei:uint256|repairFeeWei:uint256|overdueForfeitWei:uint256|totalRetainedWei:uint256|refundWei:uint256|maintenanceRequired:bool)",
   "event LostSettled(bytes32,address,uint256,uint256,uint256,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|replacementPriceWei:uint256|retainedWei:uint256|refundWei:uint256|shortfallWei:uint256)",
   "event ShortfallPaid(bytes32,address,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|amount:uint256)",
@@ -108,6 +110,8 @@ function runtimeConfigViolations(config) {
   assert.equal(fixture.policy.refundAtDeadlineComparison, ">=");
   assert.equal(fixture.policy.requestIdNeverReusable, true);
   assert.equal(fixture.policy.loanIdEqualsRequestId, true);
+  assert.equal(fixture.policy.returnTimestampSource, "PhysicalReturnConfirmed.returnedAt");
+  assert.equal(fixture.policy.lateAccrualFreezesOnPhysicalReturnConfirmation, true);
   const expiry = fixture.transitions?.find((item) => item.event === "ApprovalDeadlineReached");
   assert.equal(expiry?.copyStatus, "RELEASED");
   assert.equal(expiry?.refundStatus, "REFUND_DUE");
@@ -121,7 +125,7 @@ test("deposit confirmation cannot create an active loan", () => {
   assert.equal(approved?.loanStatus, "ACTIVE");
   assert.equal(fixture.states?.loan?.includes("ACTIVE"), true);
   assert.equal(fixture.policy.approveBeforeDeadlineOnly, true);
-  assert.deepEqual(fixture.states?.escrowStateCodes, { NONE: 0, DEPOSITED: 1, ACTIVE: 2, REFUNDED: 3, RETURN_SETTLED: 4, LOST_SHORTFALL_DUE: 5, LOST_SETTLED: 6 });
+  assert.deepEqual(fixture.states?.escrowStateCodes, { NONE: 0, DEPOSITED: 1, ACTIVE: 2, REFUNDED: 3, RETURN_SETTLED: 4, LOST_SHORTFALL_DUE: 5, LOST_SETTLED: 6, RETURN_RECEIVED: 7 });
 });
 
 test("ABI exposes only the agreed request-keyed escrow actions and proof events", () => {
@@ -142,6 +146,7 @@ test("ABI exposes only the agreed request-keyed escrow actions and proof events"
     "approve(bytes32)",
     "reject(bytes32)",
     "claimExpiredRefund(bytes32)",
+    "confirmPhysicalReturn(bytes32)",
     "settleReturn(bytes32,uint256)",
     "settleLost(bytes32)",
     "payShortfall(bytes32)",
@@ -152,6 +157,7 @@ test("ABI exposes only the agreed request-keyed escrow actions and proof events"
     "LoanApproved(bytes32,address,uint64,uint64,uint256)",
     "RequestRejected(bytes32,address,uint256)",
     "ExpiredRefundClaimed(bytes32,address,uint256)",
+    "PhysicalReturnConfirmed(bytes32,address,uint64)",
     "ReturnSettled(bytes32,address,uint64,uint256,uint256,uint256,uint256,uint256,bool)",
     "LostSettled(bytes32,address,uint256,uint256,uint256,uint256)",
     "ShortfallPaid(bytes32,address,uint256)",
@@ -193,6 +199,17 @@ test("late-return and lost-book vectors preserve exact boundary arithmetic", () 
   }
 });
 
+test("settlement uses the confirmed physical-return timestamp even when the settlement tx is later", () => {
+  const vector = fixture.returnTimingVectors?.[0];
+  assert.equal(vector?.returnedAtElapsedSinceDueSeconds, 30 * DAY);
+  assert.equal(vector?.settlementAtElapsedSinceDueSeconds, 30 * DAY + 1);
+  assert.equal(vector?.expectedLateFeeWei, (27n * E18 / 10n).toString());
+  assert.equal(vector?.expectedRefundWei, (47n * E18 + 3n * E18 / 10n).toString());
+  const confirmed = fixture.transitions?.find((item) => item.event === "PhysicalReturnConfirmed");
+  assert.equal(confirmed?.loanStatus, "SETTLEMENT_PENDING");
+  assert.equal(confirmed?.copyStatus, "RETURN_REVIEW");
+});
+
 test("API keeps role and price authority on the server", () => {
   const routes = new Set((fixture.api?.endpoints ?? []).map(({ method, path }) => `${method} ${path}`));
   for (const route of [
@@ -203,15 +220,15 @@ test("API keeps role and price authority on the server", () => {
     "POST /api/library/loans/:loanId/settlement-intents", "GET /api/library/account-status",
   ]) assert.ok(routes.has(route), `missing ${route}`);
   assert.deepEqual(fixture.api?.createRequestFields, ["bookId", "idempotencyKey"]);
-  assert.deepEqual(fixture.api?.transactionActions, ["deposit", "approve", "reject", "refund", "return", "settle", "payShortfall"]);
+  assert.deepEqual(fixture.api?.transactionActions, ["deposit", "approve", "reject", "refund", "confirmReturn", "return", "settle", "payShortfall"]);
   assert.equal(fixture.api?.roleFromClient, false);
   assert.equal(fixture.api?.priceFromClient, false);
   assert.equal(fixture.api?.noCopyBeforeVerifiedDeposit, true);
   assert.deepEqual(fixture.api?.errorStatuses, { VALIDATION_ERROR: 400, PAYLOAD_TOO_LARGE: 413, UNAUTHENTICATED: 401, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, RPC_UNAVAILABLE: 503, WRONG_CHAIN: 503, STALE_CHAIN_STATE: 503, DATABASE_BUSY: 503, CONFIGURATION_ERROR: 503, INTERNAL_ERROR: 500 });
   assert.equal(fixture.api?.loanFilterParameter, "borrowerWallet");
   assert.equal(fixture.api?.loanFilterRole, "LIBRARIAN");
-  assert.deepEqual(fixture.api?.transactionActionMethods, { deposit: "deposit", approve: "approve", reject: "reject", refund: "claimExpiredRefund", return: "settleReturn", settle: "settleLost", payShortfall: "payShortfall" });
-  assert.deepEqual(fixture.api?.transactionActionRoles, { deposit: "STUDENT_OWNER", approve: "LIBRARIAN", reject: "LIBRARIAN", refund: "STUDENT_OWNER", return: "LIBRARIAN", settle: "LIBRARIAN", payShortfall: "STUDENT_OWNER" });
+  assert.deepEqual(fixture.api?.transactionActionMethods, { deposit: "deposit", approve: "approve", reject: "reject", refund: "claimExpiredRefund", confirmReturn: "confirmPhysicalReturn", return: "settleReturn", settle: "settleLost", payShortfall: "payShortfall" });
+  assert.deepEqual(fixture.api?.transactionActionRoles, { deposit: "STUDENT_OWNER", approve: "LIBRARIAN", reject: "LIBRARIAN", refund: "STUDENT_OWNER", confirmReturn: "LIBRARIAN", return: "LIBRARIAN", settle: "LIBRARIAN", payShortfall: "STUDENT_OWNER" });
   assert.equal(fixture.api?.idempotency?.keyScopedToBorrower, true);
   assert.equal(fixture.api?.idempotency?.sameKeySameBookReturnsExisting, true);
   assert.equal(fixture.api?.idempotency?.sameKeyDifferentBookConflicts, true);
@@ -327,6 +344,7 @@ test("settlement preview response and every transaction action have a typed call
     "LOST.replacementPriceWei", "LOST.totalRetainedWei", "LOST.refundWei", "LOST.shortfallWei",
   ]);
   assert.ok(fixture.api?.loanResponseFields?.includes("borrower"));
+  assert.ok(fixture.api?.loanResponseFields?.includes("returnReceivedAt"));
   const actions = fixture.api?.transactionActions ?? [];
   assert.deepEqual(Object.keys(fixture.callerMatrix ?? {}).sort(), [...actions].sort());
   for (const action of actions) {
