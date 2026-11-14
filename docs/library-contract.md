@@ -92,6 +92,7 @@ Tại/sau approval deadline, đường đọc/reconcile lấy chain time tin c�
 | `FORBIDDEN` | 403 | Sai role/chủ sở hữu/quyền hành động hoặc đang bị hold. |
 | `NOT_FOUND` | 404 | Không tồn tại hoặc ngoài phạm vi người gọi. |
 | `CONFLICT` | 409 | Xung đột copy/idempotency/state hoặc hash giao dịch. |
+| `RATE_LIMITED` | 429 | Vượt ngưỡng challenge/verify; `retryable: true` và header `Retry-After` cho biết số giây còn lại trong cửa sổ. |
 | `INTERNAL_ERROR` | 500 | Lỗi bất ngờ; không báo thành công một phần. |
 | `RPC_UNAVAILABLE`, `WRONG_CHAIN`, `STALE_CHAIN_STATE` | 503 | Không xác minh an toàn được chain/state/time; chặn thao tác thường, giữ đường khôi phục mở. |
 | `DATABASE_BUSY` | 503 | SQLite writer bận; retry cùng key/action, không giả định transaction đã commit. |

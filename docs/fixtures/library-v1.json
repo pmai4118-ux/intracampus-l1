@@ -1102,6 +1102,7 @@
       "FORBIDDEN": 403,
       "NOT_FOUND": 404,
       "CONFLICT": 409,
+      "RATE_LIMITED": 429,
       "RPC_UNAVAILABLE": 503,
       "WRONG_CHAIN": 503,
       "STALE_CHAIN_STATE": 503,
@@ -1110,6 +1111,7 @@
       "CONFIGURATION_ERROR": 503,
       "PAYLOAD_TOO_LARGE": 413
     },
+    "retryAfterCodes": ["RATE_LIMITED"],
     "loanFilterParameter": "borrowerWallet",
     "loanFilterRole": "LIBRARIAN",
     "transactionActionMethods": {

@@ -225,7 +225,8 @@ test("API keeps role and price authority on the server", () => {
   assert.equal(fixture.api?.roleFromClient, false);
   assert.equal(fixture.api?.priceFromClient, false);
   assert.equal(fixture.api?.noCopyBeforeVerifiedDeposit, true);
-  assert.deepEqual(fixture.api?.errorStatuses, { VALIDATION_ERROR: 400, PAYLOAD_TOO_LARGE: 413, UNAUTHENTICATED: 401, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, RPC_UNAVAILABLE: 503, WRONG_CHAIN: 503, STALE_CHAIN_STATE: 503, DATABASE_BUSY: 503, CONFIGURATION_ERROR: 503, INTERNAL_ERROR: 500 });
+  assert.deepEqual(fixture.api?.errorStatuses, { VALIDATION_ERROR: 400, PAYLOAD_TOO_LARGE: 413, UNAUTHENTICATED: 401, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, RATE_LIMITED: 429, RPC_UNAVAILABLE: 503, WRONG_CHAIN: 503, STALE_CHAIN_STATE: 503, DATABASE_BUSY: 503, CONFIGURATION_ERROR: 503, INTERNAL_ERROR: 500 });
+  assert.deepEqual(fixture.api?.retryAfterCodes, ["RATE_LIMITED"]);
   assert.equal(fixture.api?.loanFilterParameter, "borrowerWallet");
   assert.equal(fixture.api?.loanFilterRole, "LIBRARIAN");
   assert.deepEqual(fixture.api?.transactionActionMethods, { deposit: "deposit", approve: "approve", reject: "reject", refund: "claimExpiredRefund", confirmReturn: "confirmPhysicalReturn", return: "settleReturn", settle: "settleLost", payShortfall: "payShortfall" });
