@@ -358,3 +358,21 @@ Mọi lỗi có đối tượng `error` gồm `code`, `message`, `retryable` và
 ## 6. Bộ fixture và ca bắt buộc khi tích hợp
 
 [`fixtures/invoice-v1.json`](fixtures/invoice-v1.json) chứa typed data, bốn vector EIP-712, receipt đầu vào/đầu ra, response lookup đầy đủ và ma trận preflight. Chạy `pnpm test:p02` (cũng nằm trong `pnpm test`). Đây là kiểm tra giao kèo; `B02`/`U04` phải chạy cùng tình huống trên implementation thật: tier 0/1/2/255, decode bigint, receipt-null trước/sau hạn, receipt revert, event từ sai contract/khác invoice, RPC lỗi trước/sau txHash, thanh toán đã xảy ra trước hạn nhưng chỉ đọc được sau hạn, hash gợi ý sai khi invoice đã paid và GET lặp.
+
+## 7. Giao kèo API và escrow cho Library (`N-BA29F8E5`)
+
+Library dùng chain `20261` và CAMPUS native (18 decimals), với escrow contract và backend module riêng. Giao kèo đầy đủ về API, auth, trạng thái request/loan/refund, event proof và ABI v1 nằm ở [library-contract.md](library-contract.md) cùng [library-v1.json](fixtures/library-v1.json). Đây là contract chung cho `N-81226E74`, `N-5DFBAD4D`, `N-47121905`, `N-696719F4` và `N-75E965E5`.
+
+Mọi trường tiền của Library là chuỗi wei nguyên trong JSON và `bigint` trong TypeScript. Browser không quyết định role, borrower, tiền cọc hay giá thay thế. Allowlist server cấp role `STUDENT`/`LIBRARIAN`; ví librarian còn phải khớp quyền trong escrow. Next.js proxy cùng origin `/api/auth/*` và `/api/library/*` tới Express, chuyển tiếp session cookie. Backend tạo transaction intent nhưng không ký hoặc gửi giao dịch thay người dùng.
+
+Các Library JSON `POST` dùng parser body 8 KiB theo cùng giới hạn `express.json({ limit: "8kb" })` của invoice; 8192 byte được nhận, 8193 byte trả `413 PAYLOAD_TOO_LARGE`.
+
+Tạo request chưa giữ copy. Chỉ receipt thành công với chain, contract, sender và event `DepositReceived` khớp mới cho phép gán một copy bằng SQLite `BEGIN IMMEDIATE`. Deposit xác nhận đưa request vào `PENDING_APPROVAL`, chưa tạo loan; chỉ event `LoanApproved` mới tạo loan `ACTIVE`. Thủ thư chỉ được duyệt trước deadline 24 giờ. Tại hoặc sau deadline, approval bị đóng, refund có thể claim và copy được giải phóng bằng chain time đã xác minh dù borrower chưa claim refund.
+
+Endpoint theo dõi receipt lưu action/hash idempotent và chỉ cập nhật projection sau receipt canonical thành công có event mong đợi. Receipt pending hoặc chưa rõ không bao giờ được báo thành công, không tự gửi lại. Sinh viên gửi yêu cầu trả; thủ thư xác nhận đã nhận vật lý và tự ký settlement trả/mất sách. Loan đến hạn sau 14 ngày từ approval. Grace 3 ngày, phí 0,1 CAMPUS cho từng khoảng đủ 24 giờ, ranh giới ngày 30, mức trừ hỏng và refund/shortfall khi mất sách được khóa trong fixture.
+
+Settlement intent của thủ thư trả borrower, treasury, escrow, chain, calldata ví, chain time và breakdown preview có kiểu chung; preview không cập nhật trạng thái loan trước receipt/event xác minh. `LibraryLoan` gồm borrower để staff xác nhận đúng người nhận tiền. `LibraryRuntimeConfig` khóa TTL challenge/session, rate limit challenge/verify, độ tươi chain, lệch tương lai và confirmation depth; thiếu/sai key trả `CONFIGURATION_ERROR` 503, không có production default.
+
+Session cookie opaque do server quản lý và `HttpOnly`; role chỉ tra từ server. Đăng nhập dùng challenge ví gắn domain với nonce dùng một lần, thời hạn session/challenge phải cấu hình và write request phải kiểm tra same-origin. Không nhận role từ JSON client. Mã lỗi/status cho input sai, chưa đăng nhập, sai quyền, resource ngoài scope, conflict, lỗi chain/config và SQLite bận được định nghĩa ở giao kèo Library, gồm `CONFIGURATION_ERROR` 503.
+
+Trạng thái account và đường khôi phục vẫn truy cập được khi shared hold guard chặn payment/grant/mượn mới. Return, deposit refund, settlement và trả shortfall không bị hold chặn. Thiếu cấu hình, sai chain, chain time cũ hoặc tương lai phải fail closed `503` cho quyết định được bảo vệ; test local cấp cấu hình rõ ràng và không đại diện production.

@@ -171,3 +171,15 @@ Sau review PR #19, journal phân biệt `prepared` chưa chạm provider với
 đồng bộ sau kiểm tra account/chain và ngay trước `eth_sendTransaction`.
 Khôi phục không hash chỉ xóa đúng prepared intent dưới cùng Web Lock; không
 suy ra chưa gửi từ việc RPC không tìm được giao dịch. Unknown cũ vẫn giữ khóa.
+
+## D019 · N-BA: giao kèo module thư viện và escrow · 2026-11-14
+
+`docs/library-contract.md` cùng `docs/fixtures/library-v1.json` là giao kèo API/ABI/status/policy cho `N-81226E74`, `N-5DFBAD4D`, `N-47121905`, `N-696719F4` và `N-75E965E5`. Chain là `20261`, tiền CAMPUS dùng 18 decimals, deposit cố định 50 CAMPUS, và terms giá sách được seal trước khi mở mượn. Request ID duy nhất là khóa nối request và loan.
+
+Backend chỉ gán copy SQLite trong `BEGIN IMMEDIATE` sau receipt deposit thành công có event khớp. Deposit tạo `PENDING_APPROVAL`; chỉ event duyệt trước deadline 24 giờ tạo loan `ACTIVE`. Hạn trả là 14 ngày tính từ duyệt, grace 3 ngày, late fee 0,1 CAMPUS cho mỗi đủ 24 giờ, và quy tắc trả/mất/hỏng đúng theo các boundary vectors. Dữ liệu API tiền là chuỗi wei; browser dùng ví người dùng và backend không giữ khóa hoặc broadcast.
+
+Đăng nhập demo xác minh challenge có nonce dùng một lần; role lấy từ allowlist phía server và phải khớp quyền librarian của escrow khi ký. Session/cookie và chain-time policy cần cấu hình; lỗi chain/config thiếu hoặc không fresh chặn hành động thường, còn đường refund/return/settlement/shortfall vẫn mở. Bản v1 không có UI CRUD catalog.
+
+Staff settlement-intent preview dùng shared `LibrarySettlementIntent` với borrower/refund recipient, treasury, escrow, chain, calldata ví, chain time và breakdown; các shared types được export qua package barrel. `LibraryLoan` giữ borrower để các client không tự suy ra người nhận tiền. TTL, challenge/verify rate limits, chain freshness/future drift và minimum confirmations là `LibraryRuntimeConfig` bắt buộc từ operator, không có production default; thiếu/sai cấu hình trả `CONFIGURATION_ERROR` 503. Library JSON POST dùng cùng giới hạn body 8 KiB hiện có cho invoice; vượt ngưỡng trả 413. ABI test so khớp toàn bộ tên/metadata function/event/error surface để chặn entry ngoài fixture.
+
+`docs/scope.md` và `docs/demo-flow.md` mô tả phạm vi hiện hành theo Library; các tài liệu P01/D004 cũ là lịch sử quyết định; phần phạm vi hiện hành được điều chỉnh theo task và không mở rộng giao kèo này. Thay đổi ABI, role, state, tiền hoặc boundary cần cập nhật fixture + caller contract và review liên module trước khi tích hợp.
