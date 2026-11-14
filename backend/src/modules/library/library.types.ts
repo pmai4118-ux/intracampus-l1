@@ -88,6 +88,7 @@ export type LibraryStoredTransaction = {
   requestId: string;
   action: "deposit" | "approve" | "reject" | "refund" | "confirmReturn" | "return" | "settle" | "payShortfall";
   txHash: string;
+  settlementIntentId: string | null;
   status: "SUBMITTED" | "CONFIRMED" | "REVERTED";
   submittedAt: number;
   blockNumber: number | null;

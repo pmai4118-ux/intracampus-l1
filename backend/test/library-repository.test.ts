@@ -103,6 +103,25 @@ function consumeChallengeInWorker(databasePath: string, tokenByte: string): Prom
   });
 }
 
+function recordActiveLoan(repository: LibraryRepository, requestId: string, block: number, time: number): void {
+  const contractAddress = "0x4444444444444444444444444444444444444444";
+  const approvalDeadline = time + 86_400;
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: requestId,
+    createdAt: time - 1, chainTime: time - 1, holdAfterSeconds: 2_592_000 });
+  repository.recordVerifiedChainEvents([{
+    chainId: 20261, contractAddress, txHash: `0x${block.toString(16).padStart(64, "0")}`, logIndex: 0, blockNumber: block,
+    blockHash: `0x${(block + 10_000).toString(16).padStart(64, "0")}`, blockTimestamp: time, transactionFrom: studentA, observedAt: time + 10,
+    eventName: "DepositReceived", requestId, borrower: studentA, bookId, amountWei: depositWei,
+    depositedAt: time, approvalDeadline,
+  }], block, time + 10, "{}");
+  repository.recordVerifiedChainEvents([{
+    chainId: 20261, contractAddress, txHash: `0x${(block + 1).toString(16).padStart(64, "0")}`, logIndex: 0, blockNumber: block + 1,
+    blockHash: `0x${(block + 10_001).toString(16).padStart(64, "0")}`, blockTimestamp: approvalDeadline - 1, transactionFrom: librarian,
+    observedAt: approvalDeadline + 10, eventName: "LoanApproved", requestId, borrower: studentA,
+    approvedAt: approvalDeadline - 1, dueAt: approvalDeadline - 1 + 1_209_600, replacementPriceWei: priceWei,
+  }], block + 1, approvalDeadline + 10, "{}");
+}
+
 function initializeDatabaseInWorker(databasePath: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(`
@@ -131,13 +150,13 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   const env = setup();
   t.after(env.cleanup);
   let repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 3);
+  assert.equal(repository.schemaVersion(), 4);
   assert.deepEqual(repository.sqliteSettings(), { foreignKeys: 1, journalMode: "wal", synchronous: 2, busyTimeoutMs: 5000 });
   assert.equal(repository.seedDemo(env.seed), "inserted");
   repository.close();
 
   repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 3);
+  assert.equal(repository.schemaVersion(), 4);
   assert.equal(repository.seedDemo(env.seed), "unchanged");
   assert.deepEqual(repository.listBooks()[0], {
     bookId, title: "Demo book", author: "Demo author", isbn: null, depositWei, replacementPriceWei: priceWei,
@@ -170,14 +189,16 @@ test("two independent startup processes migrate a new file database once", async
     initializeDatabaseInWorker(env.path),
     initializeDatabaseInWorker(env.path),
   ]);
-  assert.deepEqual(versions, [3, 3]);
+  assert.deepEqual(versions, [4, 4]);
   const repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 3);
+  assert.equal(repository.schemaVersion(), 4);
   const db = new DatabaseSync(env.path);
   try {
     for (const table of ["library_reconcile_state", "library_transactions", "library_event_canonicality"]) {
       assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
     }
+    assert.ok(db.prepare("PRAGMA table_info(library_transactions)").all().some((column) => column.name === "settlement_intent_id"));
+    assert.ok(db.prepare("PRAGMA table_info(settlements)").all().some((column) => column.name === "settlement_intent_id"));
     assert.deepEqual(Object.assign({}, db.prepare("SELECT cursor_block, health FROM library_reconcile_state WHERE singleton = 1").get()),
       { cursor_block: 0, health: "HEALTHY" });
   } finally { db.close(); }
@@ -373,6 +394,61 @@ test("reconcile skips untracked logs, atomically advances after projections, and
   assert.equal(repository.listBooks()[0].copiesAvailable, 0);
   assert.equal(repository.recordVerifiedChainEvents([approvalEvent], 125, deadline + 101, "{}").duplicates, 1);
   assert.equal(repository.reconcileState().cursorBlock, 125);
+});
+
+test("settlement receipt stays linked to its intent when another intent exists or reconciliation wins the race", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo({ ...env.seed, books: [{ ...env.seed.books[0], copies: [
+    { copyId: "copy-001", barcode: "LC-001" }, { copyId: "copy-002", barcode: "LC-002" },
+  ] }] });
+
+  const addIntentPair = (requestId: string, createdAt: number) => {
+    repository.createSettlementIntent({ intentId: `${requestId}:first`, loanId: requestId, librarianWallet: librarian,
+      outcome: "LOST", reason: "Reason for submitted settlement", createdAt });
+    repository.createSettlementIntent({ intentId: `${requestId}:later`, loanId: requestId, librarianWallet: librarian,
+      outcome: "LOST", reason: "Later unused intent reason", createdAt: createdAt + 1 });
+    return `${requestId}:first`;
+  };
+  const lostEvent = (requestId: string, txByte: string, block: number, blockTimestamp: number): LibraryVerifiedChainEvent => ({
+    chainId: 20261, contractAddress: "0x4444444444444444444444444444444444444444",
+    txHash: `0x${txByte.repeat(32)}`, logIndex: 0, blockNumber: block,
+    blockHash: `0x${(block + 80).toString(16).padStart(64, "0")}`,
+    blockTimestamp, transactionFrom: librarian, observedAt: blockTimestamp + 10, eventName: "LostSettled", requestId,
+    borrower: studentA, replacementPriceWei: priceWei, retainedWei: priceWei, refundWei: "20000000000000000000", shortfallWei: "0",
+  });
+
+  const trackedRequest = `0x${"81".repeat(32)}`;
+  recordActiveLoan(repository, trackedRequest, 150, 1_700_000_000);
+  const trackedIntent = addIntentPair(trackedRequest, 1_702_000_000);
+  const trackedHash = `0x${"91".repeat(32)}`;
+  repository.recordTransactionSubmission({ requestId: trackedRequest, action: "settle", txHash: trackedHash,
+    submittedAt: 1_702_000_010, settlementIntentId: trackedIntent, librarianWallet: librarian });
+  repository.recordVerifiedChainEvents([lostEvent(trackedRequest, "91", 152, 1_702_000_020)], 152, 1_702_000_030, "{}");
+
+  const racedRequest = `0x${"82".repeat(32)}`;
+  recordActiveLoan(repository, racedRequest, 200, 1_703_000_000);
+  const racedIntent = addIntentPair(racedRequest, 1_705_000_000);
+  const racedHash = `0x${"92".repeat(32)}`;
+  repository.recordVerifiedChainEvents([lostEvent(racedRequest, "92", 202, 1_705_000_020)], 202, 1_705_000_030, "{}");
+  repository.recordTransactionSubmission({ requestId: racedRequest, action: "settle", txHash: racedHash,
+    submittedAt: 1_705_000_040, settlementIntentId: racedIntent, librarianWallet: librarian });
+
+  const db = new DatabaseSync(env.path);
+  try {
+    const tracked = db.prepare("SELECT reason, settlement_intent_id FROM settlements WHERE loan_id = ?").get(trackedRequest);
+    assert.deepEqual(Object.assign({}, tracked), {
+      reason: "Reason for submitted settlement", settlement_intent_id: trackedIntent,
+    });
+    assert.equal(repository.getTransaction(trackedRequest, "settle")?.settlementIntentId, trackedIntent);
+
+    const raced = db.prepare("SELECT reason, settlement_intent_id FROM settlements WHERE loan_id = ?").get(racedRequest);
+    assert.deepEqual(Object.assign({}, raced), {
+      reason: "Reason for submitted settlement", settlement_intent_id: racedIntent,
+    }, "a later POST must attach its exact intent when reconciliation already confirmed the event");
+    assert.equal(repository.getTransaction(racedRequest, "settle")?.settlementIntentId, racedIntent);
+  } finally { db.close(); }
 });
 
 test("a canonicality mismatch persists reorg health and blocks later projections", (t) => {

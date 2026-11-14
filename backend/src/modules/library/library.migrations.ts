@@ -250,4 +250,12 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
     ALTER TABLE library_reconcile_state
       ADD COLUMN canonicality_cursor_event_id INTEGER NOT NULL DEFAULT 0 CHECK (canonicality_cursor_event_id >= 0);
   `,
+}, {
+  version: 4,
+  sql: `
+    ALTER TABLE library_transactions
+      ADD COLUMN settlement_intent_id TEXT REFERENCES settlement_intents(intent_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ALTER TABLE settlements
+      ADD COLUMN settlement_intent_id TEXT REFERENCES settlement_intents(intent_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+  `,
 }];

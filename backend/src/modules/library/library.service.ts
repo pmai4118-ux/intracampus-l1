@@ -220,6 +220,7 @@ export class LibraryService {
       throw new LibraryServiceError("NOT_FOUND", 404);
     }
     const action = input.action;
+    const settlementAction = action === "return" || action === "settle";
     const librarianAction = ["approve", "reject", "confirmReturn", "return", "settle"].includes(action);
     if (librarianAction !== (account.role === "LIBRARIAN")) throw new LibraryServiceError("FORBIDDEN", 403);
     const deployment = this.deploymentOrThrow();
@@ -230,7 +231,7 @@ export class LibraryService {
     if (confirmed && confirmed.txHash.toLowerCase() !== input.txHash.toLowerCase()) {
       throw new LibraryServiceError("CONFLICT", 409);
     }
-    if (confirmed?.status === "CONFIRMED") {
+    if (confirmed?.status === "CONFIRMED" && !settlementAction) {
       return { request: await this.getRequest(account, record.requestId), transaction: this.publicTransaction(confirmed, record) };
     }
     const expectedFunctions: Record<LibraryTransactionAction, string> = {
@@ -258,6 +259,9 @@ export class LibraryService {
     try { tx = await rpc.getTransaction(input.txHash); }
     catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
     if (!tx) {
+      if (confirmed?.status === "CONFIRMED" && settlementAction) {
+        throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
+      }
       const existing = this.repository.getTransaction(record.requestId, action);
       if (existing && existing.txHash.toLowerCase() !== input.txHash.toLowerCase()) throw new LibraryServiceError("CONFLICT", 409);
       return { request: await this.getRequest(account, record.requestId), transaction: existing ? this.publicTransaction(existing, record) : null };
@@ -288,7 +292,8 @@ export class LibraryService {
     }
     if (tx.value !== expectedValue) throw new LibraryServiceError("CONFLICT", 409);
     let submitted;
-    try { submitted = this.repository.recordTransactionSubmission({ requestId: record.requestId, action, txHash: input.txHash, submittedAt: chain.chainTime }); }
+    try { submitted = this.repository.recordTransactionSubmission({ requestId: record.requestId, action, txHash: input.txHash,
+      submittedAt: chain.chainTime, ...(settlementAction ? { settlementIntentId: input.settlementIntentId!, librarianWallet: account.wallet } : {}) }); }
     catch (error) { throw serviceFailure(error); }
     let receipt;
     try { receipt = await rpc.getTransactionReceipt(input.txHash); }
