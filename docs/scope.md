@@ -1,12 +1,12 @@
 # P01 · Phạm vi MVP và cách làm việc của nhóm 3 người
 
-Ngày soạn: 08/11/2026. Trạng thái: bản đề xuất để nhóm review; chưa có xác nhận nghiệm thu của cả nhóm.
+Ngày soạn: 08/11/2026. Trạng thái: baseline lịch sử; phạm vi library hiện hành được chốt tại D019 và giao kèo Library. Tài liệu này không xác nhận nghiệm thu các task trên sprint.
 
 Tài liệu đi cùng: [kịch bản demo hai thiết bị](demo-flow.md). Yêu cầu và mã task tham chiếu từ [bảng sprint IntraCampus L1](https://intracampus-l1-sprint.mphung2532.chatgpt.site/). Quy trình làm việc theo [AGENTS.md](../AGENTS.md).
 
 ## 1. Mục tiêu và trạng thái hiện tại
 
-Chứng minh một lượt thanh toán bãi xe trên IntraCampus L1: nhân viên tạo hóa đơn QR, sinh viên xem giá và ưu đãi SBT, xác nhận giao dịch bằng ví, rồi POS hiển thị biên nhận khớp dữ liệu on-chain. Sau luồng chính, trình diễn học bổng chỉ chi tại merchant hợp lệ và Copilot tiếng Việt chỉ đọc dữ liệu.
+Chứng minh thanh toán bãi xe trên IntraCampus L1 bằng QR, ví và receipt khớp on-chain; sau đó trình diễn grant giới hạn merchant và luồng mượn sách có cọc CAMPUS qua sinh viên, escrow và thủ thư. Phạm vi/library acceptance chi tiết nằm trong [giao kèo Library](library-contract.md).
 
 Repo tại thời điểm soạn mới có khung trang web, API health/network và test Foundry cơ bản. Các màn hình, hợp đồng và hành vi mô tả dưới đây là mục tiêu triển khai, chưa phải tính năng đã chạy hay kết quả kiểm thử.
 
@@ -19,7 +19,7 @@ Thông số đã có trong [cấu hình mạng dùng chung](../packages/network/
 | Nhân viên bãi xe demo | A: laptop, `/pos` | Merchant và dịch vụ từ menu demo | QR, số tiền, hạn hóa đơn; sau thanh toán có biên nhận |
 | Sinh viên có thẻ ưu đãi demo | B: điện thoại, `/student` và ví hỗ trợ EVM | QR hoặc nội dung QR được dán; xác nhận bằng ví | Đúng mạng, thẻ/tier, giá gốc, giảm giá, số phải trả, trạng thái và tx hash |
 
-Sinh viên cũng thao tác phần học bổng và Copilot trên thiết bị B. Một thành viên thuyết trình có thể giải thích và vận hành merchant căn-tin đã seed ở phần học bổng; không cần thêm thiết bị hoặc một ứng dụng quản trị riêng.
+Sinh viên thao tác grant và thư viện trên thiết bị B; thủ thư duyệt và quyết toán từ màn staff trên thiết bị A. Catalog được seed trước; không cần màn hình quản trị catalog.
 
 ## 3. Phạm vi P0, P1 và mở rộng
 
@@ -33,18 +33,12 @@ P0/P1 dưới đây là thứ tự triển khai và trình diễn trong kế ho�
 | P0 | Invoice và receipt: `B01`, `B02`, `B03`, `B04` | Có dữ liệu ví demo, QR ký đúng, POS chỉ báo thành công khi receipt/event đã xác minh |
 | P0 | Giao diện luồng chính: `U01`, `U02`, `U03`, `U04` | Hoàn thành luồng POS → điện thoại → ví → biên nhận, có trạng thái chờ và lỗi |
 | P1 | Học bổng giới hạn merchant: `L05`, `B05`, `U05` | Chi căn-tin thành công; chi ví cá nhân/merchant ngoài allowlist bị chặn; số dư khớp chain |
-| P1 | Copilot chỉ đọc: `B06`, `U06` | Hai công cụ đọc số dư và tổng chi theo khoảng thời gian; phản hồi có nguồn/thời điểm hoặc báo thiếu dữ liệu |
+| P1 | Module thư viện: `N-81226E74`, `N-5DFBAD4D`, `N-47121905`, `N-696719F4`, `N-75E965E5` | Cọc chỉ giữ bản sau receipt; thủ thư duyệt, nhận trả hoặc tất toán; frontend/backend nối trên API thật |
 | P0 + P1 | Bản triển khai dùng chung: `L06` | Chốt địa chỉ, ABI và cấu hình theo đúng dependency trên sprint; `L06` phụ thuộc cả `L04` và `L05` |
 | P0 + P1 | Nghiệm thu, đo và nộp bài: `Q01`–`Q06` | Kết quả đo có tx hash, checklist hai thiết bị, hướng dẫn dựng lại, video 3 phút/offline, pitch và hồ sơ nộp |
-| Mở rộng | `X01`–`X05` | ICM/ICTT, Copilot chuẩn bị giao dịch, indexer/WebSocket, admin/thẻ 3D và chuẩn bị chung kết; chỉ làm sau mốc MVP |
+| Mở rộng | `X01`–`X05` | ICM/ICTT, indexer/WebSocket, admin/thẻ 3D và chuẩn bị chung kết; chỉ làm sau mốc MVP |
 
 Có thể kiểm tra luồng P0 trên EVM local trước khi ghép bản L1. Việc ghép `B04` lên bản triển khai chung vẫn chờ `L06`; không đổi thứ tự phụ thuộc để coi một test local là đã hoàn thành tích hợp L1.
-
-### Điểm cắt Copilot
-
-MVP chỉ có hai công cụ đọc: số dư hiện tại và tổng chi trong khoảng thời gian. Địa chỉ ví và giới hạn thời gian được kiểm tra; phạm vi dữ liệu chi tiêu phải được mô tả, không ngụ ý có toàn bộ lịch sử khi chưa index đầy đủ. Câu hỏi mẫu: “Số dư CAMPUS của mình là bao nhiêu?” và “Mình đã chi bao nhiêu trong khoảng thời gian này?”.
-
-Số liệu lấy từ nguồn đã xác minh, kèm nguồn và thời điểm cập nhật. Model không tự tính mức ưu đãi hoặc quyết định trạng thái thanh toán. Yêu cầu chuyển tiền không tạo calldata, ký hoặc gửi giao dịch. Model/RPC lỗi thì chat báo thiếu dữ liệu hoặc lỗi; luồng thanh toán vẫn sử dụng được khi hạ tầng thanh toán còn hoạt động. Xem trước giao dịch bằng Copilot thuộc `X02`.
 
 ## 4. Bộ dữ liệu demo đề xuất
 
@@ -73,13 +67,13 @@ Mỗi task có một người thực hiện chịu trách nhiệm đầu ra và 
 | --- | --- | --- |
 | P01 và giao kèo `P02` | Người nhận từng task; người nhận contract/backend cùng đối chiếu | Tài liệu, fixture, danh sách quyết định cần review |
 | L1 / Solidity `L01`–`L06` | Người nhận task L tương ứng | Chain/RPC, cấu hình, contract, ABI, test và địa chỉ bản deploy |
-| Backend `B01`–`B06` | Người nhận task B tương ứng | Module theo [kiến trúc backend](../backend/README.md), API, dữ liệu seed và bằng chứng receipt |
-| Frontend `U01`–`U06` | Người nhận task U tương ứng | Màn hình hai thiết bị, trạng thái/lỗi, bằng chứng tích hợp |
+| Backend `B01`–`B05` | Người nhận task B tương ứng | Module theo [kiến trúc backend](../backend/README.md), API, dữ liệu seed và bằng chứng receipt |
+| Frontend `U01`–`U05` | Người nhận task U tương ứng | Màn hình hai thiết bị, trạng thái/lỗi, bằng chứng tích hợp |
 | Nghiệm thu `Q01`–`Q06` | Người nhận task Q; một thành viên khác chạy lại | Log/tx hash, checklist, video/offline, tài liệu và hồ sơ |
 
 Gợi ý mở ba luồng sau khi nhóm duyệt P01: một người nhận `P02`, một người nhận `U01`, người còn lại nhận `L01`. Thành viên tự chọn luồng trên sprint; chỉ bắt đầu task tiếp khi dependency của nó đã đáp ứng. Luân phiên là đổi trách nhiệm giữa các lượt, không đồng thời sửa cùng một phần chưa bàn giao.
 
-Các mốc phối hợp: nhóm duyệt P01 → chốt P02 giữa contract/backend/UI → hoàn thiện và seed SBT → chạy luồng thanh toán local → triển khai bộ contract theo L06 → ghép luồng hai thiết bị → hoàn thành học bổng/Copilot → nghiệm thu và nộp bài. Việc phát triển có thể song song theo dependency; không đợi đến demo mới đối chiếu ABI hoặc payload.
+Các mốc phối hợp: nhóm duyệt P01 → chốt P02 giữa contract/backend/UI → hoàn thiện và seed SBT → chạy luồng thanh toán local → triển khai bộ contract theo L06 → ghép luồng hai thiết bị → hoàn thành học bổng và Library → nghiệm thu và nộp bài. Việc phát triển có thể song song theo dependency; không đợi đến demo mới đối chiếu ABI hoặc payload.
 
 ## 6. Ranh giới dữ liệu và nguồn sự thật
 
@@ -89,7 +83,7 @@ Các mốc phối hợp: nhóm duyệt P01 → chốt P02 giữa contract/backen
 | Student / ví | Đọc invoice, kiểm tra mạng, hiển thị merchant và số tiền; người dùng xác nhận | Giao dịch lên contract trên `20261`, tx hash khi đã gửi |
 | Contract | Kiểm tra signer/domain/hạn, merchant/category, invoice chưa dùng; tính giá cuối theo SBT | Giao dịch thành công phát `InvoicePaid`; ABI/field cụ thể thuộc P02/L04 |
 | Backend receipt | Xác minh chain, địa chỉ contract, receipt thành công và event khớp invoice/merchant/số tiền | Trạng thái và biên nhận cho POS; không coi tx hash đơn lẻ là thành công |
-| Grant vault / Copilot | Vault thực thi giới hạn chi; Copilot chỉ đọc dữ liệu đã xác minh | Receipt/số dư grant và phản hồi có nguồn; quyền gửi tiền vẫn ở ví người dùng |
+| Grant vault / Library escrow | Vault và escrow thực thi quyền chi/cọc; backend xác minh receipt và chiếu trạng thái | Receipt/số dư grant, request/loan và tồn kho cùng khớp nguồn on-chain/SQLite |
 
 Tên endpoint, kiểu EIP-712 và ABI cuối cùng thuộc P02/L04/L05. P01 chỉ chốt luồng và trách nhiệm, không thay cho giao kèo kỹ thuật đó.
 
@@ -117,7 +111,7 @@ Checklist để reviewer P01 đối chiếu:
 - [ ] Hai persona, hai thiết bị và đường truy cập được mô tả rõ.
 - [ ] Mỗi bước demo có đầu vào, màn hình, thao tác và kết quả quan sát được.
 - [ ] Có sơ đồ bàn giao QR → ví → contract → POS, phân biệt dữ liệu demo và nguồn on-chain.
-- [ ] Có bảng P0/P1/mở rộng và điểm cắt Copilot.
+- [ ] Có bảng P0/P1/mở rộng và phạm vi Library đã duyệt.
 - [ ] Có đường dán QR, phục hồi RPC và mốc chuyển video; không báo thành công giả.
 - [ ] Một thành viên khác đọc kịch bản và diễn tập thao tác trên giấy mà không cần tác giả giải thích thêm; các task Q kiểm tra chạy thật sau khi triển khai.
 

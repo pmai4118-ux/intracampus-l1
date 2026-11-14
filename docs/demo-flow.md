@@ -64,7 +64,7 @@ QR bàn giao dữ liệu invoice có chữ ký hoặc cách truy xuất nó theo
 
 ## 4. Kịch bản trình diễn 3 phút
 
-Đây là phân bổ thời lượng thuyết trình đề xuất, không phải cam kết độ trễ của L1. Nếu giao dịch đang chờ thì giữ đúng trạng thái và dùng quy trình dự phòng ở mục 5. Chuẩn bị trước màn hình grant/Copilot và phiên ví để giảm thao tác thiết lập khi quay.
+Đây là phân bổ thời lượng thuyết trình đề xuất, không phải cam kết độ trễ của L1. Nếu giao dịch đang chờ thì giữ đúng trạng thái và dùng quy trình dự phòng ở mục 5. Chuẩn bị màn hình grant/thư viện, staff queue và hai ví demo để giảm thao tác thiết lập khi quay.
 
 | Thời gian | Người / màn hình | Đầu vào và thao tác | Kết quả quan sát được |
 | --- | --- | --- | --- |
@@ -76,10 +76,10 @@ QR bàn giao dữ liệu invoice có chữ ký hoặc cách truy xuất nó theo
 | 01:35–01:45 | Sinh viên; B, cùng invoice | Mở lại invoice đã trả. Nếu kiểm tra replay on-chain, dùng bộ test đã chuẩn bị thay vì gửi một giao dịch có thể tốn gas trong lượt quay | UI hiện đã trả, không cho thanh toán lần hai; bằng chứng contract từ L04 cho thấy replay bị từ chối |
 | 01:45–02:10 | Sinh viên; B, bảng học bổng | Mở grant đã seed, chọn căn-tin hợp lệ, nhập `1.000 CAMPUS`, xem trước và xác nhận bằng ví | Trước giao dịch có `5.000`; sau receipt thành công còn `4.000`; có tx hash và merchant nhận đúng khoản chi |
 | 02:10–02:25 | Sinh viên; B, bảng học bổng | Chọn ví cá nhân/merchant ngoài allowlist, thử khoản chi `1.000 CAMPUS` | Hiện lỗi merchant không hợp lệ; số dư grant vẫn `4.000`, merchant ngoài allowlist không nhận tiền. UI chặn trước khi gửi hoặc contract từ chối theo bằng chứng test/receipt |
-| 02:25–02:45 | Sinh viên; B, Copilot | Hỏi “Số dư CAMPUS của mình là bao nhiêu?”, sau đó “Chuyển 100 CAMPUS cho ví này” | Câu đọc khớp nguồn và có thời điểm; yêu cầu chuyển tiền bị từ chối, không có cửa sổ ký hay giao dịch được tạo |
-| 02:45–03:00 | Thuyết trình; A biên nhận và B | Chỉ lại biên nhận, grant và nguồn Copilot; nói rõ đang chạy trực tiếp hay xem bản ghi | Người xem xác định được luồng thanh toán, điều kiện ưu đãi, giới hạn grant và ranh giới Copilot |
+| 02:25–02:45 | Sinh viên; B, thư viện | Tìm sách đã seed, xem còn bản và cọc `50 CAMPUS`, tạo yêu cầu rồi ký deposit trong Core | Request ID và hash hiện ở trạng thái đang xác minh; không báo đã mượn khi mới có hash |
+| 02:45–03:00 | Thủ thư; A, staff library | Mở hàng chờ sau receipt deposit đã xác minh, duyệt bằng ví thủ thư; B đối chiếu hạn mượn 14 ngày | Loan chỉ ACTIVE sau event duyệt khớp; cả hai màn hình dùng cùng request ID và bằng chứng receipt |
 
-Nếu Copilot chưa nghiệm thu ở Q02, video có thể dành phần thời gian đó để giải thích biên nhận; ghi rõ Copilot chưa được trình diễn. Đây là lựa chọn nội dung video theo Q04, không tự đánh dấu B06/U06 hoàn thành hoặc bỏ chúng khỏi phạm vi MVP.
+Nếu luồng Library chưa thể chạy trực tiếp, dùng receipt đã ghi có nhãn fixture/local và giải thích bước còn thiếu; không gọi fixture là bằng chứng L1.
 
 ## 5. Kịch bản lỗi và dự phòng
 
@@ -95,7 +95,7 @@ Các nhãn dưới đây diễn đạt hành vi UI cần có; tên enum và mã 
 | RPC mất trước khi gửi | Dừng gửi mới, kiểm tra kết nối/hotspot và thử đọc lại một lần; chuyển video nếu không khôi phục trong `20` giây | A/B báo không xác minh được mạng/dữ liệu; không dùng receipt giả hoặc mở ví với giá chưa xác minh |
 | RPC mất sau khi có tx hash | Giữ invoiceId/tx hash, báo đang chờ xác minh, thử đọc lại sau khi nối mạng; không tự gửi lại. Nếu sau `20` giây vẫn không đọc được, chuyển video | Khi mạng về, tra giao dịch cũ rồi cập nhật trạng thái đúng; nếu chưa tìm thấy thì tiếp tục chưa xác minh. Chỉ cho thử lại sau khi xác định giao dịch cũ thất bại hoặc không được gửi, xử lý invoice còn hạn |
 | Giao dịch revert | Mở receipt/test đã chuẩn bị trong buổi kiểm thử | Hiện thất bại và lý do nếu đọc được; POS không báo đã trả. Không giả định số dư ví cá nhân giữ nguyên vì có thể mất gas |
-| Copilot/model/RPC phục vụ chat lỗi | Cho tối đa `10` giây rồi hiển thị timeout/thiếu dữ liệu; tiếp tục giải thích biên nhận | Không bịa số dư; lỗi chat không khóa POS hay thao tác ví nếu hạ tầng thanh toán còn hoạt động |
+| Chain time/RPC của Library không xác minh được | Giữ trạng thái giao dịch chưa xác minh; thử đọc lại giao dịch cũ khi RPC phục hồi | Không duyệt, giải phóng copy hoặc báo settlement thành công dựa trên giờ máy; các đường trả/refund vẫn mở |
 | Không thể tiếp tục demo trực tiếp | Theo mốc RPC ở trên, người thứ ba mở MP4 đã thử offline từ bộ Q04; nếu video lỗi, dùng ảnh/receipt đã ghi có nhãn và tx hash | Thông báo “Bản ghi trước — không phải giao dịch trực tiếp”; không đánh dấu invoice đang chờ là đã trả |
 
 Mốc `10`/`20` giây là ngân sách thao tác trình diễn do P01 đề xuất, không phải timeout API, SLA hoặc kết quả đo hiệu năng. Q01 đo độ trễ thực tế riêng. Hotspot và đường dán QR phải được Q02 chạy thử trên hai thiết bị; không mặc định chúng đã sẵn sàng.
@@ -113,7 +113,7 @@ Mốc `10`/`20` giây là ngân sách thao tác trình diễn do P01 đề xuấ
 
 P01 kiểm tra khả năng đọc hiểu kịch bản. Sau khi có triển khai, Q02 kiểm tra chạy thật; mỗi tình huống có người chạy, bản deploy, thời gian, pass/fail và bằng chứng. Mở cả hai thiết bị, đối chiếu cùng invoiceId/tx hash, giữ một bộ ví nạp sẵn và dùng invoice mới cho mỗi lượt.
 
-Các tình huống cần chạy khi triển khai xong: thanh toán ưu đãi; ví thường/thẻ hết hạn; QR hết hạn; chữ ký/domain bị sửa; sai mạng; từ chối ví; invoice đã trả; receipt thất bại hoặc event sai contract; camera lỗi; RPC mất trước/sau khi gửi; grant hợp lệ/ngoài allowlist/vượt số dư; Copilot đọc đúng/thiếu dữ liệu/từ chối chuyển tiền.
+Các tình huống cần chạy khi triển khai xong: thanh toán ưu đãi; ví thường/thẻ hết hạn; QR hết hạn; chữ ký/domain bị sửa; sai mạng; từ chối ví; invoice đã trả; receipt thất bại hoặc event sai contract; camera lỗi; RPC mất trước/sau khi gửi; grant hợp lệ/ngoài allowlist/vượt số dư; Library deposit/approval/expiry, race hết copy, return/settlement và hold recovery.
 
 Q01 lưu log đo phí và độ trễ bằng tx hash thực. Q02 ghi kết quả tại `docs/demo-checklist.md` và lỗi còn chặn demo. Q04 chuẩn bị `docs/video-script.md`, `docs/demo-assets.md` và bộ offline; các file này thuộc task sau, chưa được tạo bởi P01.
 
