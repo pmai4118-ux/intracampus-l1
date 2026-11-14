@@ -202,6 +202,14 @@ Tuỳ chọn:
 - `--replace`: bắt buộc truyền nếu ghi đè một file đích đã có `status: "deployed"`.
   Exporter luôn từ chối ghi trực tiếp lên file chuẩn `deployments/intracampus.json`.
 
+Ứng dụng dùng loader typed từ `@intracampus/network`: `getLibraryDeployment()` trả
+view `unconfigured` khi manifest cũ chỉ có ba contract hoặc Library chưa được deploy;
+`requireLibraryDeployment(manifest, { allowLocal: true })` trả manifest mở rộng đã
+kiểm tra ABI, policy, role, terms và bằng chứng seed/seal. `allowLocal` chỉ bật tường
+minh trong test/demo; API production mặc định từ chối `local-anvil`. `requireDeployment()`
+hiện hữu tiếp tục kiểm tra ba contract gốc và không bắt ứng dụng POS/invoice phụ thuộc
+Library.
+
 ### Cấu trúc evidence cục bộ (`local-anvil`)
 
 Khối `library` do `export-library-deployment.mjs` xuất và kiểm chứng qua

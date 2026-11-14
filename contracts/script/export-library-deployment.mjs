@@ -180,12 +180,14 @@ function validateDeployedLibrarySection(lib, { allowLocal = false, baseAddresses
 
   if (!Array.isArray(lib.books) || lib.books.length === 0) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
   const seenBooks = new Set();
+  const seedSealCoverage = new Map();
   for (const entry of lib.books) {
     const book = assertValidObject(entry);
     if (!isHash(book.bookId)) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     const bookId = book.bookId.toLowerCase();
     if (seenBooks.has(bookId)) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     seenBooks.add(bookId);
+    seedSealCoverage.set(bookId, { seedBookTerms: false, sealBookTerms: false });
     if (
       book.depositWei !== POLICY_SPEC.depositWei ||
       typeof book.replacementPriceWei !== "string" ||
@@ -206,6 +208,7 @@ function validateDeployedLibrarySection(lib, { allowLocal = false, baseAddresses
       !["seedBookTerms", "sealBookTerms"].includes(String(tx.type)) ||
       !isHash(tx.bookId) ||
       !seenBooks.has(tx.bookId.toLowerCase()) ||
+      seedSealCoverage.get(tx.bookId.toLowerCase())[tx.type] ||
       !isHash(tx.transactionHash) ||
       txHashes.has(tx.transactionHash.toLowerCase()) ||
       !isHash(tx.blockHash) ||
@@ -215,6 +218,10 @@ function validateDeployedLibrarySection(lib, { allowLocal = false, baseAddresses
       throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     }
     txHashes.add(tx.transactionHash.toLowerCase());
+    seedSealCoverage.get(tx.bookId.toLowerCase())[tx.type] = true;
+  }
+  if ([...seedSealCoverage.values()].some((coverage) => !coverage.seedBookTerms || !coverage.sealBookTerms)) {
+    throw new Error("INVALID_LIBRARY_DEPLOYMENT");
   }
 }
 

@@ -1,5 +1,16 @@
 export { campusNetwork } from "./chain.ts";
 export { getDeployment, requireDeployment, deploymentResponse } from "./deployment.ts";
+export { getLibraryDeployment, requireLibraryDeployment } from "./library-deployment.ts";
+export type {
+  DeployedLibraryDeployment,
+  LibraryBookTerms,
+  LibraryDeployedManifest,
+  LibraryDeployment,
+  LibraryDeploymentEnvironment,
+  LibraryDeploymentPolicy,
+  LibrarySeedTransaction,
+  UnconfiguredLibraryDeployment,
+} from "./library-deployment.ts";
 export type { DeployedManifest, PublicContract } from "./deployment.ts";
 
 export type { SignedInvoiceEnvelope, InvoiceTransaction, VerifiedInvoiceReceipt, InvoiceApiError, InvoiceLookupResponse } from "./invoices.ts";
