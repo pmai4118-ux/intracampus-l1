@@ -25,6 +25,7 @@ export type LibraryTransactionAction =
   | "approve"
   | "reject"
   | "refund"
+  | "confirmReturn"
   | "return"
   | "settle"
   | "payShortfall";
@@ -36,7 +37,8 @@ export type LibraryEscrowState =
   | "REFUNDED"
   | "RETURN_SETTLED"
   | "LOST_SHORTFALL_DUE"
-  | "LOST_SETTLED";
+  | "LOST_SETTLED"
+  | "RETURN_RECEIVED";
 export type LibraryWei = string;
 export type LibraryBytes32 = `0x${string}`;
 export type LibraryAddress = `0x${string}`;
@@ -108,6 +110,7 @@ export type LibraryEventProof = {
     | "LoanApproved"
     | "RequestRejected"
     | "ExpiredRefundClaimed"
+    | "PhysicalReturnConfirmed"
     | "ReturnSettled"
     | "LostSettled"
     | "ShortfallPaid";
@@ -204,6 +207,7 @@ export type LibraryLoan = {
   approvedAt: number;
   dueAt: number;
   returnRequestedAt: number | null;
+  returnReceivedAt: number | null;
   settlement: LibrarySettlement | null;
 };
 

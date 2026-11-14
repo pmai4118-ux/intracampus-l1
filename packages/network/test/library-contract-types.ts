@@ -28,6 +28,10 @@ const returnedRequest: LibrarySettlementIntentRequest = {
   repairRequestedWei: "1000000000000000000",
 };
 const lostRequest: LibrarySettlementIntentRequest = { outcome: "LOST", reason: "Not found after inventory." };
+const confirmedReturnSubmission: LibraryTransactionSubmission = {
+  action: "confirmReturn",
+  txHash: "0x1234",
+};
 const returnSubmission: LibraryTransactionSubmission = {
   action: "return",
   txHash: "0x1234",
@@ -53,4 +57,5 @@ void borrower;
 void payloadTooLarge;
 void returnedRequest;
 void lostRequest;
+void confirmedReturnSubmission;
 void returnSubmission;
