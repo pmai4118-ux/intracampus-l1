@@ -12,9 +12,10 @@ const DAY = 86_400;
 const E18 = 1_000_000_000_000_000_000n;
 
 function normalizedAbiEntry(entry) {
-  const signature = `${entry.name ?? "constructor"}(${(entry.inputs ?? []).map(({ type }) => type).join(",")})`;
-  const inputs = (entry.inputs ?? []).map(({ name = "", type, indexed }) => `${name}:${type}${indexed ? ":indexed" : ""}`).join("|");
-  const outputs = (entry.outputs ?? []).map(({ name = "", type }) => `${name}:${type}`).join("|") || "-";
+  const encode = (value) => encodeURIComponent(String(value)).replaceAll("(", "%28").replaceAll(")", "%29");
+  const signature = `${encode(entry.name ?? "constructor")}(${(entry.inputs ?? []).map(({ type }) => encode(type)).join(",")})`;
+  const inputs = (entry.inputs ?? []).map(({ name = "", type, indexed }) => `${encode(name)}:${encode(type)}${indexed ? ":indexed" : ""}`).join("|");
+  const outputs = (entry.outputs ?? []).map(({ name = "", type }) => `${encode(name)}:${encode(type)}`).join("|") || "-";
   if (entry.type === "constructor") return `constructor ${signature}:${entry.stateMutability}:inputs(${inputs})`;
   if (entry.type === "function") return `function ${signature}:${entry.stateMutability}:inputs(${inputs}):outputs(${outputs})`;
   if (entry.type === "event") return `event ${signature}:anonymous=${entry.anonymous ?? false}:inputs(${inputs})`;
