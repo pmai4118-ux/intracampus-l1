@@ -82,6 +82,7 @@ class FakeLibraryRpc implements LibraryRpcClient {
   receipts = new Map<string, TransactionReceipt>();
   liveReplacementPriceWei = replacementPriceWei;
   termsReads = 0;
+  failingBlockNumber: number | null = null;
 
   async getNetwork() {
     if (!this.available) throw new Error("rpc down");
@@ -90,6 +91,7 @@ class FakeLibraryRpc implements LibraryRpcClient {
   async getBlock(tag: "latest" | number) {
     if (!this.available) throw new Error("rpc down");
     const number = tag === "latest" ? 500 : tag;
+    if (number === this.failingBlockNumber) throw new Error("block lookup failed");
     return { number, timestamp: this.chainTime, hash: hash(number) } as unknown as Block;
   }
   async getLogs(_filter: Filter): Promise<Log[]> {
@@ -256,6 +258,29 @@ test("malformed Library request and settlement inputs return validation errors",
     assert.equal(response.status, 400, `repair amount ${repairRequestedWei} should be rejected`);
     assert.equal((await response.json()).error.code, "VALIDATION_ERROR");
   }
+});
+
+test("a failed canonical block lookup for a reverted receipt returns retryable RPC_UNAVAILABLE", async (t) => {
+  const state = setup(t);
+  const api = await serve(t, state.app);
+  const cookie = await studentCookie(state);
+  const account = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await state.libraryService.createRequest({ account, bookId, idempotencyKey: "reverted-block-read" });
+  const txHash = hash(197);
+  state.rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: student.address,
+    data: iface.encodeFunctionData("deposit", [request.requestId, bookId]), value: BigInt(depositWei) } as unknown as TransactionResponse);
+  state.rpc.receipts.set(txHash, { hash: txHash, status: 0, blockNumber: 499, blockHash: hash(499), logs: [] } as unknown as TransactionReceipt);
+  state.rpc.failingBlockNumber = 499;
+
+  const response = await fetch(`${api}/api/library/requests/${request.requestId}/transactions`, { method: "POST", headers: {
+    cookie, origin: authConfig.origin, "content-type": "application/json" }, body: JSON.stringify({ action: "deposit", txHash }) });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "2");
+  const error = (await response.json()).error;
+  assert.equal(error.code, "RPC_UNAVAILABLE");
+  assert.equal(error.retryable, true);
+  assert.equal(state.repository.getTransaction(request.requestId, "deposit")?.status, "SUBMITTED",
+    "a missing canonical block read does not misclassify the receipt as reverted");
 });
 
 test("transaction submission is idempotent when reconciliation sees the mined event first", async (t) => {

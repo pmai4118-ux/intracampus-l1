@@ -310,7 +310,9 @@ export class LibraryService {
     try { receipt = await rpc.getTransactionReceipt(input.txHash); }
     catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
     if (receipt?.status === 0 && receipt.blockNumber <= chain.safeBlock) {
-      const block = await rpc.getBlock(receipt.blockNumber);
+      let block;
+      try { block = await rpc.getBlock(receipt.blockNumber); }
+      catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
       if (block?.hash?.toLowerCase() === receipt.blockHash.toLowerCase()) {
         try { submitted = this.repository.markTransactionReverted({ requestId: record.requestId, action, txHash: input.txHash,
           blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, checkedAt: chain.checkedAt }); }
