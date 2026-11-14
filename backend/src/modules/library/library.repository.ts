@@ -12,7 +12,10 @@ import type {
   LibraryDemoSeed,
   LibraryDepositProjection,
   LibraryRequestRecord,
+  LibrarySettlementIntentRecord,
   LibrarySessionRecord,
+  LibraryStoredTransaction,
+  LibraryVerifiedChainEvent,
   LibraryVerifiedDeposit,
 } from "./library.types.ts";
 
@@ -21,6 +24,54 @@ const bytes32Pattern = /^0x[0-9a-f]{64}$/i;
 const integerStringPattern = /^(0|[1-9][0-9]*)$/;
 const fixedDepositWei = "50000000000000000000";
 const authCleanupBatchSize = 256;
+const eventActions = {
+  DepositReceived: "deposit",
+  LoanApproved: "approve",
+  RequestRejected: "reject",
+  ExpiredRefundClaimed: "refund",
+  PhysicalReturnConfirmed: "confirmReturn",
+  ReturnSettled: "return",
+  LostSettled: "settle",
+  ShortfallPaid: "payShortfall",
+} as const;
+
+function librarySqliteBusy(error: unknown): boolean {
+  return error instanceof Error && (error.message.toLowerCase().includes("database is locked")
+    || ("code" in error && typeof error.code === "string" && /SQLITE_(BUSY|LOCKED)/.test(error.code)));
+}
+
+function beginImmediate(db: DatabaseSync): void {
+  try { db.exec("BEGIN IMMEDIATE"); }
+  catch (error) {
+    if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+    throw error;
+  }
+}
+
+function rollback(db: DatabaseSync): void {
+  try { db.exec("ROLLBACK"); } catch { /* preserve the transaction failure */ }
+}
+
+function serializedChainEvent(event: LibraryVerifiedChainEvent): string {
+  const { observedAt: _observedAt, ...immutable } = event;
+  return JSON.stringify(immutable);
+}
+
+function chainEventPayloadMatches(payload: string, event: LibraryVerifiedChainEvent): boolean {
+  try {
+    const stored = JSON.parse(payload) as Record<string, unknown>;
+    if (event.eventName === "DepositReceived" && stored.eventName === "DepositReceived" && typeof stored.depositWei === "string") {
+      return stored.requestId === event.requestId && String(stored.borrower).toLowerCase() === event.borrower.toLowerCase()
+        && String(stored.bookId).toLowerCase() === event.bookId.toLowerCase() && stored.depositWei === event.amountWei
+        && stored.approvalDeadline === event.approvalDeadline && stored.chainId === event.chainId
+        && String(stored.contractAddress).toLowerCase() === event.contractAddress.toLowerCase()
+        && String(stored.txHash).toLowerCase() === event.txHash.toLowerCase() && stored.logIndex === event.logIndex
+        && stored.blockNumber === event.blockNumber && String(stored.blockHash).toLowerCase() === event.blockHash.toLowerCase()
+        && stored.occurredAt === event.blockTimestamp;
+    }
+    return serializedChainEvent(stored as unknown as LibraryVerifiedChainEvent) === serializedChainEvent(event);
+  } catch { return false; }
+}
 
 function canonicalWallet(value: string): string {
   if (!addressPattern.test(value) || /^0x0{40}$/i.test(value)) throw new Error("INVALID_LIBRARY_WALLET");
@@ -99,7 +150,7 @@ export function applyLibraryMigrations(db: DatabaseSync, migrations: readonly Li
   if (versions.some((version, index) => !Number.isSafeInteger(version) || version < 1 || (index > 0 && version <= versions[index - 1]))) {
     throw new Error("INVALID_LIBRARY_MIGRATION_SEQUENCE");
   }
-  db.exec("BEGIN IMMEDIATE");
+  beginImmediate(db);
   try {
     const appliedVersion = db.prepare("PRAGMA user_version").get()?.user_version;
     if (typeof appliedVersion !== "number" || !Number.isSafeInteger(appliedVersion) || appliedVersion < 0) throw new Error("INVALID_LIBRARY_SCHEMA_VERSION");
@@ -114,7 +165,7 @@ export function applyLibraryMigrations(db: DatabaseSync, migrations: readonly Li
     }
     db.exec("COMMIT");
   } catch (error) {
-    db.exec("ROLLBACK");
+    rollback(db);
     throw error;
   }
 }
@@ -185,7 +236,7 @@ export class LibraryRepository {
     const serialized = JSON.stringify(seed);
     const hash = createHash("sha256").update(serialized, "utf8").digest("hex");
     const now = Math.floor(Date.now() / 1000);
-    this.db.exec("BEGIN IMMEDIATE");
+    beginImmediate(this.db);
     try {
       const previous = this.db.prepare("SELECT seed_version, seed_hash FROM library_seed_state WHERE singleton = 1").get();
       if (previous) {
@@ -213,7 +264,7 @@ export class LibraryRepository {
       this.db.exec("COMMIT");
       return "inserted";
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       if (error instanceof Error && error.message === "LIBRARY_SEED_CONFLICT") throw error;
       if (error instanceof Error && (error.message.includes("UNIQUE constraint failed") || error.message.includes("FOREIGN KEY constraint failed"))) {
         throw new Error("LIBRARY_SEED_CONFLICT");
@@ -244,13 +295,16 @@ export class LibraryRepository {
     return { wallet: String(row.wallet), role: String(row.role) as "STUDENT" | "LIBRARIAN", enabled: Number(row.enabled) === 1 };
   }
 
-  createDepositRequest(input: { requestId: string; wallet: string; bookId: string; idempotencyKey: string; createdAt: number }): LibraryRequestRecord {
+  createDepositRequest(input: { requestId: string; wallet: string; bookId: string; idempotencyKey: string; createdAt: number;
+    chainTime: number; holdAfterSeconds: number }): LibraryRequestRecord {
     const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");
     const wallet = canonicalWallet(input.wallet);
     const bookId = canonicalBytes32(input.bookId, "INVALID_LIBRARY_BOOK_ID");
     safeInteger(input.createdAt, "INVALID_LIBRARY_TIMESTAMP");
     if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200) throw new Error("INVALID_LIBRARY_IDEMPOTENCY_KEY");
-    this.db.exec("BEGIN IMMEDIATE");
+    safeInteger(input.chainTime, "INVALID_LIBRARY_TIMESTAMP");
+    safeInteger(input.holdAfterSeconds, "INVALID_LIBRARY_HOLD_POLICY", 1);
+    beginImmediate(this.db);
     try {
       const existing = rowToRequest(this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE r.account_id = (SELECT account_id FROM accounts WHERE wallet = ? COLLATE NOCASE) AND r.idempotency_key = ?`)
@@ -262,6 +316,27 @@ export class LibraryRepository {
       }
       const account = this.db.prepare("SELECT account_id, role, enabled FROM accounts WHERE wallet = ? COLLATE NOCASE").get(wallet);
       if (!account || Number(account.enabled) !== 1 || account.role !== "STUDENT") throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
+      const accountId = Number(account.account_id);
+      const chainTime = input.chainTime;
+      const holdAfterSeconds = input.holdAfterSeconds;
+      this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
+        SELECT l.account_id, l.loan_id, 'OVERDUE', ? FROM loans l
+        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED') AND ? > l.due_at + ?
+        ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`)
+        .run(chainTime, accountId, chainTime, holdAfterSeconds);
+      this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
+        SELECT l.account_id, l.loan_id, 'LOST_SHORTFALL', ? FROM loans l
+        WHERE l.account_id = ? AND l.status = 'LOST_SHORTFALL_DUE'
+        ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, accountId);
+      this.db.prepare(`UPDATE account_holds SET released_at = ? WHERE account_id = ? AND released_at IS NULL AND (
+        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED'))
+        OR (hold_type = 'LOST_SHORTFALL' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) <> 'LOST_SHORTFALL_DUE'))`)
+        .run(chainTime, accountId);
+      const blockingHold = this.db.prepare(`SELECT 1 AS found FROM account_holds h
+        JOIN loans l USING(loan_id) WHERE h.account_id = ? AND h.released_at IS NULL
+        AND ((h.hold_type = 'OVERDUE' AND ? > l.due_at + ?) OR h.hold_type = 'LOST_SHORTFALL') LIMIT 1`)
+        .get(accountId, chainTime, holdAfterSeconds);
+      if (blockingHold) throw new Error("LIBRARY_ACCOUNT_HELD");
       const hasBook = this.db.prepare("SELECT 1 AS found FROM books WHERE book_id = ?").get(bookId);
       if (!hasBook) throw new Error("LIBRARY_BOOK_NOT_FOUND");
       const available = this.db.prepare("SELECT 1 AS found FROM book_copies WHERE book_id = ? AND status = 'AVAILABLE' LIMIT 1").get(bookId);
@@ -274,7 +349,7 @@ export class LibraryRepository {
       this.db.exec("COMMIT");
       return request;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       throw error;
     }
   }
@@ -298,14 +373,21 @@ export class LibraryRepository {
     if (event.chainId !== 20261 || event.eventName !== "DepositReceived" || event.approvalDeadline <= event.occurredAt) {
       throw new Error("INVALID_LIBRARY_VERIFIED_DEPOSIT");
     }
-    const payload = JSON.stringify(event);
-    this.db.exec("BEGIN IMMEDIATE");
+    const chainEvent: LibraryVerifiedChainEvent = {
+      chainId: 20261, contractAddress: event.contractAddress, txHash: event.txHash, logIndex: event.logIndex,
+      blockNumber: event.blockNumber, blockHash: event.blockHash, blockTimestamp: event.occurredAt,
+      transactionFrom: event.borrower, observedAt: event.occurredAt, eventName: "DepositReceived",
+      requestId: event.requestId, borrower: event.borrower, bookId: event.bookId, amountWei: event.depositWei,
+      depositedAt: event.occurredAt, approvalDeadline: event.approvalDeadline,
+    };
+    const payload = serializedChainEvent(chainEvent);
+    beginImmediate(this.db);
     try {
       const previous = this.db.prepare(`SELECT request_id, payload_json FROM chain_events
         WHERE chain_id = ? AND contract_address = ? COLLATE NOCASE AND tx_hash = ? AND log_index = ?`)
         .get(event.chainId, event.contractAddress, event.txHash, event.logIndex);
       if (previous) {
-        if (previous.request_id !== event.requestId || previous.payload_json !== payload) throw new Error("LIBRARY_EVENT_CONFLICT");
+        if (previous.request_id !== event.requestId || !chainEventPayloadMatches(String(previous.payload_json), chainEvent)) throw new Error("LIBRARY_EVENT_CONFLICT");
         const duplicate = this.getDepositProjection(event.requestId, true);
         if (!duplicate) throw new Error("LIBRARY_REQUEST_NOT_FOUND");
         this.db.exec("COMMIT");
@@ -319,10 +401,17 @@ export class LibraryRepository {
         || String(request.book_id) !== event.bookId || String(request.deposit_wei) !== event.depositWei) {
         throw new Error("LIBRARY_DEPOSIT_REQUEST_MISMATCH");
       }
-      this.db.prepare(`INSERT INTO chain_events(chain_id, contract_address, tx_hash, log_index, block_number, block_hash,
+      const inserted = this.db.prepare(`INSERT INTO chain_events(chain_id, contract_address, tx_hash, log_index, block_number, block_hash,
         event_name, request_id, payload_json, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(event.chainId, event.contractAddress, event.txHash, event.logIndex, event.blockNumber, event.blockHash,
           event.eventName, event.requestId, payload, event.occurredAt);
+      const eventId = Number(inserted.lastInsertRowid);
+      this.db.prepare(`INSERT INTO library_event_canonicality(event_id, status, checked_at, observed_block_hash)
+        VALUES (?, 'CANONICAL', ?, ?)`).run(eventId, event.occurredAt, event.blockHash);
+      this.db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, block_number,
+        block_hash, log_index, event_name) VALUES (?, 'deposit', ?, ?, 'CONFIRMED', ?, ?, ?, 'DepositReceived')
+        ON CONFLICT(request_id, action) DO NOTHING`)
+        .run(event.requestId, event.txHash, event.occurredAt, event.blockNumber, event.blockHash, event.logIndex);
 
       const copy = this.db.prepare(`SELECT copy_id FROM book_copies WHERE book_id = ? AND status = 'AVAILABLE'
         ORDER BY barcode, copy_id LIMIT 1`).get(event.bookId);
@@ -345,7 +434,7 @@ export class LibraryRepository {
       this.db.exec("COMMIT");
       return projection;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       if (error instanceof Error && error.message.includes("UNIQUE constraint failed: chain_events")) throw new Error("LIBRARY_EVENT_CONFLICT");
       throw error;
     }
@@ -355,6 +444,600 @@ export class LibraryRepository {
     const normalized = canonicalBytes32(requestId, "INVALID_LIBRARY_REQUEST_ID");
     return rowToRequest(this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
       WHERE r.request_id = ?`).get(normalized));
+  }
+
+  recordVerifiedChainEvents(events: readonly LibraryVerifiedChainEvent[], cursorBlock: number, checkedAt: number,
+    policyJson: string, advanceCursor = true): { applied: number; duplicates: number; ignored: number; cursorBlock: number } {
+    safeInteger(cursorBlock, "INVALID_LIBRARY_BLOCK_NUMBER");
+    safeInteger(checkedAt, "INVALID_LIBRARY_TIMESTAMP");
+    if (!policyJson.trim() || policyJson.length > 16_384) throw new Error("INVALID_LIBRARY_POLICY_SNAPSHOT");
+    beginImmediate(this.db);
+    try {
+      const state = this.db.prepare("SELECT cursor_block, health FROM library_reconcile_state WHERE singleton = 1").get();
+      if (!state || state.health !== "HEALTHY") throw new Error("LIBRARY_REORG_DETECTED");
+      if (cursorBlock < Number(state.cursor_block)) throw new Error("LIBRARY_CURSOR_REGRESSION");
+      let applied = 0, duplicates = 0, ignored = 0;
+      const ordered = [...events].sort((left, right) => left.blockNumber - right.blockNumber || left.logIndex - right.logIndex);
+      for (const source of ordered) {
+        const event = { ...source,
+          requestId: canonicalBytes32(source.requestId, "INVALID_LIBRARY_REQUEST_ID"),
+          borrower: canonicalWallet(source.borrower),
+          transactionFrom: canonicalWallet(source.transactionFrom),
+          contractAddress: canonicalWallet(source.contractAddress),
+          txHash: canonicalBytes32(source.txHash, "INVALID_LIBRARY_TX_HASH"),
+          blockHash: canonicalBytes32(source.blockHash, "INVALID_LIBRARY_BLOCK_HASH"),
+        } as LibraryVerifiedChainEvent;
+        safeInteger(event.logIndex, "INVALID_LIBRARY_LOG_INDEX");
+        safeInteger(event.blockNumber, "INVALID_LIBRARY_BLOCK_NUMBER");
+        safeInteger(event.blockTimestamp, "INVALID_LIBRARY_TIMESTAMP", 1);
+        safeInteger(event.observedAt, "INVALID_LIBRARY_TIMESTAMP");
+        if (event.chainId !== 20261 || (advanceCursor && event.blockNumber > cursorBlock)) throw new Error("INVALID_LIBRARY_VERIFIED_EVENT");
+        if (event.eventName === "DepositReceived") {
+          event.bookId = canonicalBytes32(event.bookId, "INVALID_LIBRARY_BOOK_ID");
+          canonicalWei(event.amountWei, true);
+          safeInteger(event.depositedAt, "INVALID_LIBRARY_TIMESTAMP", 1);
+          safeInteger(event.approvalDeadline, "INVALID_LIBRARY_TIMESTAMP", 1);
+        } else if (event.eventName === "LoanApproved") {
+          canonicalWei(event.replacementPriceWei, true);
+          safeInteger(event.approvedAt, "INVALID_LIBRARY_TIMESTAMP", 1);
+          safeInteger(event.dueAt, "INVALID_LIBRARY_TIMESTAMP", 1);
+        } else if (event.eventName === "RequestRejected" || event.eventName === "ExpiredRefundClaimed") {
+          canonicalWei(event.refundWei);
+        } else if (event.eventName === "PhysicalReturnConfirmed") {
+          safeInteger(event.returnedAt, "INVALID_LIBRARY_TIMESTAMP", 1);
+        } else if (event.eventName === "ReturnSettled") {
+          safeInteger(event.returnedAt, "INVALID_LIBRARY_TIMESTAMP", 1);
+          canonicalWei(event.lateFeeWei); canonicalWei(event.repairFeeWei); canonicalWei(event.overdueForfeitWei);
+          canonicalWei(event.totalRetainedWei); canonicalWei(event.refundWei);
+        } else if (event.eventName === "LostSettled") {
+          canonicalWei(event.replacementPriceWei, true); canonicalWei(event.retainedWei); canonicalWei(event.refundWei);
+          canonicalWei(event.shortfallWei);
+        } else if (event.eventName === "ShortfallPaid") canonicalWei(event.amountWei, true);
+
+        const previous = this.db.prepare(`SELECT e.event_id, e.request_id, e.payload_json, c.status
+          FROM chain_events e LEFT JOIN library_event_canonicality c USING(event_id)
+          WHERE e.chain_id = ? AND e.contract_address = ? COLLATE NOCASE AND e.tx_hash = ? AND e.log_index = ?`)
+          .get(event.chainId, event.contractAddress, event.txHash, event.logIndex);
+        if (previous) {
+          if (previous.request_id !== event.requestId || !chainEventPayloadMatches(String(previous.payload_json), event)) throw new Error("LIBRARY_EVENT_CONFLICT");
+          if (previous.status !== "CANONICAL") throw new Error("LIBRARY_REORG_DETECTED");
+          duplicates++;
+          continue;
+        }
+        const request = this.db.prepare(`SELECT r.request_id, r.account_id, r.book_id, r.copy_id, r.status, r.refund_status,
+          r.deposit_wei, r.approval_deadline, a.wallet, b.deposit_wei AS book_deposit_wei,
+          b.replacement_price_wei, l.status AS loan_status, l.deposit_wei AS loan_deposit_wei,
+          l.replacement_price_wei AS loan_replacement_price_wei, l.return_received_at, l.due_at
+          FROM borrow_requests r JOIN accounts a USING(account_id) JOIN books b USING(book_id)
+          LEFT JOIN loans l ON l.request_id = r.request_id WHERE r.request_id = ?`).get(event.requestId);
+        if (!request) { ignored++; continue; }
+        if (String(request.wallet).toLowerCase() !== event.borrower || String(request.book_id) !== (event.eventName === "DepositReceived" ? event.bookId : String(request.book_id))) {
+          throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+        }
+        const payload = serializedChainEvent(event);
+        const inserted = this.db.prepare(`INSERT INTO chain_events(chain_id, contract_address, tx_hash, log_index, block_number,
+          block_hash, event_name, request_id, payload_json, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(event.chainId, event.contractAddress, event.txHash, event.logIndex, event.blockNumber, event.blockHash,
+            event.eventName, event.requestId, payload, event.blockTimestamp);
+        const eventId = Number(inserted.lastInsertRowid);
+        this.db.prepare(`INSERT INTO library_event_canonicality(event_id, status, checked_at, observed_block_hash)
+          VALUES (?, 'CANONICAL', ?, ?)`).run(eventId, checkedAt, event.blockHash);
+
+        const releaseCopy = (copyId: unknown, fromStatus: string) => {
+          if (typeof copyId !== "string") throw new Error("LIBRARY_EVENT_COPY_MISSING");
+          const result = this.db.prepare("UPDATE book_copies SET status = 'AVAILABLE' WHERE copy_id = ? AND status = ?")
+            .run(copyId, fromStatus);
+          if (result.changes !== 1) throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+        };
+        const privileged = ["LoanApproved", "RequestRejected", "PhysicalReturnConfirmed", "ReturnSettled", "LostSettled"]
+          .includes(event.eventName);
+        const actor = this.db.prepare("SELECT account_id, role FROM accounts WHERE wallet = ? COLLATE NOCASE")
+          .get(event.transactionFrom);
+        if (privileged && (!actor || actor.role !== "LIBRARIAN")) throw new Error("LIBRARY_EVENT_ACTOR_MISMATCH");
+
+        switch (event.eventName) {
+          case "DepositReceived": {
+            if (request.status !== "AWAITING_DEPOSIT" || String(request.book_id) !== event.bookId
+              || String(request.book_deposit_wei) !== event.amountWei || event.depositedAt !== event.blockTimestamp
+              || event.approvalDeadline <= event.depositedAt) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            const copy = this.db.prepare(`SELECT copy_id FROM book_copies WHERE book_id = ? AND status = 'AVAILABLE'
+              ORDER BY barcode, copy_id LIMIT 1`).get(event.bookId);
+            if (copy) {
+              const copyId = String(copy.copy_id);
+              if (this.db.prepare("UPDATE book_copies SET status = 'PENDING_APPROVAL' WHERE copy_id = ? AND status = 'AVAILABLE'")
+                .run(copyId).changes !== 1) throw new Error("LIBRARY_COPY_ALLOCATION_CONFLICT");
+              this.db.prepare(`UPDATE borrow_requests SET copy_id = ?, status = 'PENDING_APPROVAL', refund_status = 'NONE',
+                deposit_wei = ?, approval_deadline = ?, chain_id = ?, contract_address = ?, deposit_tx_hash = ?, updated_at = ?
+                WHERE request_id = ? AND status = 'AWAITING_DEPOSIT'`)
+                .run(copyId, event.amountWei, event.approvalDeadline, event.chainId, event.contractAddress, event.txHash, event.blockTimestamp, event.requestId);
+            } else {
+              this.db.prepare(`UPDATE borrow_requests SET status = 'REJECTED_NO_COPY', refund_status = 'REFUND_DUE', deposit_wei = ?,
+                approval_deadline = ?, chain_id = ?, contract_address = ?, deposit_tx_hash = ?, updated_at = ?
+                WHERE request_id = ? AND status = 'AWAITING_DEPOSIT'`)
+                .run(event.amountWei, event.approvalDeadline, event.chainId, event.contractAddress, event.txHash, event.blockTimestamp, event.requestId);
+            }
+            break;
+          }
+          case "LoanApproved": {
+            if (request.status !== "PENDING_APPROVAL" || request.copy_id === null || request.approval_deadline === null
+              || event.approvedAt !== event.blockTimestamp || event.approvedAt >= Number(request.approval_deadline)
+              || event.dueAt <= event.approvedAt || String(request.replacement_price_wei) !== event.replacementPriceWei) {
+              throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            }
+            if (this.db.prepare("UPDATE book_copies SET status = 'ON_LOAN' WHERE copy_id = ? AND status = 'PENDING_APPROVAL'")
+              .run(String(request.copy_id)).changes !== 1) throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+            this.db.prepare(`UPDATE borrow_requests SET status = 'APPROVED', updated_at = ? WHERE request_id = ?`)
+              .run(event.blockTimestamp, event.requestId);
+            this.db.prepare(`INSERT INTO loans(loan_id, request_id, book_id, copy_id, account_id, status, deposit_wei,
+              replacement_price_wei, policy_json, approved_at, due_at, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`)
+              .run(event.requestId, event.requestId, request.book_id, request.copy_id, request.account_id,
+                request.deposit_wei, event.replacementPriceWei, policyJson, event.approvedAt, event.dueAt, event.blockTimestamp, event.blockTimestamp);
+            break;
+          }
+          case "RequestRejected": {
+            if (request.status !== "PENDING_APPROVAL" || request.copy_id === null || String(request.deposit_wei) !== event.refundWei) {
+              throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            }
+            releaseCopy(request.copy_id, "PENDING_APPROVAL");
+            this.db.prepare("UPDATE borrow_requests SET status = 'REJECTED', refund_status = 'REFUNDED', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            break;
+          }
+          case "ExpiredRefundClaimed": {
+            if (!["PENDING_APPROVAL", "REJECTED_NO_COPY", "EXPIRED_REFUND_DUE"].includes(String(request.status))
+              || String(request.deposit_wei) !== event.refundWei || request.approval_deadline === null
+              || event.blockTimestamp < Number(request.approval_deadline)) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            if (request.status === "PENDING_APPROVAL") releaseCopy(request.copy_id, "PENDING_APPROVAL");
+            this.db.prepare(`UPDATE borrow_requests SET status = CASE WHEN status = 'PENDING_APPROVAL' THEN 'EXPIRED_REFUND_DUE' ELSE status END,
+              refund_status = 'REFUNDED', updated_at = ? WHERE request_id = ?`)
+              .run(event.blockTimestamp, event.requestId);
+            break;
+          }
+          case "PhysicalReturnConfirmed": {
+            if (!["ACTIVE", "RETURN_REQUESTED"].includes(String(request.loan_status)) || event.returnedAt !== event.blockTimestamp) {
+              throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            }
+            if (this.db.prepare("UPDATE book_copies SET status = 'RETURN_REVIEW' WHERE copy_id = ? AND status = 'ON_LOAN'")
+              .run(String(request.copy_id)).changes !== 1) throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+            this.db.prepare("UPDATE loans SET status = 'SETTLEMENT_PENDING', return_received_at = ?, updated_at = ? WHERE request_id = ?")
+              .run(event.returnedAt, event.blockTimestamp, event.requestId);
+            this.db.prepare("UPDATE borrow_requests SET status = 'SETTLEMENT_PENDING', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            break;
+          }
+          case "ReturnSettled": {
+            if (request.loan_status !== "SETTLEMENT_PENDING" || Number(request.return_received_at) !== event.returnedAt) {
+              throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            }
+            const actorId = Number(actor?.account_id);
+            const intent = this.db.prepare(`SELECT reason FROM settlement_intents WHERE loan_id = ? AND outcome = 'RETURNED'
+              AND librarian_account_id = ? ORDER BY created_at DESC LIMIT 1`).get(event.requestId, actorId);
+            this.db.prepare(`INSERT INTO settlements(loan_id, outcome, reason, retained_wei, refund_wei, shortfall_wei,
+              librarian_account_id, tx_hash, event_id, created_at) VALUES (?, 'RETURNED', ?, ?, ?, '0', ?, ?, ?, ?)`)
+              .run(event.requestId, String(intent?.reason ?? "Verified on-chain settlement"), event.totalRetainedWei, event.refundWei,
+                actorId, event.txHash, eventId, event.blockTimestamp);
+            if (this.db.prepare(`UPDATE book_copies SET status = ? WHERE copy_id = ? AND status = 'RETURN_REVIEW'`)
+              .run(event.maintenanceRequired ? "MAINTENANCE" : "AVAILABLE", String(request.copy_id)).changes !== 1) {
+              throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+            }
+            this.db.prepare("UPDATE loans SET status = 'RETURNED', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            this.db.prepare("UPDATE borrow_requests SET status = 'RETURNED', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            break;
+          }
+          case "LostSettled": {
+            if (!["ACTIVE", "RETURN_REQUESTED"].includes(String(request.loan_status))
+              || event.replacementPriceWei !== String(request.loan_replacement_price_wei)) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            const depositAmount = BigInt(String(request.loan_deposit_wei));
+            const replacement = BigInt(event.replacementPriceWei);
+            if (BigInt(event.retainedWei) !== (replacement < depositAmount ? replacement : depositAmount)
+              || BigInt(event.refundWei) !== (depositAmount > replacement ? depositAmount - replacement : 0n)
+              || BigInt(event.shortfallWei) !== (replacement > depositAmount ? replacement - depositAmount : 0n)) {
+              throw new Error("LIBRARY_EVENT_SETTLEMENT_MISMATCH");
+            }
+            const actorId = Number(actor?.account_id);
+            const intent = this.db.prepare(`SELECT reason FROM settlement_intents WHERE loan_id = ? AND outcome = 'LOST'
+              AND librarian_account_id = ? ORDER BY created_at DESC LIMIT 1`).get(event.requestId, actorId);
+            this.db.prepare(`INSERT INTO settlements(loan_id, outcome, reason, retained_wei, refund_wei, shortfall_wei,
+              librarian_account_id, tx_hash, event_id, created_at) VALUES (?, 'LOST', ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .run(event.requestId, String(intent?.reason ?? "Verified on-chain settlement"), event.retainedWei, event.refundWei,
+                event.shortfallWei, actorId, event.txHash, eventId, event.blockTimestamp);
+            const status = BigInt(event.shortfallWei) > 0n ? "LOST_SHORTFALL_DUE" : "LOST_SETTLED";
+            if (this.db.prepare("UPDATE book_copies SET status = 'LOST' WHERE copy_id = ? AND status = 'ON_LOAN'")
+              .run(String(request.copy_id)).changes !== 1) throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+            this.db.prepare("UPDATE loans SET status = ?, updated_at = ? WHERE request_id = ?")
+              .run(status, event.blockTimestamp, event.requestId);
+            this.db.prepare("UPDATE borrow_requests SET status = ?, updated_at = ? WHERE request_id = ?")
+              .run(status, event.blockTimestamp, event.requestId);
+            break;
+          }
+          case "ShortfallPaid": {
+            const due = this.db.prepare("SELECT shortfall_wei FROM settlements WHERE loan_id = ? AND outcome = 'LOST'")
+              .get(event.requestId)?.shortfall_wei;
+            if (request.loan_status !== "LOST_SHORTFALL_DUE" || due === undefined || String(due) !== event.amountWei) {
+              throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            }
+            this.db.prepare("UPDATE loans SET status = 'LOST_SETTLED', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            this.db.prepare("UPDATE borrow_requests SET status = 'LOST_SETTLED', updated_at = ? WHERE request_id = ?")
+              .run(event.blockTimestamp, event.requestId);
+            this.db.prepare("UPDATE account_holds SET released_at = ? WHERE loan_id = ? AND hold_type = 'LOST_SHORTFALL' AND released_at IS NULL")
+              .run(event.blockTimestamp, event.requestId);
+            break;
+          }
+        }
+
+        const action = eventActions[event.eventName];
+        const previousTx = this.db.prepare("SELECT tx_hash, status FROM library_transactions WHERE request_id = ? AND action = ?")
+          .get(event.requestId, action);
+        if (previousTx && String(previousTx.tx_hash).toLowerCase() !== event.txHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+        this.db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, block_number,
+          block_hash, log_index, event_name) VALUES (?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?)
+          ON CONFLICT(request_id, action) DO UPDATE SET status = 'CONFIRMED', block_number = excluded.block_number,
+            block_hash = excluded.block_hash, log_index = excluded.log_index, event_name = excluded.event_name`)
+          .run(event.requestId, action, event.txHash, event.observedAt, event.blockNumber, event.blockHash, event.logIndex, event.eventName);
+        if (actor) this.db.prepare(`INSERT INTO audit_log(actor_account_id, actor_role, action, target_type, target_id, created_at)
+          VALUES (?, ?, ?, 'request', ?, ?)`).run(Number(actor.account_id), String(actor.role), event.eventName, event.requestId, event.blockTimestamp);
+        applied++;
+      }
+      this.db.prepare(`UPDATE library_reconcile_state SET cursor_block = ?, checked_at = ? WHERE singleton = 1`)
+        .run(advanceCursor ? cursorBlock : Number(state.cursor_block), checkedAt);
+      this.db.exec("COMMIT");
+      return { applied, duplicates, ignored, cursorBlock };
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  reconcileState(): { cursorBlock: number; checkedAt: number; health: "HEALTHY" | "REORG_DETECTED"; errorCode: string | null } {
+    const row = this.db.prepare("SELECT cursor_block, checked_at, health, error_code FROM library_reconcile_state WHERE singleton = 1").get();
+    if (!row) throw new Error("LIBRARY_RECONCILE_STATE_MISSING");
+    return { cursorBlock: Number(row.cursor_block), checkedAt: Number(row.checked_at),
+      health: String(row.health) as "HEALTHY" | "REORG_DETECTED", errorCode: row.error_code === null ? null : String(row.error_code) };
+  }
+
+  initializeReconcileCursor(deploymentBlock: number, checkedAt: number): void {
+    safeInteger(deploymentBlock, "INVALID_LIBRARY_BLOCK_NUMBER", 1);
+    safeInteger(checkedAt, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const existing = this.db.prepare("SELECT cursor_block FROM library_reconcile_state WHERE singleton = 1").get();
+      const event = this.db.prepare("SELECT 1 AS found FROM chain_events LIMIT 1").get();
+      if (Number(existing?.cursor_block) === 0 && !event) {
+        this.db.prepare("UPDATE library_reconcile_state SET cursor_block = ?, checked_at = ? WHERE singleton = 1")
+          .run(deploymentBlock - 1, checkedAt);
+      }
+      this.db.exec("COMMIT");
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  eventCanonicalityCandidates(limit: number, afterEventId = 0): Array<{ eventId: number; blockNumber: number; blockHash: string }> {
+    safeInteger(limit, "INVALID_LIBRARY_BATCH_SIZE", 1);
+    safeInteger(afterEventId, "INVALID_LIBRARY_EVENT_ID");
+    const rows = this.db.prepare(`SELECT e.event_id, e.block_number, e.block_hash FROM chain_events e
+      JOIN library_event_canonicality c USING(event_id) WHERE c.status = 'CANONICAL' AND e.event_id > ?
+      ORDER BY e.event_id LIMIT ?`).all(afterEventId, limit);
+    return rows.map((row) => ({ eventId: Number(row.event_id), blockNumber: Number(row.block_number), blockHash: String(row.block_hash) }));
+  }
+
+  canonicalityCursor(): number {
+    const row = this.db.prepare("SELECT canonicality_cursor_event_id FROM library_reconcile_state WHERE singleton = 1").get();
+    if (!row) throw new Error("LIBRARY_RECONCILE_STATE_MISSING");
+    return Number(row.canonicality_cursor_event_id);
+  }
+
+  advanceCanonicalityCursor(eventId: number): void {
+    safeInteger(eventId, "INVALID_LIBRARY_EVENT_ID");
+    beginImmediate(this.db);
+    try {
+      const state = this.db.prepare("SELECT canonicality_cursor_event_id FROM library_reconcile_state WHERE singleton = 1").get();
+      if (!state) throw new Error("LIBRARY_RECONCILE_STATE_MISSING");
+      const exists = this.db.prepare(`SELECT 1 AS found FROM library_event_canonicality
+        WHERE event_id = ? AND status = 'CANONICAL'`).get(eventId);
+      if (!exists) throw new Error("LIBRARY_EVENT_CANONICALITY_NOT_FOUND");
+      this.db.prepare("UPDATE library_reconcile_state SET canonicality_cursor_event_id = ? WHERE singleton = 1").run(eventId);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  markEventOrphaned(input: { eventId: number; observedBlockHash: string; checkedAt: number }): void {
+    safeInteger(input.eventId, "INVALID_LIBRARY_EVENT_ID", 1);
+    safeInteger(input.checkedAt, "INVALID_LIBRARY_TIMESTAMP");
+    const observedBlockHash = canonicalBytes32(input.observedBlockHash, "INVALID_LIBRARY_BLOCK_HASH");
+    beginImmediate(this.db);
+    try {
+      const changed = this.db.prepare(`UPDATE library_event_canonicality SET status = 'ORPHANED', checked_at = ?, observed_block_hash = ?
+        WHERE event_id = ? AND status = 'CANONICAL'`).run(input.checkedAt, observedBlockHash, input.eventId);
+      if (changed.changes !== 1) throw new Error("LIBRARY_EVENT_CANONICALITY_NOT_FOUND");
+      this.db.prepare("UPDATE library_reconcile_state SET health = 'REORG_DETECTED', error_code = 'CHAIN_REORG' WHERE singleton = 1").run();
+      this.db.exec("COMMIT");
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  recordTransactionSubmission(input: { requestId: string; action: LibraryStoredTransaction["action"]; txHash: string; submittedAt: number }): LibraryStoredTransaction {
+    const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");
+    const txHash = canonicalBytes32(input.txHash, "INVALID_LIBRARY_TX_HASH");
+    safeInteger(input.submittedAt, "INVALID_LIBRARY_TIMESTAMP");
+    if (!Object.values(eventActions).includes(input.action)) throw new Error("INVALID_LIBRARY_ACTION");
+    beginImmediate(this.db);
+    try {
+      if (!this.getRequest(requestId)) throw new Error("LIBRARY_REQUEST_NOT_FOUND");
+      const existing = this.db.prepare("SELECT tx_hash FROM library_transactions WHERE request_id = ? AND action = ?").get(requestId, input.action);
+      if (existing && String(existing.tx_hash).toLowerCase() !== txHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      this.db.prepare(`INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status)
+        VALUES (?, ?, ?, ?, 'SUBMITTED') ON CONFLICT(request_id, action) DO NOTHING`)
+        .run(requestId, input.action, txHash, input.submittedAt);
+      const result = this.getTransaction(requestId, input.action);
+      if (!result) throw new Error("LIBRARY_TRANSACTION_WRITE_FAILED");
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  listTransactions(requestIdInput: string): LibraryStoredTransaction[] {
+    const requestId = canonicalBytes32(requestIdInput, "INVALID_LIBRARY_REQUEST_ID");
+    const rows = this.db.prepare("SELECT * FROM library_transactions WHERE request_id = ? ORDER BY submitted_at, action").all(requestId);
+    return rows.map((row) => ({ requestId, action: String(row.action) as LibraryStoredTransaction["action"], txHash: String(row.tx_hash),
+      status: String(row.status) as LibraryStoredTransaction["status"], submittedAt: Number(row.submitted_at),
+      blockNumber: row.block_number === null ? null : Number(row.block_number), blockHash: row.block_hash === null ? null : String(row.block_hash),
+      logIndex: row.log_index === null ? null : Number(row.log_index), eventName: row.event_name === null ? null : String(row.event_name) }));
+  }
+
+  getTransaction(requestId: string, action: LibraryStoredTransaction["action"]): LibraryStoredTransaction | undefined {
+    const row = this.db.prepare("SELECT * FROM library_transactions WHERE request_id = ? AND action = ?").get(requestId, action);
+    if (!row) return undefined;
+    return { requestId, action, txHash: String(row.tx_hash), status: String(row.status) as LibraryStoredTransaction["status"],
+      submittedAt: Number(row.submitted_at), blockNumber: row.block_number === null ? null : Number(row.block_number),
+      blockHash: row.block_hash === null ? null : String(row.block_hash), logIndex: row.log_index === null ? null : Number(row.log_index),
+      eventName: row.event_name === null ? null : String(row.event_name) };
+  }
+
+  pendingTransactions(limit = 100): LibraryStoredTransaction[] {
+    safeInteger(limit, "INVALID_LIBRARY_BATCH_SIZE", 1);
+    const rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED'
+      ORDER BY submitted_at, request_id, action LIMIT ?`).all(limit);
+    return rows.map((row) => ({ requestId: String(row.request_id), action: String(row.action) as LibraryStoredTransaction["action"],
+      txHash: String(row.tx_hash), status: "SUBMITTED", submittedAt: Number(row.submitted_at), blockNumber: null,
+      blockHash: null, logIndex: null, eventName: null }));
+  }
+
+  markTransactionReverted(input: { requestId: string; action: LibraryStoredTransaction["action"]; txHash: string;
+    blockNumber: number; blockHash: string; checkedAt: number }): LibraryStoredTransaction {
+    const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");
+    const txHash = canonicalBytes32(input.txHash, "INVALID_LIBRARY_TX_HASH");
+    const blockHash = canonicalBytes32(input.blockHash, "INVALID_LIBRARY_BLOCK_HASH");
+    safeInteger(input.blockNumber, "INVALID_LIBRARY_BLOCK_NUMBER");
+    safeInteger(input.checkedAt, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const changed = this.db.prepare(`UPDATE library_transactions SET status = 'REVERTED', block_number = ?, block_hash = ?
+        WHERE request_id = ? AND action = ? AND tx_hash = ? AND status = 'SUBMITTED'`)
+        .run(input.blockNumber, blockHash, requestId, input.action, txHash);
+      if (changed.changes !== 1) {
+        const existing = this.getTransaction(requestId, input.action);
+        if (!existing || existing.txHash !== txHash || existing.status !== "REVERTED") throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      }
+      const result = this.getTransaction(requestId, input.action);
+      if (!result) throw new Error("LIBRARY_TRANSACTION_NOT_FOUND");
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  listRequests(walletInput: string, queue = false): LibraryRequestRecord[] {
+    const wallet = canonicalWallet(walletInput);
+    const rows = queue
+      ? this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
+        WHERE r.status = 'PENDING_APPROVAL' AND r.copy_id IS NOT NULL ORDER BY r.created_at, r.request_id`).all()
+      : this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
+        WHERE a.wallet = ? COLLATE NOCASE ORDER BY r.created_at DESC, r.request_id`).all(wallet);
+    return rows.map((row) => rowToRequest(row)!).filter(Boolean);
+  }
+
+  listLoans(walletInput?: string): Array<{ loanId: string; requestId: string; bookId: string; borrower: string; status: string;
+    approvedAt: number; dueAt: number; returnRequestedAt: number | null; returnReceivedAt: number | null; settlement: unknown | null }> {
+    const wallet = walletInput === undefined ? undefined : canonicalWallet(walletInput);
+    const rows = wallet === undefined
+      ? this.db.prepare(`SELECT l.*, a.wallet, s.outcome, s.retained_wei, s.refund_wei, s.shortfall_wei, e.payload_json AS event_json
+        FROM loans l JOIN accounts a USING(account_id) LEFT JOIN settlements s USING(loan_id)
+        LEFT JOIN chain_events e ON e.event_id = s.event_id ORDER BY l.approved_at DESC, l.loan_id`).all()
+      : this.db.prepare(`SELECT l.*, a.wallet, s.outcome, s.retained_wei, s.refund_wei, s.shortfall_wei, e.payload_json AS event_json
+        FROM loans l JOIN accounts a USING(account_id) LEFT JOIN settlements s USING(loan_id)
+        LEFT JOIN chain_events e ON e.event_id = s.event_id WHERE a.wallet = ? COLLATE NOCASE
+        ORDER BY l.approved_at DESC, l.loan_id`).all(wallet);
+    return rows.map((row) => {
+      let settlement: unknown | null = null;
+      if (row.outcome === "RETURNED" && typeof row.event_json === "string") {
+        const proof = JSON.parse(String(row.event_json)) as Record<string, unknown>;
+        settlement = { outcome: "RETURNED", returnedAt: proof.returnedAt, lateFeeWei: proof.lateFeeWei,
+          repairFeeWei: proof.repairFeeWei, overdueForfeitWei: proof.overdueForfeitWei, totalRetainedWei: proof.totalRetainedWei,
+          refundWei: proof.refundWei, maintenanceRequired: proof.maintenanceRequired };
+      } else if (row.outcome === "LOST" && typeof row.event_json === "string") {
+        const proof = JSON.parse(String(row.event_json)) as Record<string, unknown>;
+        settlement = { outcome: "LOST", replacementPriceWei: proof.replacementPriceWei, totalRetainedWei: proof.retainedWei,
+          refundWei: proof.refundWei, shortfallWei: proof.shortfallWei };
+      }
+      return { loanId: String(row.loan_id), requestId: String(row.request_id), bookId: String(row.book_id), borrower: String(row.wallet),
+        status: String(row.status), approvedAt: Number(row.approved_at), dueAt: Number(row.due_at),
+        returnRequestedAt: row.return_requested_at === null ? null : Number(row.return_requested_at),
+        returnReceivedAt: row.return_received_at === null ? null : Number(row.return_received_at), settlement };
+    });
+  }
+
+  loanForSettlement(loanIdInput: string): { loanId: string; requestId: string; bookId: string; borrower: string;
+    status: string; depositWei: string; replacementPriceWei: string; approvedAt: number; dueAt: number; returnReceivedAt: number | null } | undefined {
+    const loanId = canonicalBytes32(loanIdInput, "INVALID_LIBRARY_LOAN_ID");
+    const row = this.db.prepare(`SELECT l.*, a.wallet FROM loans l JOIN accounts a USING(account_id) WHERE l.loan_id = ?`).get(loanId);
+    if (!row) return undefined;
+    return { loanId, requestId: String(row.request_id), bookId: String(row.book_id), borrower: String(row.wallet),
+      status: String(row.status), depositWei: String(row.deposit_wei), replacementPriceWei: String(row.replacement_price_wei),
+      approvedAt: Number(row.approved_at), dueAt: Number(row.due_at),
+      returnReceivedAt: row.return_received_at === null ? null : Number(row.return_received_at) };
+  }
+
+  createSettlementIntent(input: { intentId: string; loanId: string; librarianWallet: string; outcome: "RETURNED" | "LOST";
+    condition?: "GOOD" | "DAMAGED"; reason: string; repairRequestedWei?: string; createdAt: number }): LibrarySettlementIntentRecord {
+    if (!input.intentId.trim() || input.intentId.length > 200 || !input.reason.trim()) throw new Error("INVALID_LIBRARY_SETTLEMENT_INTENT");
+    const loanId = canonicalBytes32(input.loanId, "INVALID_LIBRARY_LOAN_ID");
+    const librarianWallet = canonicalWallet(input.librarianWallet);
+    const createdAt = safeInteger(input.createdAt, "INVALID_LIBRARY_TIMESTAMP");
+    if (input.outcome === "RETURNED" && (!input.condition || !["GOOD", "DAMAGED"].includes(input.condition))) {
+      throw new Error("INVALID_LIBRARY_SETTLEMENT_INTENT");
+    }
+    if (input.outcome === "LOST" && (input.condition !== undefined || input.repairRequestedWei !== undefined)) {
+      throw new Error("INVALID_LIBRARY_SETTLEMENT_INTENT");
+    }
+    const repair = input.repairRequestedWei === undefined ? null : canonicalWei(input.repairRequestedWei);
+    beginImmediate(this.db);
+    try {
+      const actor = this.db.prepare("SELECT account_id, role FROM accounts WHERE wallet = ? COLLATE NOCASE AND enabled = 1")
+        .get(librarianWallet);
+      const loan = this.loanForSettlement(loanId);
+      if (!actor || actor.role !== "LIBRARIAN") throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
+      if (!loan) throw new Error("LIBRARY_REQUEST_NOT_FOUND");
+      if (input.outcome === "RETURNED" ? loan.status !== "SETTLEMENT_PENDING" || loan.returnReceivedAt === null
+        : !["ACTIVE", "RETURN_REQUESTED"].includes(loan.status)) throw new Error("LIBRARY_INVALID_LOAN_STATE");
+      this.db.prepare(`INSERT INTO settlement_intents(intent_id, request_id, loan_id, librarian_account_id, outcome, condition,
+        reason, repair_requested_wei, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(input.intentId, loan.requestId, loanId, Number(actor.account_id), input.outcome, input.condition ?? null,
+          input.reason.trim(), repair, createdAt);
+      this.db.prepare(`INSERT INTO audit_log(actor_account_id, actor_role, action, target_type, target_id, reason, created_at)
+        VALUES (?, 'LIBRARIAN', 'settlement_intent_created', 'loan', ?, ?, ?)`)
+        .run(Number(actor.account_id), loanId, input.reason.trim(), createdAt);
+      const result = this.getSettlementIntent(input.intentId);
+      if (!result) throw new Error("LIBRARY_SETTLEMENT_INTENT_WRITE_FAILED");
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) throw new Error("LIBRARY_SETTLEMENT_INTENT_CONFLICT");
+      throw error;
+    }
+  }
+
+  getSettlementIntent(intentId: string): LibrarySettlementIntentRecord | undefined {
+    if (typeof intentId !== "string" || !intentId.trim() || intentId.length > 200) return undefined;
+    const row = this.db.prepare(`SELECT i.intent_id, i.request_id, i.loan_id, i.outcome, i.condition, i.reason,
+      i.repair_requested_wei, i.created_at, a.wallet FROM settlement_intents i
+      JOIN accounts a ON a.account_id = i.librarian_account_id WHERE i.intent_id = ?`).get(intentId);
+    if (!row) return undefined;
+    return { intentId: String(row.intent_id), requestId: String(row.request_id), loanId: String(row.loan_id),
+      librarianWallet: String(row.wallet), outcome: String(row.outcome) as "RETURNED" | "LOST",
+      condition: row.condition === null ? null : String(row.condition) as "GOOD" | "DAMAGED", reason: String(row.reason),
+      repairRequestedWei: row.repair_requested_wei === null ? null : String(row.repair_requested_wei), createdAt: Number(row.created_at) };
+  }
+
+  requestReturn(input: { loanId: string; wallet: string; requestedAt: number }): { loanId: string; requestId: string; status: string; requestedAt: number } {
+    const loanId = canonicalBytes32(input.loanId, "INVALID_LIBRARY_LOAN_ID");
+    const wallet = canonicalWallet(input.wallet);
+    safeInteger(input.requestedAt, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const loan = this.db.prepare(`SELECT l.request_id, l.status, l.return_requested_at, a.wallet, a.account_id
+        FROM loans l JOIN accounts a USING(account_id) WHERE l.loan_id = ?`).get(loanId);
+      if (!loan || String(loan.wallet).toLowerCase() !== wallet) throw new Error("LIBRARY_REQUEST_NOT_FOUND");
+      if (loan.status === "RETURN_REQUESTED" && loan.return_requested_at !== null) {
+        this.db.exec("COMMIT");
+        return { loanId, requestId: String(loan.request_id), status: "RETURN_REQUESTED", requestedAt: Number(loan.return_requested_at) };
+      }
+      if (loan.status !== "ACTIVE") throw new Error("LIBRARY_INVALID_LOAN_STATE");
+      this.db.prepare("UPDATE loans SET status = 'RETURN_REQUESTED', return_requested_at = ?, updated_at = ? WHERE loan_id = ? AND status = 'ACTIVE'")
+        .run(input.requestedAt, input.requestedAt, loanId);
+      this.db.prepare("UPDATE borrow_requests SET status = 'RETURN_REQUESTED', updated_at = ? WHERE request_id = ?")
+        .run(input.requestedAt, String(loan.request_id));
+      this.db.prepare(`INSERT INTO audit_log(actor_account_id, actor_role, action, target_type, target_id, created_at)
+        VALUES (?, 'STUDENT', 'return_requested', 'loan', ?, ?)`)
+        .run(Number(loan.account_id), loanId, input.requestedAt);
+      this.db.exec("COMMIT");
+      return { loanId, requestId: String(loan.request_id), status: "RETURN_REQUESTED", requestedAt: input.requestedAt };
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  expirePendingRequests(chainTime: number): number {
+    safeInteger(chainTime, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const expired = this.db.prepare(`SELECT request_id, copy_id FROM borrow_requests
+        WHERE status = 'PENDING_APPROVAL' AND approval_deadline <= ? ORDER BY approval_deadline, request_id`).all(chainTime);
+      for (const request of expired) {
+        if (typeof request.copy_id === "string") {
+          const released = this.db.prepare("UPDATE book_copies SET status = 'AVAILABLE' WHERE copy_id = ? AND status = 'PENDING_APPROVAL'")
+            .run(request.copy_id);
+          if (released.changes !== 1) throw new Error("LIBRARY_EVENT_COPY_CONFLICT");
+        }
+        this.db.prepare(`UPDATE borrow_requests SET copy_id = NULL, status = 'EXPIRED_REFUND_DUE', refund_status = 'REFUND_DUE',
+          updated_at = ? WHERE request_id = ? AND status = 'PENDING_APPROVAL'`).run(chainTime, request.request_id);
+      }
+      this.db.exec("COMMIT");
+      return expired.length;
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
+  }
+
+  accountStatus(walletInput: string, chainTime: number, holdAfterSeconds: number): { held: boolean; checkedAt: number; blockingLoanIds: string[] } {
+    const wallet = canonicalWallet(walletInput);
+    safeInteger(chainTime, "INVALID_LIBRARY_TIMESTAMP");
+    safeInteger(holdAfterSeconds, "INVALID_LIBRARY_HOLD_POLICY", 1);
+    beginImmediate(this.db);
+    try {
+      const account = this.db.prepare("SELECT account_id FROM accounts WHERE wallet = ? COLLATE NOCASE AND enabled = 1").get(wallet);
+      if (!account) throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
+      this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
+        SELECT l.account_id, l.loan_id, 'OVERDUE', ? FROM loans l
+        WHERE l.account_id = ? AND l.status IN ('ACTIVE', 'RETURN_REQUESTED') AND ? > l.due_at + ?
+        ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, Number(account.account_id), chainTime, holdAfterSeconds);
+      this.db.prepare(`INSERT INTO account_holds(account_id, loan_id, hold_type, started_at)
+        SELECT l.account_id, l.loan_id, 'LOST_SHORTFALL', ? FROM loans l
+        WHERE l.account_id = ? AND l.status = 'LOST_SHORTFALL_DUE'
+        ON CONFLICT(account_id, loan_id, hold_type) DO NOTHING`).run(chainTime, Number(account.account_id));
+      this.db.prepare(`UPDATE account_holds SET released_at = ? WHERE account_id = ? AND released_at IS NULL AND (
+        (hold_type = 'OVERDUE' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) NOT IN ('ACTIVE', 'RETURN_REQUESTED'))
+        OR (hold_type = 'LOST_SHORTFALL' AND (SELECT status FROM loans WHERE loan_id = account_holds.loan_id) <> 'LOST_SHORTFALL_DUE'))`)
+        .run(chainTime, Number(account.account_id));
+      const rows = this.db.prepare(`SELECT DISTINCT h.loan_id FROM account_holds h
+        JOIN loans l USING(loan_id) WHERE h.account_id = ? AND h.released_at IS NULL
+        AND ((h.hold_type = 'OVERDUE' AND ? > l.due_at + ?) OR h.hold_type = 'LOST_SHORTFALL')
+        ORDER BY h.loan_id`).all(Number(account.account_id), chainTime, holdAfterSeconds);
+      this.db.exec("COMMIT");
+      const blockingLoanIds = rows.map((row) => String(row.loan_id));
+      return { held: blockingLoanIds.length > 0, checkedAt: chainTime, blockingLoanIds };
+    } catch (error) {
+      rollback(this.db);
+      if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
+      throw error;
+    }
   }
 
   private getDepositProjection(requestId: string, duplicate: boolean): LibraryDepositProjection | undefined {
@@ -400,7 +1083,7 @@ export class LibraryRepository {
     safeInteger(input.now, "INVALID_LIBRARY_TIMESTAMP");
     safeInteger(input.expiresAt, "INVALID_LIBRARY_TIMESTAMP", 1);
     if (!/^[0-9a-f]{64}$/.test(tokenHash) || input.expiresAt <= input.now) throw new Error("INVALID_LIBRARY_SESSION");
-    this.db.exec("BEGIN IMMEDIATE");
+    beginImmediate(this.db);
     try {
       const challenge = this.db.prepare(`SELECT c.challenge_id, c.account_id, c.expires_at, c.consumed_at,
         a.wallet, a.role, a.enabled FROM auth_challenges c JOIN accounts a USING(account_id)
@@ -417,7 +1100,7 @@ export class LibraryRepository {
       return { tokenHash, wallet: String(challenge.wallet), role: String(challenge.role) as "STUDENT" | "LIBRARIAN",
         createdAt: input.now, expiresAt: input.expiresAt };
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       throw error;
     }
   }
@@ -440,7 +1123,7 @@ export class LibraryRepository {
     const windowStartedAt = Math.floor(input.now / input.windowSeconds) * input.windowSeconds;
     const windowEndsAt = windowStartedAt + input.windowSeconds;
     if (!Number.isSafeInteger(windowEndsAt)) throw new Error("INVALID_LIBRARY_TIMESTAMP");
-    this.db.exec("BEGIN IMMEDIATE");
+    beginImmediate(this.db);
     try {
       this.purgeExpiredAuthRecords(input.now);
       const retention = Math.max(86_400, input.windowSeconds * 2);
@@ -460,7 +1143,7 @@ export class LibraryRepository {
       this.db.exec("COMMIT");
       return { allowed: true, retryAfterSeconds: 0 };
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       throw error;
     }
   }
@@ -492,7 +1175,7 @@ export class LibraryRepository {
   setAccountEnabled(walletInput: string, enabled: boolean, changedAt: number): void {
     const wallet = canonicalWallet(walletInput);
     safeInteger(changedAt, "INVALID_LIBRARY_TIMESTAMP");
-    this.db.exec("BEGIN IMMEDIATE");
+    beginImmediate(this.db);
     try {
       const changed = this.db.prepare("UPDATE accounts SET enabled = ? WHERE wallet = ? COLLATE NOCASE").run(enabled ? 1 : 0, wallet);
       if (changed.changes !== 1) throw new Error("LIBRARY_ACCOUNT_NOT_FOUND");
@@ -500,11 +1183,12 @@ export class LibraryRepository {
         .run(changedAt, wallet);
       this.db.exec("COMMIT");
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      rollback(this.db);
       throw error;
     }
   }
 }
 
 export type { LibraryAccountSeed, LibraryBookRecord, LibraryDbRefundStatus, LibraryDbRequestStatus, LibraryDemoSeed,
-  LibraryChallengeRecord, LibraryDepositProjection, LibraryRequestRecord, LibrarySessionRecord, LibraryVerifiedDeposit } from "./library.types.ts";
+  LibraryChallengeRecord, LibraryDepositProjection, LibraryRequestRecord, LibrarySettlementIntentRecord, LibrarySessionRecord,
+  LibraryStoredTransaction, LibraryVerifiedChainEvent, LibraryVerifiedDeposit } from "./library.types.ts";

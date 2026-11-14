@@ -336,6 +336,10 @@ test("two tabs serialize claim and send through the lock and shared durable inte
 });
 test("HTTP unverified response and oversized/malformed payload never become a balance", async () => {
   await assert.rejects(lookupGrant(async () => response({ status: "unverified", chainId: 20261, balanceWei: null, error: { code: "RPC_UNAVAILABLE", retryable: true } }, 503), config, beneficiary), /RPC_UNAVAILABLE/);
+  await assert.rejects(lookupGrant(async () => response({ status: "unverified", chainId: 20261, balanceWei: null,
+    error: { code: "FORBIDDEN", retryable: false } }, 403), config, beneficiary), /FORBIDDEN/);
+  await assert.rejects(lookupGrant(async () => response({ status: "unverified", chainId: 20261, balanceWei: null,
+    error: { code: "UNAUTHENTICATED", retryable: false } }, 401), config, beneficiary), /UNAUTHENTICATED/);
   await assert.rejects(lookupGrant(async () => new Response("x".repeat(256 * 1024 + 1)), config, beneficiary));
   await assert.rejects(lookupGrant(async () => response({ ...body(), balanceWei: null }), config, beneficiary));
 });

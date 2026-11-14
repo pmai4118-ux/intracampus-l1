@@ -98,8 +98,12 @@ export async function lookupGrant(fetcher: typeof fetch, config: GrantConfig, be
   if (!response.ok) {
     const body = object(data), error = object(body.error);
     check(body.status === "unverified" && body.chainId === 20261 && body.balanceWei === null && typeof error.retryable === "boolean");
-    const known = ["TX_REVERTED", "RECEIPT_MISMATCH", "DEPLOYMENT_NOT_CONFIGURED", "INVALID_DEPLOYMENT", "DEPLOYMENT_MISMATCH", "WRONG_CHAIN", "RPC_UNAVAILABLE", "CHAIN_CHANGED"];
-    check(known.includes(String(error.code)) && (response.status === 422 ? ["TX_REVERTED", "RECEIPT_MISMATCH"].includes(String(error.code)) : response.status === 503));
+    const known = ["TX_REVERTED", "RECEIPT_MISMATCH", "DEPLOYMENT_NOT_CONFIGURED", "INVALID_DEPLOYMENT", "DEPLOYMENT_MISMATCH",
+      "WRONG_CHAIN", "RPC_UNAVAILABLE", "CHAIN_CHANGED", "UNAUTHENTICATED", "FORBIDDEN", "STALE_CHAIN_STATE",
+      "CONFIGURATION_ERROR", "DATABASE_BUSY"];
+    const expectedStatus = ["TX_REVERTED", "RECEIPT_MISMATCH"].includes(String(error.code)) ? 422
+      : error.code === "UNAUTHENTICATED" ? 401 : error.code === "FORBIDDEN" ? 403 : 503;
+    check(known.includes(String(error.code)) && response.status === expectedStatus);
     throw new GrantUiError(String(error.code));
   }
   return parseGrantLookup(data, config, beneficiary, intent);
@@ -141,6 +145,11 @@ export function grantMessage(code: string): string {
     MERCHANT_NOT_ALLOWED: "Căn-tin không còn được phép nhận FOOD. Chưa gửi giao dịch, số dư voucher giữ nguyên.",
     WRONG_CHAIN: "Chuyển ví về IntraCampus L1, chain 20261, rồi thử đọc lại.",
     CHAIN_CHANGED: "Mạng thay đổi trong lúc kiểm tra. Đọc lại trước khi tiếp tục.",
+    UNAUTHENTICATED: "Đăng nhập bằng ví sinh viên để xem học bổng của tài khoản này.",
+    FORBIDDEN: "Tài khoản này chưa được phép xem học bổng hoặc đang bị Library hold.",
+    STALE_CHAIN_STATE: "Chưa xác minh được trạng thái chain và Library hold mới nhất. Thử đọc lại sau.",
+    CONFIGURATION_ERROR: "Backend chưa cấu hình đầy đủ cho Library session và hold.",
+    DATABASE_BUSY: "Dữ liệu Library đang được cập nhật. Giữ nguyên giao dịch và thử lại.",
     INVALID_ACCOUNT: "Kết nối đúng ví được cấp học bổng trước khi chi.",
     SIMULATION_FAILED: "Chưa mô phỏng được khoản chi. Kiểm tra số dư, merchant và kết nối; chưa mở yêu cầu ký.",
     SIGNATURE_REJECTED: "Bạn đã từ chối ký. Chưa gửi khoản chi; có thể xem lại và thử lại.",

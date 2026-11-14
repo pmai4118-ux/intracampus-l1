@@ -201,4 +201,53 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
       PRIMARY KEY (scope, subject_hash, window_started_at)
     ) STRICT;
   `,
+}, {
+  version: 2,
+  sql: `
+    CREATE TABLE library_reconcile_state (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      cursor_block INTEGER NOT NULL CHECK (cursor_block >= 0),
+      checked_at INTEGER NOT NULL CHECK (checked_at >= 0),
+      health TEXT NOT NULL CHECK (health IN ('HEALTHY', 'REORG_DETECTED')),
+      error_code TEXT
+    ) STRICT;
+    INSERT INTO library_reconcile_state(singleton, cursor_block, checked_at, health, error_code)
+      VALUES (1, 0, 0, 'HEALTHY', NULL);
+
+    CREATE TABLE library_transactions (
+      request_id TEXT NOT NULL REFERENCES borrow_requests(request_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      action TEXT NOT NULL CHECK (action IN ('deposit', 'approve', 'reject', 'refund', 'confirmReturn', 'return', 'settle', 'payShortfall')),
+      tx_hash TEXT NOT NULL CHECK (length(tx_hash) = 66),
+      submitted_at INTEGER NOT NULL CHECK (submitted_at >= 0),
+      status TEXT NOT NULL CHECK (status IN ('SUBMITTED', 'CONFIRMED', 'REVERTED')),
+      block_number INTEGER CHECK (block_number IS NULL OR block_number >= 0),
+      block_hash TEXT CHECK (block_hash IS NULL OR length(block_hash) = 66),
+      log_index INTEGER CHECK (log_index IS NULL OR log_index >= 0),
+      event_name TEXT,
+      PRIMARY KEY (request_id, action),
+      UNIQUE (tx_hash),
+      CHECK ((status = 'SUBMITTED' AND block_number IS NULL AND block_hash IS NULL AND log_index IS NULL AND event_name IS NULL)
+        OR (status IN ('CONFIRMED', 'REVERTED') AND block_number IS NOT NULL AND block_hash IS NOT NULL))
+    ) STRICT;
+    CREATE INDEX ix_library_transactions_hash ON library_transactions(tx_hash);
+
+    CREATE TABLE library_event_canonicality (
+      event_id INTEGER PRIMARY KEY REFERENCES chain_events(event_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+      status TEXT NOT NULL CHECK (status IN ('CANONICAL', 'ORPHANED')),
+      checked_at INTEGER NOT NULL CHECK (checked_at >= 0),
+      observed_block_hash TEXT NOT NULL CHECK (length(observed_block_hash) = 66)
+    ) STRICT;
+    CREATE INDEX ix_library_event_canonicality_status ON library_event_canonicality(status, checked_at);
+    INSERT INTO library_event_canonicality(event_id, status, checked_at, observed_block_hash)
+      SELECT event_id, 'CANONICAL', occurred_at, block_hash FROM chain_events;
+    INSERT INTO library_transactions(request_id, action, tx_hash, submitted_at, status, block_number, block_hash, log_index, event_name)
+      SELECT e.request_id, 'deposit', e.tx_hash, e.occurred_at, 'CONFIRMED', e.block_number, e.block_hash, e.log_index, e.event_name
+      FROM chain_events e WHERE e.event_name = 'DepositReceived';
+  `,
+}, {
+  version: 3,
+  sql: `
+    ALTER TABLE library_reconcile_state
+      ADD COLUMN canonicality_cursor_event_id INTEGER NOT NULL DEFAULT 0 CHECK (canonicality_cursor_event_id >= 0);
+  `,
 }];

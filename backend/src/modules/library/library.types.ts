@@ -58,6 +58,56 @@ export type LibraryVerifiedDeposit = {
   occurredAt: number;
 };
 
+export type LibraryVerifiedChainEventBase = {
+  chainId: 20261;
+  contractAddress: string;
+  txHash: string;
+  logIndex: number;
+  blockNumber: number;
+  blockHash: string;
+  blockTimestamp: number;
+  transactionFrom: string;
+  observedAt: number;
+};
+
+export type LibraryVerifiedChainEvent = LibraryVerifiedChainEventBase & (
+  | { eventName: "DepositReceived"; requestId: string; borrower: string; bookId: string; amountWei: string;
+      depositedAt: number; approvalDeadline: number }
+  | { eventName: "LoanApproved"; requestId: string; borrower: string; approvedAt: number; dueAt: number; replacementPriceWei: string }
+  | { eventName: "RequestRejected"; requestId: string; borrower: string; refundWei: string }
+  | { eventName: "ExpiredRefundClaimed"; requestId: string; borrower: string; refundWei: string }
+  | { eventName: "PhysicalReturnConfirmed"; requestId: string; borrower: string; returnedAt: number }
+  | { eventName: "ReturnSettled"; requestId: string; borrower: string; returnedAt: number; lateFeeWei: string; repairFeeWei: string;
+      overdueForfeitWei: string; totalRetainedWei: string; refundWei: string; maintenanceRequired: boolean }
+  | { eventName: "LostSettled"; requestId: string; borrower: string; replacementPriceWei: string; retainedWei: string; refundWei: string;
+      shortfallWei: string }
+  | { eventName: "ShortfallPaid"; requestId: string; borrower: string; amountWei: string }
+);
+
+export type LibraryStoredTransaction = {
+  requestId: string;
+  action: "deposit" | "approve" | "reject" | "refund" | "confirmReturn" | "return" | "settle" | "payShortfall";
+  txHash: string;
+  status: "SUBMITTED" | "CONFIRMED" | "REVERTED";
+  submittedAt: number;
+  blockNumber: number | null;
+  blockHash: string | null;
+  logIndex: number | null;
+  eventName: string | null;
+};
+
+export type LibrarySettlementIntentRecord = {
+  intentId: string;
+  requestId: string;
+  loanId: string;
+  librarianWallet: string;
+  outcome: "RETURNED" | "LOST";
+  condition: "GOOD" | "DAMAGED" | null;
+  reason: string;
+  repairRequestedWei: string | null;
+  createdAt: number;
+};
+
 export type LibraryDepositProjection = {
   requestId: string;
   status: LibraryDbRequestStatus;

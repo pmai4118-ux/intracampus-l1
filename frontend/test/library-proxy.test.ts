@@ -5,6 +5,7 @@ import type { RequestListener } from "node:http";
 import { createServer as createHttpServer } from "node:http";
 import { createRequire } from "node:module";
 import { createServer as createNetServer } from "node:net";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
@@ -615,4 +616,139 @@ test("Next same-origin proxy preserves auth cookies, headers, query, JSON bodies
   assert.equal(booksCall?.url, "/api/library/books?q=Distributed%20Systems");
   assert.equal(booksCall?.cookie, sessionCookie);
   assert.ok(recorded.every((entry) => !entry.url.startsWith("/api/deployment")));
+});
+
+test("Next same-origin calls the real Express Library API with its session cookie", async (t) => {
+  const [{ Wallet, Interface, keccak256 }, { AuthService }, { AuthRepository }, { LibraryRepository },
+    { LibraryService }, { createApp }] = await Promise.all([
+    import(pathToFileURL(join(repoRoot, "node_modules", "ethers", "lib.esm", "index.js")).href).catch(() =>
+      import(pathToFileURL(join(repoRoot, "backend", "node_modules", "ethers", "lib.esm", "index.js")).href)),
+    import(pathToFileURL(join(repoRoot, "backend", "src", "modules", "auth", "auth.service.ts")).href),
+    import(pathToFileURL(join(repoRoot, "backend", "src", "modules", "auth", "auth.repository.ts")).href),
+    import(pathToFileURL(join(repoRoot, "backend", "src", "modules", "library", "library.repository.ts")).href),
+    import(pathToFileURL(join(repoRoot, "backend", "src", "modules", "library", "library.service.ts")).href),
+    import(pathToFileURL(join(repoRoot, "backend", "src", "app.ts")).href),
+  ]);
+
+  const fixture = JSON.parse(readFileSync(join(repoRoot, "docs", "fixtures", "library-v1.json"), "utf8")) as {
+    abi: unknown[];
+    policy: {
+      depositWei: string;
+      approvalWindowSeconds: number;
+      loanDurationSeconds: number;
+      gracePeriodSeconds: number;
+      lateFeeIntervalSeconds: number;
+      lateFeePerIntervalWei: string;
+      maxLateFeeWei: string;
+      fullDepositRetentionAfterSeconds: number;
+    };
+  };
+  const student = new Wallet(`0x${"71".repeat(32)}`);
+  const librarian = new Wallet(`0x${"72".repeat(32)}`);
+  const bookId = `0x${"73".repeat(32)}`;
+  const escrow = `0x${"74".repeat(20)}`;
+  const address = (n: number) => `0x${n.toString(16).padStart(40, "0")}`;
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  const chainTime = 1_800_000_000;
+  const termsInterface = new Interface(fixture.abi as never);
+  const library = {
+    schemaVersion: 1,
+    status: "deployed",
+    chainId: 20261,
+    abiVersion: 1,
+    environment: "local-anvil",
+    verifiedAt: { blockNumber: 4, blockHash: hash(4) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: fixture.abi },
+    roles: { deployer: address(11), administrator: address(12), librarian: librarian.address.toLowerCase() },
+    treasury: address(13),
+    policy: fixture.policy,
+    books: [{ bookId, depositWei: fixture.policy.depositWei, replacementPriceWei: "30000000000000000000", sealed: true }],
+    seedTransactions: [
+      { type: "seedBookTerms", bookId, transactionHash: hash(2), blockNumber: 2, blockHash: hash(2) },
+      { type: "sealBookTerms", bookId, transactionHash: hash(3), blockNumber: 3, blockHash: hash(3) },
+    ],
+  };
+  const repository = new LibraryRepository(":memory:");
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Proxy integrated book", author: "Test author", isbn: null,
+    depositWei: fixture.policy.depositWei, replacementPriceWei: "30000000000000000000",
+    copies: [{ copyId: "proxy-copy", barcode: "LP-001" }] }],
+    accounts: [{ wallet: student.address, role: "STUDENT" }, { wallet: librarian.address, role: "LIBRARIAN" }] });
+  t.after(() => repository.close());
+
+  const nextPort = await allocateLoopbackPort();
+  const nextOrigin = `http://127.0.0.1:${nextPort}`;
+  const authConfig = {
+    origin: nextOrigin,
+    domain: `127.0.0.1:${nextPort}`,
+    chainId: 20261 as const,
+    challengeTtlSeconds: 300,
+    sessionTtlSeconds: 3600,
+    challengeRateLimit: { maxRequests: 10, windowSeconds: 60 },
+    verifyRateLimit: { maxRequests: 10, windowSeconds: 60 },
+    cookieName: "library_session",
+    secureCookie: false,
+  };
+  const authService = new AuthService(new AuthRepository(repository), authConfig, () => chainTime);
+  const rpc = {
+    async getNetwork() { return { chainId: BigInt(20261) }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 500 : tag;
+      return { number, timestamp: chainTime, hash: hash(number) };
+    },
+    async getLogs() { return []; },
+    async getTransaction() { return null; },
+    async getTransactionReceipt() { return null; },
+    async getCode() { return "0x6000"; },
+    async call() {
+      return termsInterface.encodeFunctionResult("bookTerms", [fixture.policy.depositWei, "30000000000000000000", true]);
+    },
+  };
+  const libraryService = new LibraryService(repository, {
+    deployment: { schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil", library },
+    allowLocal: true,
+    chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 },
+    rpc: rpc as never,
+    now: () => chainTime,
+  });
+  t.after(() => libraryService.close());
+  const api = createApp(undefined, undefined, undefined, undefined, authService, authConfig, libraryService);
+  const backendServer = createHttpServer(api).listen(0, "127.0.0.1");
+  t.after(() => new Promise<void>((resolve) => backendServer.close(() => resolve())));
+  await once(backendServer, "listening");
+  const backendAddress = backendServer.address();
+  assert.ok(backendAddress && typeof backendAddress !== "string");
+  const origin = await startNextDev(t, nextPort, `http://127.0.0.1:${backendAddress.port}`);
+  assert.equal(origin, nextOrigin);
+
+  const challengeResponse = await fetch(`${origin}/api/auth/challenge`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json" },
+    body: JSON.stringify({ wallet: student.address }),
+  });
+  assert.equal(challengeResponse.status, 201);
+  const challenge = await challengeResponse.json() as { challengeId: string; message: string };
+  const verifyResponse = await fetch(`${origin}/api/auth/verify`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json" },
+    body: JSON.stringify({ challengeId: challenge.challengeId, signature: await student.signMessage(challenge.message) }),
+  });
+  assert.equal(verifyResponse.status, 200);
+  const cookie = cookiePairFromSetCookie(verifyResponse.headers.getSetCookie(), "library_session");
+
+  const booksResponse = await fetch(`${origin}/api/library/books`, { headers: { cookie } });
+  assert.equal(booksResponse.status, 200);
+  assert.equal((await booksResponse.json() as Array<{ bookId: string; title: string }>)[0].title, "Proxy integrated book");
+
+  const requestResponse = await fetch(`${origin}/api/library/requests`, {
+    method: "POST",
+    headers: { origin, cookie, "content-type": "application/json" },
+    body: JSON.stringify({ bookId, idempotencyKey: "next-real-api-request" }),
+  });
+  assert.equal(requestResponse.status, 201);
+  const request = await requestResponse.json() as { requestId: string; status: string; depositIntent: { valueWei: string } };
+  assert.equal(request.status, "AWAITING_DEPOSIT");
+  assert.equal(request.depositIntent.valueWei, fixture.policy.depositWei);
+  assert.equal(repository.getRequest(request.requestId)?.wallet, student.address.toLowerCase());
+  assert.equal(repository.getRequest(request.requestId)?.status, "AWAITING_DEPOSIT");
 });

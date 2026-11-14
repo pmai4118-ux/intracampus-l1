@@ -86,3 +86,31 @@ Auth configuration is independent of invoice/grant configuration so missing Libr
 Production uses HTTPS and the host-only `__Host-library_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/`, with no `Domain`). Explicit local HTTP uses `library_session` without `Secure` only after the loopback opt-in. `POST /api/auth/challenge`, `POST /api/auth/verify`, and `POST /api/auth/logout` require an `Origin` exactly matching `LIBRARY_AUTH_ORIGIN`. Challenge and verify are JSON-only and share the 8192-byte Library parser limit. A throttled attempt returns `429 RATE_LIMITED`, `retryable: true`, and `Retry-After` seconds until its fixed window resets.
 
 The browser flow is: request a challenge with its wallet, sign the exact message in the wallet, submit only the challenge ID and signature, keep the session cookie out of JavaScript, call `/api/auth/session` with that cookie, and POST logout to revoke it. Verify responses contain the allowlisted account and expiry but never the raw session token; only the `Set-Cookie` header carries that token.
+
+## API runtime and reconciliation
+
+`backend/src/server.ts` mounts the Library API with the existing invoice and grants APIs. Library settings are read independently; missing or invalid settings leave unrelated routes available and Library calls fail closed with `503 CONFIGURATION_ERROR`.
+
+| Environment variable | Requirement |
+| --- | --- |
+| `INTRACAMPUS_RPC_URL` | Required. HTTPS, or HTTP on loopback for local development. Credentials, query strings and fragments are rejected. |
+| `LIBRARY_ALLOW_LOCAL_ANVIL` | Set exactly `true` to accept a `local-anvil` deployment manifest; otherwise local manifests are rejected. |
+| `LIBRARY_CHAIN_MAX_STALE_SECONDS` | Required positive integer; maximum age of the safe block timestamp. |
+| `LIBRARY_CHAIN_MAX_FUTURE_DRIFT_SECONDS` | Required nonnegative integer; maximum safe-block timestamp drift into the future. |
+| `LIBRARY_MIN_CONFIRMATIONS` | Required positive integer; safe head is `latest - (confirmations - 1)`. |
+
+Before returning Library data or accepting a lifecycle action, the server reads `eth_chainId` from the configured RPC, checks the deployment verification block and escrow runtime code, then reconciles at most ten 1,000-block ranges per pass. Each range rejects more than 2,000 logs. A pass also rechecks at most 200 previously canonical events, resuming from a SQLite cursor that rotates through the event history across requests and restarts. A log is projected only after its transaction, successful receipt, canonical block hash, escrow address, calldata, sender, and lifecycle event agree. Deposit terms are also read from the escrow at the safe block. The chain cursor and event projections commit in one SQLite transaction; pending requests expire only after the cursor reaches the safe head. RPC loss, an unknown result, or a detected reorg cannot create a success state. Reorg health stays fail closed for operator investigation.
+
+The API runs one bounded reconciliation pass before a chain-dependent call. If it is behind, the response is retryable `503 STALE_CHAIN_STATE` with `Retry-After`; the caller may retry, and reconciliation resumes from the persisted cursor. No backend route signs or broadcasts a wallet transaction.
+
+Operators can also run one bounded pass from the backend package directory:
+
+```powershell
+pnpm.cmd --filter @intracampus/backend library:reconcile
+```
+
+The command reads the same `.env`, manifest and `LIBRARY_DB_PATH` as the server. It prints only safe-head/cursor counts and exits `0` when caught up, `2` when more bounded passes are needed, or `1` for configuration, RPC, database, or reconciliation failure. Re-run it to resume; it never broadcasts. The current manifest must be deployed and local Anvil must be explicitly enabled where applicable.
+
+### Caller boundary for holds
+
+`GET /api/grants/:beneficiary` now requires the authenticated session wallet to match `:beneficiary`; it returns the documented unverified response with `403 FORBIDDEN` while that account is held. New Library requests are held at the API and again under SQLite's write lock. `GET /api/library/account-status`, return requests, deposit refunds, settlement and shortfall payment remain available for recovery. POS invoice issuance remains a separate B04 flow; the student payment UI must check fresh account status before opening a new payment flow, while B05 grant reads go through the guarded same-origin endpoint. Neither B04 nor B05 trusts a client-supplied role or hold result.

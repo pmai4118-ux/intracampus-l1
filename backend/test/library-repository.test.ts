@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
 import { LibraryRepository, applyLibraryMigrations } from "../src/modules/library/library.repository.ts";
-import type { LibraryBookSeed } from "../src/modules/library/library.types.ts";
+import type { LibraryBookSeed, LibraryVerifiedChainEvent } from "../src/modules/library/library.types.ts";
 
 const studentA = "0x1111111111111111111111111111111111111111";
 const studentB = "0x2222222222222222222222222222222222222222";
@@ -131,13 +131,13 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   const env = setup();
   t.after(env.cleanup);
   let repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 1);
+  assert.equal(repository.schemaVersion(), 3);
   assert.deepEqual(repository.sqliteSettings(), { foreignKeys: 1, journalMode: "wal", synchronous: 2, busyTimeoutMs: 5000 });
   assert.equal(repository.seedDemo(env.seed), "inserted");
   repository.close();
 
   repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 1);
+  assert.equal(repository.schemaVersion(), 3);
   assert.equal(repository.seedDemo(env.seed), "unchanged");
   assert.deepEqual(repository.listBooks()[0], {
     bookId, title: "Demo book", author: "Demo author", isbn: null, depositWei, replacementPriceWei: priceWei,
@@ -170,9 +170,17 @@ test("two independent startup processes migrate a new file database once", async
     initializeDatabaseInWorker(env.path),
     initializeDatabaseInWorker(env.path),
   ]);
-  assert.deepEqual(versions, [1, 1]);
+  assert.deepEqual(versions, [3, 3]);
   const repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 1);
+  assert.equal(repository.schemaVersion(), 3);
+  const db = new DatabaseSync(env.path);
+  try {
+    for (const table of ["library_reconcile_state", "library_transactions", "library_event_canonicality"]) {
+      assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
+    }
+    assert.deepEqual(Object.assign({}, db.prepare("SELECT cursor_block, health FROM library_reconcile_state WHERE singleton = 1").get()),
+      { cursor_block: 0, health: "HEALTHY" });
+  } finally { db.close(); }
   repository.close();
 });
 
@@ -215,8 +223,8 @@ test("simultaneous independent connections assign the last copy to only one depo
   repository.seedDemo(env.seed);
   const a = `0x${"01".repeat(32)}`;
   const b = `0x${"02".repeat(32)}`;
-  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000 });
-  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000 });
+  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
+  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
   repository.close();
 
   const results = await Promise.all([
@@ -239,8 +247,8 @@ test("database unique index rejects duplicate active copy allocation outside rep
   repository.seedDemo(env.seed);
   const a = `0x${"01".repeat(32)}`;
   const b = `0x${"02".repeat(32)}`;
-  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000 });
-  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000 });
+  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
+  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
   repository.close();
   t.after(env.cleanup);
   const db = new DatabaseSync(env.path);
@@ -257,8 +265,8 @@ test("loan rows must match their request and an active physical copy cannot back
   repository.seedDemo(env.seed);
   const a = `0x${"01".repeat(32)}`;
   const b = `0x${"02".repeat(32)}`;
-  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000 });
-  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000 });
+  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
+  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
   repository.close();
   t.after(env.cleanup);
   const db = new DatabaseSync(env.path);
@@ -283,13 +291,119 @@ test("verified event replay is idempotent and a chain event key cannot confirm a
   repository.seedDemo(env.seed);
   const a = `0x${"01".repeat(32)}`;
   const b = `0x${"02".repeat(32)}`;
-  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000 });
-  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000 });
+  repository.createDepositRequest({ requestId: a, wallet: studentA, bookId, idempotencyKey: "req-a", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
+  repository.createDepositRequest({ requestId: b, wallet: studentB, bookId, idempotencyKey: "req-b", createdAt: 1_799_900_000, chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
   const event = deposit(a, studentA, "a1");
   assert.equal(repository.recordVerifiedDeposit(event).status, "PENDING_APPROVAL");
   assert.equal(repository.recordVerifiedDeposit(event).duplicate, true);
   assert.throws(() => repository.recordVerifiedDeposit({ ...deposit(b, studentB, "a1"), logIndex: event.logIndex }),
     { message: "LIBRARY_EVENT_CONFLICT" });
+});
+
+test("reconcile skips untracked logs, atomically advances after projections, and applies approval before late expiry", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const requestId = `0x${"31".repeat(32)}`;
+  const depositedAt = 1_799_913_600;
+  const deadline = 1_800_000_000;
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "reconcile", createdAt: depositedAt - 1,
+    chainTime: depositedAt - 1, holdAfterSeconds: 2_592_000 });
+  const depositEvent: LibraryVerifiedChainEvent = {
+    chainId: 20261, contractAddress: "0x4444444444444444444444444444444444444444",
+    txHash: `0x${"41".repeat(32)}`, logIndex: 0, blockNumber: 123, blockHash: `0x${"51".repeat(32)}`,
+    blockTimestamp: depositedAt, transactionFrom: studentA, observedAt: deadline + 10,
+    eventName: "DepositReceived", requestId, borrower: studentA, bookId, amountWei: depositWei,
+    depositedAt, approvalDeadline: deadline,
+  };
+  const untracked = { ...depositEvent, requestId: `0x${"32".repeat(32)}`, txHash: `0x${"42".repeat(32)}`, blockNumber: 122 };
+  assert.deepEqual(repository.recordVerifiedChainEvents([untracked, depositEvent], 123, deadline + 10, "{}"),
+    { applied: 1, duplicates: 0, ignored: 1, cursorBlock: 123 });
+  assert.equal(repository.getRequest(requestId)?.status, "PENDING_APPROVAL");
+  assert.equal(repository.reconcileState().cursorBlock, 123);
+
+  const approvalEvent: LibraryVerifiedChainEvent = {
+    chainId: 20261, contractAddress: depositEvent.contractAddress, txHash: `0x${"43".repeat(32)}`,
+    logIndex: 0, blockNumber: 124, blockHash: `0x${"52".repeat(32)}`, blockTimestamp: deadline - 1,
+    transactionFrom: librarian, observedAt: deadline + 100, eventName: "LoanApproved", requestId,
+    borrower: studentA, approvedAt: deadline - 1, dueAt: deadline + 1_209_599, replacementPriceWei: priceWei,
+  };
+  assert.deepEqual(repository.recordVerifiedChainEvents([approvalEvent], 124, deadline + 100, "{\"loanDurationSeconds\":1209600}"),
+    { applied: 1, duplicates: 0, ignored: 0, cursorBlock: 124 });
+  assert.equal(repository.getRequest(requestId)?.status, "APPROVED");
+  assert.equal(repository.listBooks()[0].copiesAvailable, 0);
+  assert.equal(repository.recordVerifiedChainEvents([approvalEvent], 125, deadline + 101, "{}").duplicates, 1);
+  assert.equal(repository.reconcileState().cursorBlock, 125);
+});
+
+test("a canonicality mismatch persists reorg health and blocks later projections", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const requestId = `0x${"33".repeat(32)}`;
+  const depositedAt = 1_799_913_600;
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "reorg", createdAt: depositedAt - 1,
+    chainTime: depositedAt - 1, holdAfterSeconds: 2_592_000 });
+  repository.recordVerifiedChainEvents([{
+    chainId: 20261, contractAddress: "0x4444444444444444444444444444444444444444", txHash: `0x${"44".repeat(32)}`,
+    logIndex: 0, blockNumber: 123, blockHash: `0x${"53".repeat(32)}`, blockTimestamp: depositedAt,
+    transactionFrom: studentA, observedAt: depositedAt + 1, eventName: "DepositReceived", requestId,
+    borrower: studentA, bookId, amountWei: depositWei, depositedAt, approvalDeadline: 1_800_000_000,
+  }], 123, depositedAt + 1, "{}");
+  const db = new DatabaseSync(env.path);
+  const eventId = Number(db.prepare("SELECT event_id FROM chain_events WHERE request_id = ?").get(requestId)?.event_id);
+  db.close();
+  repository.markEventOrphaned({ eventId, observedBlockHash: `0x${"54".repeat(32)}`, checkedAt: depositedAt + 2 });
+  assert.equal(repository.reconcileState().health, "REORG_DETECTED");
+  assert.throws(() => repository.recordVerifiedChainEvents([], 124, depositedAt + 3, "{}"), { message: "LIBRARY_REORG_DETECTED" });
+});
+
+test("a disabled librarian session does not invalidate an already authorized on-chain approval", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const requestId = `0x${"35".repeat(32)}`;
+  const depositedAt = 1_700_000_000;
+  const approvedAt = depositedAt + 1;
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "disabled-librarian",
+    createdAt: depositedAt - 1, chainTime: depositedAt - 1, holdAfterSeconds: 2_592_000 });
+  const common = { chainId: 20261 as const, contractAddress: "0x4444444444444444444444444444444444444444",
+    logIndex: 0, observedAt: 1_800_000_000 };
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"45".repeat(32)}`, blockNumber: 123, blockHash: `0x${"55".repeat(32)}`,
+    blockTimestamp: depositedAt, transactionFrom: studentA, eventName: "DepositReceived", requestId,
+    borrower: studentA, bookId, amountWei: depositWei, depositedAt, approvalDeadline: depositedAt + 86_400,
+  }], 123, 1_800_000_000, "{}");
+  repository.setAccountEnabled(librarian, false, depositedAt);
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: `0x${"46".repeat(32)}`, blockNumber: 124, blockHash: `0x${"56".repeat(32)}`,
+    blockTimestamp: approvedAt, transactionFrom: librarian, eventName: "LoanApproved", requestId,
+    borrower: studentA, approvedAt, dueAt: approvedAt + 1_209_600, replacementPriceWei: priceWei,
+  }], 124, 1_800_000_000, "{}");
+
+  assert.equal(repository.getRequest(requestId)?.status, "APPROVED");
+  assert.equal(repository.listLoans(studentA)[0]?.status, "ACTIVE");
+});
+
+test("a busy write-lock acquisition stays a retryable database error", (t) => {
+  const env = setup();
+  const repository = new LibraryRepository(env.path);
+  repository.seedDemo(env.seed);
+  const database = new DatabaseSync(env.path);
+  const internal = (repository as unknown as { db: DatabaseSync }).db;
+  internal.exec("PRAGMA busy_timeout = 0");
+  database.exec("BEGIN IMMEDIATE");
+  t.after(() => {
+    try { database.exec("ROLLBACK"); } catch { /* the test may already have released it */ }
+    database.close();
+    repository.close();
+    env.cleanup();
+  });
+
+  assert.throws(() => repository.accountStatus(studentA, 1_800_000_000, 2_592_000), { message: "LIBRARY_DATABASE_BUSY" });
 });
 
 test("disabling an account revokes its stored sessions in the same transaction", (t) => {
@@ -403,7 +517,8 @@ test("online SQLite backup reopens with catalog, account, and request history", 
   const repository = new LibraryRepository(env.path);
   repository.seedDemo(env.seed);
   const requestId = `0x${"01".repeat(32)}`;
-  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "backup-request", createdAt: 1_799_900_000 });
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "backup-request", createdAt: 1_799_900_000,
+    chainTime: 1_799_900_000, holdAfterSeconds: 2_592_000 });
   const backupPath = join(env.directory, "backup", "library-copy.sqlite");
   assert.ok(await repository.backupTo(backupPath) > 0);
   repository.close();

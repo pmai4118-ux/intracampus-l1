@@ -8,6 +8,8 @@ import type { InvoiceCreationService } from "./modules/invoices/invoices.service
 import { createAuthRouter } from "./modules/auth/auth.routes.ts";
 import type { AuthService } from "./modules/auth/auth.service.ts";
 import type { LibraryAuthConfig } from "./modules/auth/auth.config.ts";
+import { createLibraryRouter } from "./modules/library/library.routes.ts";
+import type { LibraryService } from "./modules/library/library.service.ts";
 
 export function createApp(
   rpcUrl?: string,
@@ -16,6 +18,7 @@ export function createApp(
   grantsService?: GrantsService,
   authService?: AuthService,
   authConfig?: LibraryAuthConfig,
+  libraryService?: LibraryService,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -26,7 +29,8 @@ export function createApp(
 
   app.use(createNetworkRouter(rpcUrl));
   app.use(createInvoicesRouter(receiptService, creationService));
-  app.use(createGrantsRouter(grantsService));
+  app.use(createGrantsRouter(grantsService, authService, authConfig, libraryService));
+  app.use(createLibraryRouter(libraryService, authService, authConfig));
   app.use(createAuthRouter(authService, authConfig));
 
   return app;
