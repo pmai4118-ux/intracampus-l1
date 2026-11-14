@@ -1,5 +1,9 @@
 # Nhật ký quyết định
 
+## N-812 · Đóng băng phí trễ tại xác nhận nhận sách vật lý · 2026-11-14
+
+Peer review phát hiện settleReturn gộp xác nhận nhận sách và chuyển tiền nên độ trễ giữa nhận vật lý và settlement có thể đổi số tiền trả; điều này không đáp ứng yêu cầu plan rằng lúc xác nhận nhận sách đóng băng phí. Thêm confirmPhysicalReturn(requestId) do LIBRARIAN ký, lưu chain timestamp và phát PhysicalReturnConfirmed; trạng thái escrow chuyển sang RETURN_RECEIVED. settleReturn chỉ chạy sau receipt này và dùng timestamp đã lưu, không dùng thời điểm settlement. Bản sách ở RETURN_REVIEW đến receipt quyết toán; sau receipt mới thành AVAILABLE hoặc MAINTENANCE. API action confirmReturn và LibraryLoan.returnReceivedAt chuyển cùng mốc timestamp sang backend/UI. ABI fixture và caller matrix Phase 1 được cập nhật trước khi Phase 2 tiếp tục; ABI thay đổi chỉ trong module thư viện, không ảnh hưởng payment/grants.
+
 ## D015 · B04: ghép cấu hình canonical và POS receipt · 2026-11-12
 
 B04 ghép source L05/L06 với main U02/U03/B01/B02, giữ toàn bộ test scripts. Khi manifest đã deploy, B01 lấy merchant/signer/SBT từ L06, kiểm tra getter/allowlist cùng block trước phát hành; U02/U03 dùng cùng địa chỉ public và chặn override lệch. Giữ cấu hình thủ công khi manifest unconfigured cho local/fixture; không coi đó là nghiệm thu L1. Không đổi P02, ABI hoặc quyền ký giao dịch của U04. Xem [bàn giao B04](b04-integration.md).
@@ -171,3 +175,15 @@ Sau review PR #19, journal phân biệt `prepared` chưa chạm provider với
 đồng bộ sau kiểm tra account/chain và ngay trước `eth_sendTransaction`.
 Khôi phục không hash chỉ xóa đúng prepared intent dưới cùng Web Lock; không
 suy ra chưa gửi từ việc RPC không tìm được giao dịch. Unknown cũ vẫn giữ khóa.
+
+## D019 · N-BA: giao kèo module thư viện và escrow · 2026-11-14
+
+`docs/library-contract.md` cùng `docs/fixtures/library-v1.json` là giao kèo API/ABI/status/policy cho `N-81226E74`, `N-5DFBAD4D`, `N-47121905`, `N-696719F4` và `N-75E965E5`. Chain là `20261`, tiền CAMPUS dùng 18 decimals, deposit cố định 50 CAMPUS, và terms giá sách được seal trước khi mở mượn. Request ID duy nhất là khóa nối request và loan.
+
+Backend chỉ gán copy SQLite trong `BEGIN IMMEDIATE` sau receipt deposit thành công có event khớp. Deposit tạo `PENDING_APPROVAL`; chỉ event duyệt trước deadline 24 giờ tạo loan `ACTIVE`. Hạn trả là 14 ngày tính từ duyệt, grace 3 ngày, late fee 0,1 CAMPUS cho mỗi đủ 24 giờ, và quy tắc trả/mất/hỏng đúng theo các boundary vectors. Dữ liệu API tiền là chuỗi wei; browser dùng ví người dùng và backend không giữ khóa hoặc broadcast.
+
+Đăng nhập demo xác minh challenge có nonce dùng một lần; role lấy từ allowlist phía server và phải khớp quyền librarian của escrow khi ký. Session/cookie và chain-time policy cần cấu hình; lỗi chain/config thiếu hoặc không fresh chặn hành động thường, còn đường refund/return/settlement/shortfall vẫn mở. Bản v1 không có UI CRUD catalog.
+
+Staff settlement-intent preview dùng shared `LibrarySettlementIntent` với borrower/refund recipient, treasury, escrow, chain, calldata ví, chain time và breakdown; các shared types được export qua package barrel. Audit intent lưu reason/condition/librarian trước khi trả calldata và receipt được liên kết qua intent ID; trường audit chỉ dành cho staff, không đưa lên chain. `LibraryLoan` giữ borrower để các client không tự suy ra người nhận tiền. TTL, challenge/verify rate limits, chain freshness/future drift và minimum confirmations là `LibraryRuntimeConfig` bắt buộc từ operator, không có production default; thiếu/sai cấu hình trả `CONFIGURATION_ERROR` 503. Library JSON POST dùng cùng giới hạn body 8 KiB hiện có cho invoice; vượt ngưỡng trả 413. ABI test so khớp toàn bộ tên/metadata function/event/error surface để chặn entry ngoài fixture.
+
+`docs/scope.md` và `docs/demo-flow.md` mô tả phạm vi hiện hành theo Library; các tài liệu P01/D004 cũ là lịch sử quyết định; phần phạm vi hiện hành được điều chỉnh theo task và không mở rộng giao kèo này. Thay đổi ABI, role, state, tiền hoặc boundary cần cập nhật fixture + caller contract và review liên module trước khi tích hợp.
