@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -468,6 +468,46 @@ test("library template and export safety protect canonical deployments/intracamp
     template: true,
   });
   assert.deepEqual(JSON.parse(await readFile(join(safeTargetDir, "nested", "library-deployment.json"), "utf8")), aliasedAllowedResult);
+
+  // Concurrent exporters must not both succeed and replace the first manifest at one absent path.
+  const concurrentOutputPath = join(dir, "concurrent", "library-deployment.json");
+  const baseA = coreDeployedFixture();
+  const baseB = coreDeployedFixture();
+  baseA.exportMarker = "A";
+  baseB.exportMarker = "B";
+  const basePathA = join(dir, "base-a.json");
+  const basePathB = join(dir, "base-b.json");
+  await writeFile(basePathA, JSON.stringify(baseA));
+  await writeFile(basePathB, JSON.stringify(baseB));
+  const concurrentResults = await Promise.allSettled([
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathA, template: true }),
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathB, template: true }),
+  ]);
+  const successfulExports = concurrentResults.filter((result) => result.status === "fulfilled");
+  const rejectedExports = concurrentResults.filter((result) => result.status === "rejected");
+  assert.equal(successfulExports.length, 1);
+  assert.equal(rejectedExports.length, 1);
+  assert.match(String(rejectedExports[0].reason?.message), /already in progress|lock|overwrite/i);
+  assert.deepEqual(JSON.parse(await readFile(concurrentOutputPath, "utf8")), successfulExports[0].value);
+
+  const staleLockPath = concurrentOutputPath + ".lock";
+  const preservedOutput = await readFile(concurrentOutputPath, "utf8");
+  await writeFile(staleLockPath, "stale lock");
+  await assert.rejects(
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathB, template: true }),
+    /another export is in progress or a stale export lock exists/,
+  );
+  assert.equal(await readFile(concurrentOutputPath, "utf8"), preservedOutput);
+  await unlink(staleLockPath);
+
+  const sequentialOutputPath = join(dir, "sequential", "library-deployment.json");
+  await exportLibraryDeployment({ contractsDir: dir, outputPath: sequentialOutputPath, template: true });
+  const sequentialResult = await exportLibraryDeployment({
+    contractsDir: dir,
+    outputPath: sequentialOutputPath,
+    template: true,
+  });
+  assert.deepEqual(JSON.parse(await readFile(sequentialOutputPath, "utf8")), sequentialResult);
 
   // Refuse overwriting an existing deployed manifest without --replace.
   await writeFile(outputPath, JSON.stringify({ status: "deployed", library: { status: "deployed" } }));

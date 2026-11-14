@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, readFile, readlink, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readlink, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -662,22 +662,50 @@ async function saveManifest(outputPath, manifest, replace) {
     !(await isCanonicalDeploymentPath(resolved)),
     "Refusing to write onto canonical deployments/intracampus.json",
   );
-  try {
-    const previous = JSON.parse(await readFile(resolved, "utf8"));
-    assert(
-      replace || (previous?.status !== "deployed" && previous?.library?.status !== "deployed"),
-      "Refusing to overwrite a deployed manifest without --replace",
-    );
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
   await mkdir(dirname(resolved), { recursive: true });
-  const temp = `${resolved}.${randomUUID()}.tmp`;
+
+  const lockTarget = await resolveCanonicalPath(resolved);
+  const lockPath = `${lockTarget}.lock`;
+  let lockHandle;
   try {
-    await writeFile(temp, JSON.stringify(manifest, null, 2) + "\n", { flag: "wx" });
-    await rename(temp, resolved);
+    lockHandle = await open(lockPath, "wx");
+  } catch (error) {
+    if (error.code === "EEXIST") {
+      throw new Error(
+        "Refusing to write manifest: another export is in progress or a stale export lock exists; " +
+          "verify no exporter is active before removing the lock",
+      );
+    }
+    throw error;
+  }
+
+  try {
+    await lockHandle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + "\n");
+    await lockHandle.close();
+    lockHandle = undefined;
+
+    try {
+      const previous = JSON.parse(await readFile(resolved, "utf8"));
+      assert(
+        replace || (previous?.status !== "deployed" && previous?.library?.status !== "deployed"),
+        "Refusing to overwrite a deployed manifest without --replace",
+      );
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    const temp = `${resolved}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temp, JSON.stringify(manifest, null, 2) + "\n", { flag: "wx" });
+      await rename(temp, resolved);
+    } finally {
+      await unlink(temp).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
   } finally {
-    await unlink(temp).catch((error) => {
+    if (lockHandle) await lockHandle.close();
+    await unlink(lockPath).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
   }
