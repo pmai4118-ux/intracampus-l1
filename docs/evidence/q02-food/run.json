@@ -1,0 +1,18 @@
+{
+  "runner": "Codex",
+  "reportSavedAtUtc": "2026-11-14T05:49:36.0349658Z",
+  "sourceRevision": "14b4a6234b3f4a5265204776e1e844b4aa13af0b",
+  "host": "Windows",
+  "browser": "Microsoft Edge headless (Chromium)",
+  "network": "HTTP loopback",
+  "viewports": [
+    "390x844",
+    "1440x1000"
+  ],
+  "wallet": "Injected EIP-1193",
+  "chainId": 20261,
+  "environment": "local-anvil",
+  "timestampScope": "Report save time for the full U05 browser run. Individual case timestamps were not recorded by the existing harness.",
+  "caseCount": 10,
+  "grantSpentReceipt": "grant-spent-rpc-receipt.json"
+}

@@ -1,0 +1,1692 @@
+{
+  "schemaVersion": 1,
+  "source": "local-anvil",
+  "manifest": {
+    "schemaVersion": 1,
+    "status": "deployed",
+    "chainId": 20261,
+    "abiVersion": 1,
+    "environment": "local-anvil",
+    "contracts": {
+      "StudentSBTIdentity": {
+        "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "abiVersion": 1,
+        "abi": [
+          {
+            "type": "constructor",
+            "inputs": [
+              {
+                "name": "issuer_",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "approve",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "balanceOf",
+            "inputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "credentials",
+            "inputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "getApproved",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "isApprovedForAll",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "issuer",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "locked",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "mint",
+            "inputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "ownerOf",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "revoke",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "safeTransferFrom",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "safeTransferFrom",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "setApprovalForAll",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "supportsInterface",
+            "inputs": [
+              {
+                "name": "interfaceId",
+                "type": "bytes4",
+                "internalType": "bytes4"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "function",
+            "name": "tierOf",
+            "inputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "transferFrom",
+            "inputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "pure"
+          },
+          {
+            "type": "event",
+            "name": "Locked",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "event",
+            "name": "Transfer",
+            "inputs": [
+              {
+                "name": "from",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "to",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "indexed": true,
+                "internalType": "uint256"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "error",
+            "name": "CredentialAlreadyIssued",
+            "inputs": [
+              {
+                "name": "wallet",
+                "type": "address",
+                "internalType": "address"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvalidExpiry",
+            "inputs": [
+              {
+                "name": "expiresAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvalidWallet",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "Soulbound",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "TokenNotFound",
+            "inputs": [
+              {
+                "name": "tokenId",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "UnauthorizedIssuer",
+            "inputs": []
+          }
+        ],
+        "transactionHash": "0xb7074bfaa5c73dc4b6ee73e07693973cdbb5242b8dec70aed2695feeb00e6410",
+        "blockNumber": 1,
+        "blockHash": "0xc384ddfe2c2f1b8b5bb4709ce32277e362b30bbaf8377ea7bbec3f92a5a4f84e",
+        "runtimeCodeHash": "0xc13cf8784c7c62b8b1ec93f4fdcd69771c12dec2639bd0934a864159e9220ed2"
+      },
+      "CampusPaymentRegistry": {
+        "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        "abiVersion": 1,
+        "abi": [
+          {
+            "type": "constructor",
+            "inputs": [
+              {
+                "name": "admin_",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "posSigner_",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "studentSbt_",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "admin",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "allowedMerchantCategories",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "allowed",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "isInvoicePaid",
+            "inputs": [
+              {
+                "name": "invoiceId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "payInvoice",
+            "inputs": [
+              {
+                "name": "invoice",
+                "type": "tuple",
+                "internalType": "struct CampusPaymentRegistry.Invoice",
+                "components": [
+                  {
+                    "name": "invoiceId",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "merchant",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "category",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "amount",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
+                    "name": "expiresAt",
+                    "type": "uint64",
+                    "internalType": "uint64"
+                  }
+                ]
+              },
+              {
+                "name": "signature",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "payable"
+          },
+          {
+            "type": "function",
+            "name": "posSigner",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "quoteInvoice",
+            "inputs": [
+              {
+                "name": "invoice",
+                "type": "tuple",
+                "internalType": "struct CampusPaymentRegistry.Invoice",
+                "components": [
+                  {
+                    "name": "invoiceId",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "merchant",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
+                    "name": "category",
+                    "type": "bytes32",
+                    "internalType": "bytes32"
+                  },
+                  {
+                    "name": "amount",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
+                    "name": "expiresAt",
+                    "type": "uint64",
+                    "internalType": "uint64"
+                  }
+                ]
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "tier",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "discountAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "paidAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "setMerchantCategory",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "allowed",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "studentSbt",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "contract IStudentTier"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "event",
+            "name": "InvoicePaid",
+            "inputs": [
+              {
+                "name": "invoiceId",
+                "type": "bytes32",
+                "indexed": true,
+                "internalType": "bytes32"
+              },
+              {
+                "name": "payer",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "merchant",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "indexed": false,
+                "internalType": "bytes32"
+              },
+              {
+                "name": "originalAmount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              },
+              {
+                "name": "discountAmount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              },
+              {
+                "name": "paidAmount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              },
+              {
+                "name": "tier",
+                "type": "uint8",
+                "indexed": false,
+                "internalType": "uint8"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "event",
+            "name": "MerchantCategoryUpdated",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "indexed": true,
+                "internalType": "bytes32"
+              },
+              {
+                "name": "allowed",
+                "type": "bool",
+                "indexed": false,
+                "internalType": "bool"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "error",
+            "name": "IncorrectPaymentAmount",
+            "inputs": [
+              {
+                "name": "sentValue",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "requiredAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvalidConfiguration",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidInvoice",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidMerchantOrCategory",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvalidSignature",
+            "inputs": [
+              {
+                "name": "recoveredSigner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "expectedSigner",
+                "type": "address",
+                "internalType": "address"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvoiceAlreadyPaid",
+            "inputs": [
+              {
+                "name": "invoiceId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvoiceExpired",
+            "inputs": [
+              {
+                "name": "invoiceId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "expiresAt",
+                "type": "uint64",
+                "internalType": "uint64"
+              },
+              {
+                "name": "currentTimestamp",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "MerchantTransferFailed",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "ReentrantPayment",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "UnauthorizedAdmin",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "UnsupportedTier",
+            "inputs": [
+              {
+                "name": "tier",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          }
+        ],
+        "transactionHash": "0x436e6f1a95b2e7451e69574eb409fe85a50ab4aa09a405383fe9c71bf11a1a66",
+        "blockNumber": 2,
+        "blockHash": "0x22d1b8ac7614cf76ea915d739fd558c0be582524c22281f0553581c1d8dce131",
+        "runtimeCodeHash": "0x9e98d35d1a718f82bf5a5865f9b4ecb916248ad577948faf7f15fa4330f49245"
+      },
+      "PurposeBoundGrantVault": {
+        "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+        "abiVersion": 1,
+        "abi": [
+          {
+            "type": "constructor",
+            "inputs": [
+              {
+                "name": "issuer_",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "registry_",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "balances",
+            "inputs": [
+              {
+                "name": "beneficiary",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ],
+            "outputs": [
+              {
+                "name": "balance",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "grant",
+            "inputs": [
+              {
+                "name": "beneficiary",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "payable"
+          },
+          {
+            "type": "function",
+            "name": "issuer",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "merchantRegistry",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "address",
+                "internalType": "contract IGrantMerchantRegistry"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "function",
+            "name": "spend",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "outputs": [],
+            "stateMutability": "nonpayable"
+          },
+          {
+            "type": "function",
+            "name": "totalAllocated",
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ],
+            "stateMutability": "view"
+          },
+          {
+            "type": "event",
+            "name": "GrantIssued",
+            "inputs": [
+              {
+                "name": "beneficiary",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "indexed": true,
+                "internalType": "bytes32"
+              },
+              {
+                "name": "issuer",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              },
+              {
+                "name": "balance",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "event",
+            "name": "GrantSpent",
+            "inputs": [
+              {
+                "name": "beneficiary",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "merchant",
+                "type": "address",
+                "indexed": true,
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "indexed": true,
+                "internalType": "bytes32"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              },
+              {
+                "name": "balance",
+                "type": "uint256",
+                "indexed": false,
+                "internalType": "uint256"
+              }
+            ],
+            "anonymous": false
+          },
+          {
+            "type": "error",
+            "name": "InsufficientGrantBalance",
+            "inputs": [
+              {
+                "name": "available",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "requested",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "InvalidAmount",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidBeneficiary",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidCategory",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidConfiguration",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "InvalidMerchant",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "category",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "MerchantTransferFailed",
+            "inputs": [
+              {
+                "name": "merchant",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "type": "error",
+            "name": "ReentrantGrant",
+            "inputs": []
+          },
+          {
+            "type": "error",
+            "name": "UnauthorizedIssuer",
+            "inputs": []
+          }
+        ],
+        "transactionHash": "0x5cdf2bcdbfa61188c32b62540ef0944693b7932896e88de8b32c6d35f07b07e2",
+        "blockNumber": 3,
+        "blockHash": "0x47540b18a45ecfd246d49ceb9ee5e631f4f1b73de5fb8e8ff6cb90e7df6e7e70",
+        "runtimeCodeHash": "0xc2a4211b4e822cf8bd8a5953be4298b16c7d79dfc0203ab6ddb2a15ec8644b9f"
+      }
+    },
+    "roles": {
+      "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "sbtIssuer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "grantIssuer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "posSigner": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD"
+    },
+    "merchants": {
+      "parking": {
+        "address": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+        "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb"
+      },
+      "canteen": {
+        "address": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+        "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d"
+      }
+    }
+  },
+  "context": {
+    "appCommit": "f48624b84124af8bb69023c1e7198c0477f09549",
+    "startedAt": "2026-11-13T16:36:46.083667+00:00",
+    "network": "Same Windows host, HTTP loopback, Anvil automine",
+    "devices": "Headless Edge 157.0.4341.46: POS 1440×1000, Student 390×844",
+    "wallet": "Injected EIP-1193; unlocked accounts on this temporary Anvil; no human approval time",
+    "clock": "One Python monotonic clock; POS sampled every 20 ms plus command/RPC time; binding marks include browser IPC",
+    "posPollMs": 2000,
+    "receiptPollMs": 50,
+    "planned": {
+      "standard": 4,
+      "sbt": 3
+    }
+  },
+  "attempts": [
+    {
+      "invoiceId": "0x33ab1c237f794b21b8237e9e0a202ee891a311596d669ff29ebc1385162a93fc",
+      "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "tier": 0,
+      "observed": "rejected",
+      "marksMs": {
+        "request": 3547
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x33ab1c237f794b21b8237e9e0a202ee891a311596d669ff29ebc1385162a93fc",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794587696
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-b0255649-740d-4cc9-a052-e8ebdd257e3c",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587396
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0x373f055191da5f3da0ff9a633babba06e5ac2d0e2efd10dcd66685b3becb98e1449ec8d3b068165af619d5b769c75ce6094b2ac6c20677c374927857c18c55e61c"
+      },
+      "rpcReceipt": null,
+      "canonicalBlockHash": null
+    },
+    {
+      "invoiceId": "0x433fc9ad14bfa867b004f47c706f5b97beec4eb87ee171f6f1e3b52f81eb96ff",
+      "txHash": "0xbcc2a7f05f76b4aaaee0106248354e5fe86580acdb812b37cf38c4546ee22fb0",
+      "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "tier": 0,
+      "observed": "timeout",
+      "marksMs": {
+        "request": 3844,
+        "submit": 3844,
+        "hash": 3859,
+        "receipt": 3875
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x433fc9ad14bfa867b004f47c706f5b97beec4eb87ee171f6f1e3b52f81eb96ff",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794587696
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-d714d0e8-be6d-427c-ab42-2d0d9b75649c",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587396
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0x4bf53019bb98cb72ba205ceb187484a2e2e3735c7186cf1976ca6a2ebce93f7527aef307d6e88a48ea9ba00c9b46bd8e0760a78f01a69fa393c1f7e737adf1831c"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x0",
+        "cumulativeGasUsed": "0xc1d0",
+        "logs": [],
+        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "transactionHash": "0xbcc2a7f05f76b4aaaee0106248354e5fe86580acdb812b37cf38c4546ee22fb0",
+        "transactionIndex": "0x0",
+        "blockHash": "0x65cec585258e3ff04645b0527c68c14967abda87cdd0104ef422906336f73912",
+        "blockNumber": "0xe",
+        "gasUsed": "0xc1d0",
+        "effectiveGasPrice": "0x465e3719",
+        "blobGasPrice": "0x1",
+        "from": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587809
+      },
+      "canonicalBlockHash": "0x65cec585258e3ff04645b0527c68c14967abda87cdd0104ef422906336f73912"
+    },
+    {
+      "invoiceId": "0x702a124ea23bb5a2cddc1d0ea5a17e7834f777b9fd675deff6c61aa0c1d8f498",
+      "txHash": "0x73c1f42d58e2b78b50b9fc58515c96580ef0f4aaf77b84dcfd2da53ad00be8d4",
+      "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "tier": 0,
+      "observed": "hash-observed",
+      "marksMs": {
+        "request": 24031,
+        "submit": 24031,
+        "hash": 24031,
+        "receipt": 24047,
+        "pos": 25922
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x702a124ea23bb5a2cddc1d0ea5a17e7834f777b9fd675deff6c61aa0c1d8f498",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794588109
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-224345fb-e6b1-49d1-a9f3-49b1fbb1b34a",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587809
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0xc92e8c803f3c8d89c652629a07aadfd75d1be8f2e203340f5c4ecc1a1d05b8e1102e182c8a57111171e5018a4b857404d3870e12ece60c36d7652981a074b7e21b"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x1",
+        "cumulativeGasUsed": "0x12d38",
+        "logs": [
+          {
+            "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0x702a124ea23bb5a2cddc1d0ea5a17e7834f777b9fd675deff6c61aa0c1d8f498",
+              "0x0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+              "0x00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65"
+            ],
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a2a15d09519be000000000000000000000000000000000000000000000000000000000000000000000",
+            "blockHash": "0x3a7b320ca203d77d4c6bc9a8a3318fb4d9a2e06db5831247b2272b47407402e4",
+            "blockNumber": "0xf",
+            "blockTimestamp": "0x6af73cb6",
+            "transactionHash": "0x73c1f42d58e2b78b50b9fc58515c96580ef0f4aaf77b84dcfd2da53ad00be8d4",
+            "transactionIndex": "0x0",
+            "logIndex": "0x0",
+            "removed": false
+          }
+        ],
+        "logsBloom": "0x00000000040000000000000000000000000000800000000000000000000000000000000000000000000000000000000010000000000000000000000000100000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000080000000000000000000100000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000001000000000002000000000000000000004000000000000000000000001000000000000000000000000800000000000000000",
+        "transactionHash": "0x73c1f42d58e2b78b50b9fc58515c96580ef0f4aaf77b84dcfd2da53ad00be8d4",
+        "transactionIndex": "0x0",
+        "blockHash": "0x3a7b320ca203d77d4c6bc9a8a3318fb4d9a2e06db5831247b2272b47407402e4",
+        "blockNumber": "0xf",
+        "gasUsed": "0x12d38",
+        "effectiveGasPrice": "0x4506ed1e",
+        "blobGasPrice": "0x1",
+        "from": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587830
+      },
+      "canonicalBlockHash": "0x3a7b320ca203d77d4c6bc9a8a3318fb4d9a2e06db5831247b2272b47407402e4"
+    },
+    {
+      "invoiceId": "0xd7347e4c36ab1d4595f78594b3333992130d91dc9f5cadd97e28ff355ff68c3f",
+      "txHash": "0x2053a278234b694fcd01b8d19d9a6f3f3897e0da2ea0a096737b15a801a34529",
+      "payer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "tier": 0,
+      "observed": "hash-observed",
+      "marksMs": {
+        "request": 26125,
+        "submit": 26125,
+        "hash": 26125,
+        "receipt": 26125,
+        "pos": 28031
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0xd7347e4c36ab1d4595f78594b3333992130d91dc9f5cadd97e28ff355ff68c3f",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794588130
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-14048514-f90d-4536-b431-c3d24d1029f9",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587830
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0xa25edb5c53623078cc09e23ff64a528107fa1d69226af490b729a0f723b41adc33cc674dd017f6d634400f36b44868ea0c06c71a46306abc462a0eade0b864cf1b"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x1",
+        "cumulativeGasUsed": "0x12d38",
+        "logs": [
+          {
+            "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0xd7347e4c36ab1d4595f78594b3333992130d91dc9f5cadd97e28ff355ff68c3f",
+              "0x0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+              "0x00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65"
+            ],
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a2a15d09519be000000000000000000000000000000000000000000000000000000000000000000000",
+            "blockHash": "0x73343bf0901fca8fb296304ea78f9e824c6dd495dbd520cd309cbbd5e27ae8fe",
+            "blockNumber": "0x10",
+            "blockTimestamp": "0x6af73cb8",
+            "transactionHash": "0x2053a278234b694fcd01b8d19d9a6f3f3897e0da2ea0a096737b15a801a34529",
+            "transactionIndex": "0x0",
+            "logIndex": "0x0",
+            "removed": false
+          }
+        ],
+        "logsBloom": "0x00000000040000000000000000000000000000800000000000000000000000000000000000000000000000000000000010000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200800000000000000000000000000000000000000800000000000000000000000000000000000000000000200000000000000000080000000000000000000100000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000004000000000000000000000001000000000000000000000000800000000000000000",
+        "transactionHash": "0x2053a278234b694fcd01b8d19d9a6f3f3897e0da2ea0a096737b15a801a34529",
+        "transactionIndex": "0x0",
+        "blockHash": "0x73343bf0901fca8fb296304ea78f9e824c6dd495dbd520cd309cbbd5e27ae8fe",
+        "blockNumber": "0x10",
+        "gasUsed": "0x12d38",
+        "effectiveGasPrice": "0x43daf58a",
+        "blobGasPrice": "0x1",
+        "from": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587832
+      },
+      "canonicalBlockHash": "0x73343bf0901fca8fb296304ea78f9e824c6dd495dbd520cd309cbbd5e27ae8fe"
+    },
+    {
+      "invoiceId": "0x2ae6adc496b3c7a6a359c27679569015711a407a0e4e889b0d1960c8e200eea4",
+      "txHash": "0xeba29a7a4516c7cfc226f3a256d57735d4d747987fdb4a010d3f54b8a9f458b0",
+      "payer": "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
+      "tier": 1,
+      "observed": "hash-observed",
+      "marksMs": {
+        "request": 28953,
+        "submit": 28969,
+        "hash": 28969,
+        "receipt": 28984,
+        "pos": 30781
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x2ae6adc496b3c7a6a359c27679569015711a407a0e4e889b0d1960c8e200eea4",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794588132
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-b61e6830-8115-411a-ac73-b519faf9e1fc",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587832
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0x9b5fc63a0781eb93055384c71bf238bf07e30d2943f4f34e3b078edbc6d607947e946ad069eedacbf353cbcb710cfe7a6a4a3dd122affd8b2301b31f5a73d6321b"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x1",
+        "cumulativeGasUsed": "0x133f5",
+        "logs": [
+          {
+            "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0x2ae6adc496b3c7a6a359c27679569015711a407a0e4e889b0d1960c8e200eea4",
+              "0x00000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955",
+              "0x00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65"
+            ],
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000001043561a88293000000000000000000000000000000000000000000000000000925e06eec972b000000000000000000000000000000000000000000000000000000000000000000001",
+            "blockHash": "0x12efe7c0c324e643b1dac8e3b2df96c19c9d83666429e5ee1022ac51b5f4d51d",
+            "blockNumber": "0x11",
+            "blockTimestamp": "0x6af73cbb",
+            "transactionHash": "0xeba29a7a4516c7cfc226f3a256d57735d4d747987fdb4a010d3f54b8a9f458b0",
+            "transactionIndex": "0x0",
+            "logIndex": "0x0",
+            "removed": false
+          }
+        ],
+        "logsBloom": "0x08000000040000000000000000000000000000800000000000000000000000000000000000000000002000000000000010000000000000000000000000000000000000000000000000000000000000000002000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000100000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000001000040000000000000000000000000004000000000000000000000001000000000000000000000000800000000000000000",
+        "transactionHash": "0xeba29a7a4516c7cfc226f3a256d57735d4d747987fdb4a010d3f54b8a9f458b0",
+        "transactionIndex": "0x0",
+        "blockHash": "0x12efe7c0c324e643b1dac8e3b2df96c19c9d83666429e5ee1022ac51b5f4d51d",
+        "blockNumber": "0x11",
+        "gasUsed": "0x133f5",
+        "effectiveGasPrice": "0x42d44b90",
+        "blobGasPrice": "0x1",
+        "from": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587835
+      },
+      "canonicalBlockHash": "0x12efe7c0c324e643b1dac8e3b2df96c19c9d83666429e5ee1022ac51b5f4d51d"
+    },
+    {
+      "invoiceId": "0x8eaa9ab040f48d15b065b75077605cd3c55639af609e5c22f1a19009b5f75e34",
+      "txHash": "0xecb6c5889a6cc091c4090d929d908d48fac08f016e5101cdf5d2e15b4b4425fc",
+      "payer": "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
+      "tier": 1,
+      "observed": "hash-observed",
+      "marksMs": {
+        "request": 31078,
+        "submit": 31094,
+        "hash": 31094,
+        "receipt": 31125,
+        "pos": 32922
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x8eaa9ab040f48d15b065b75077605cd3c55639af609e5c22f1a19009b5f75e34",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794588135
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-7d7e6c04-ecee-4c1a-926f-1076e8dbb69a",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587835
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0xb7a4009f0fec9ad0fb1630c746b3eee15f467487a2ef8359b6cb82977c6de103748e241291e88af32d08adc5033b0362ec97c814bc0dab470c3b5e73b91a1c3a1b"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x1",
+        "cumulativeGasUsed": "0x133f5",
+        "logs": [
+          {
+            "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0x8eaa9ab040f48d15b065b75077605cd3c55639af609e5c22f1a19009b5f75e34",
+              "0x00000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955",
+              "0x00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65"
+            ],
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000001043561a88293000000000000000000000000000000000000000000000000000925e06eec972b000000000000000000000000000000000000000000000000000000000000000000001",
+            "blockHash": "0xd56e08f47e2944296c5044476c70e40551f95b03a6a3340df8b66a870161b197",
+            "blockNumber": "0x12",
+            "blockTimestamp": "0x6af73cbd",
+            "transactionHash": "0xecb6c5889a6cc091c4090d929d908d48fac08f016e5101cdf5d2e15b4b4425fc",
+            "transactionIndex": "0x0",
+            "logIndex": "0x0",
+            "removed": false
+          }
+        ],
+        "logsBloom": "0x00000000040000000000000000000000000000800000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000080000002000000000000100000000000000000000000000000000000000002000000000000000000000000000000000000000000000008000000000001000040000000000000000000000000004000000000000000000000001000000000000000000000000800000000000000000",
+        "transactionHash": "0xecb6c5889a6cc091c4090d929d908d48fac08f016e5101cdf5d2e15b4b4425fc",
+        "transactionIndex": "0x0",
+        "blockHash": "0xd56e08f47e2944296c5044476c70e40551f95b03a6a3340df8b66a870161b197",
+        "blockNumber": "0x12",
+        "gasUsed": "0x133f5",
+        "effectiveGasPrice": "0x41ee526e",
+        "blobGasPrice": "0x1",
+        "from": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587837
+      },
+      "canonicalBlockHash": "0xd56e08f47e2944296c5044476c70e40551f95b03a6a3340df8b66a870161b197"
+    },
+    {
+      "invoiceId": "0x032578ff0da7c4e953d12a3648719c0ef2398d37eeedbbac85c4e13530ebeb20",
+      "txHash": "0x25ea6b2f013e8f993a7e632deb74ac6fb8cc818b73b94dcafb15f703eadec941",
+      "payer": "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
+      "tier": 1,
+      "observed": "hash-observed",
+      "marksMs": {
+        "request": 33140,
+        "submit": 33140,
+        "hash": 33140,
+        "receipt": 33172,
+        "pos": 35031
+      },
+      "envelope": {
+        "schemaVersion": 1,
+        "domain": {
+          "name": "IntraCampusPayment",
+          "version": "1",
+          "chainId": 20261,
+          "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+        },
+        "invoice": {
+          "invoiceId": "0x032578ff0da7c4e953d12a3648719c0ef2398d37eeedbbac85c4e13530ebeb20",
+          "merchant": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+          "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb",
+          "amount": "3000000000000000000000",
+          "expiresAt": 1794588137
+        },
+        "meta": {
+          "invoiceCode": "INV-20261113-PARKING-4de216c8-8850-477b-8167-87ca1f5d3ce9",
+          "merchantId": "parking-demo",
+          "merchantName": "Bãi xe demo",
+          "serviceId": "parking-single",
+          "serviceName": "Một lượt gửi xe demo",
+          "categoryCode": "PARKING",
+          "issuedAt": 1794587837
+        },
+        "signer": "0x933402EB0612E8719A7f62A699D35A2d281BB5AD",
+        "signature": "0xe6dbf0961b9ebc8841a2b080384abf4f7baf912cd1578cbf7b0daefb916765b13d9477dbd02b59176321ee9e725eabbed8036548278872c5e430b774854721041c"
+      },
+      "rpcReceipt": {
+        "type": "0x2",
+        "status": "0x1",
+        "cumulativeGasUsed": "0x133ff",
+        "logs": [
+          {
+            "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+            "topics": [
+              "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d",
+              "0x032578ff0da7c4e953d12a3648719c0ef2398d37eeedbbac85c4e13530ebeb20",
+              "0x00000000000000000000000014dc79964da2c08b23698b3d3cc7ca32193d9955",
+              "0x00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65"
+            ],
+            "data": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb0000000000000000000000000000000000000000000000a2a15d09519be0000000000000000000000000000000000000000000000000001043561a88293000000000000000000000000000000000000000000000000000925e06eec972b000000000000000000000000000000000000000000000000000000000000000000001",
+            "blockHash": "0x0b0c21c993084cc779f797c4a984ff6613eb8763bee4be2e849f11c201bf920f",
+            "blockNumber": "0x13",
+            "blockTimestamp": "0x6af73cbf",
+            "transactionHash": "0x25ea6b2f013e8f993a7e632deb74ac6fb8cc818b73b94dcafb15f703eadec941",
+            "transactionIndex": "0x0",
+            "logIndex": "0x0",
+            "removed": false
+          }
+        ],
+        "logsBloom": "0x00000000040000000000000000000000000000800000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000100000000000000000000000000000000000000082000000000000000000000000000000000000000000000100000000000001000040000000000000000000000000014000000000000000000000001000000000000000000000000800000000000000000",
+        "transactionHash": "0x25ea6b2f013e8f993a7e632deb74ac6fb8cc818b73b94dcafb15f703eadec941",
+        "transactionIndex": "0x0",
+        "blockHash": "0x0b0c21c993084cc779f797c4a984ff6613eb8763bee4be2e849f11c201bf920f",
+        "blockNumber": "0x13",
+        "gasUsed": "0x133ff",
+        "effectiveGasPrice": "0x4124f1c3",
+        "blobGasPrice": "0x1",
+        "from": "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
+        "to": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+        "contractAddress": null,
+        "blockTimestamp": 1794587839
+      },
+      "canonicalBlockHash": "0x0b0c21c993084cc779f797c4a984ff6613eb8763bee4be2e849f11c201bf920f"
+    }
+  ]
+}

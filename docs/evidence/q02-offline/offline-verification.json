@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-14T05:59:42.475221+00:00",
+  "method": "Edge Playwright browser context offline, local file URLs; no network used",
+  "files": {
+    "pos-sbt-receipt.png": {
+      "decodedPixels": [
+        1280,
+        2380
+      ],
+      "sha256": "763d84e0cd9465c8a16d6f3b25dd73aad563a61bf4d401f4344624b385e5065c"
+    },
+    "food-student-receipt.png": {
+      "decodedPixels": [
+        390,
+        2540
+      ],
+      "sha256": "777b530ac0963cafa6b29987640a2e0a374a0284ed2a071e8e570e64a5279413"
+    },
+    "pos-sbt-anvil.mp4": {
+      "playedAndSeeked": true,
+      "durationSeconds": 7.52,
+      "sha256": "058f7ce08f559c21bcb8fbc000cfa0555a6cbae5fd8064b8a385740a3387ad20"
+    },
+    "README.md": {
+      "opened": true,
+      "sha256": "df73725c53db028cba017b0420a15e241e5a290fa504a8416ccb36e751bbe758"
+    }
+  }
+}
