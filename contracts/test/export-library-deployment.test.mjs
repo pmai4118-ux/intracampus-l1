@@ -388,6 +388,18 @@ test("requireLibraryDeployment rejects missing/invalid escrow ABI, version, chai
     ["deposit not payable", (m) => {
       m.library.escrow.abi.find((e) => e.name === "deposit").stateMutability = "nonpayable";
     }],
+    ["collapsed bookTerms output list", (m) => {
+      const entry = m.library.escrow.abi.find((e) => e.name === "bookTerms");
+      const description = entry.outputs.map(({ name, type }) => `${name}:${type}`).join("|");
+      const last = entry.outputs.at(-1);
+      entry.outputs = [{ name: description.slice(0, -(last.type.length + 1)), type: last.type }];
+    }],
+    ["collapsed requestInfo output list", (m) => {
+      const entry = m.library.escrow.abi.find((e) => e.name === "requestInfo");
+      const description = entry.outputs.map(({ name, type }) => `${name}:${type}`).join("|");
+      const last = entry.outputs.at(-1);
+      entry.outputs = [{ name: description.slice(0, -(last.type.length + 1)), type: last.type }];
+    }],
     ["wrong ReturnSettled indexed field", (m) => {
       m.library.escrow.abi.find((e) => e.name === "ReturnSettled").inputs[0].indexed = false;
     }],

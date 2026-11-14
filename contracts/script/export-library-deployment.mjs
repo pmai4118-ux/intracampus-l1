@@ -43,9 +43,9 @@ const POLICY_SPEC = {
 
 function normalizeAbiEntry(entry) {
   assert(entry && typeof entry === "object" && !Array.isArray(entry), "INVALID_LIBRARY_DEPLOYMENT");
-  const signature = `${entry.name ?? "constructor"}(${(entry.inputs ?? []).map(({ type }) => type).join(",")})`;
-  const inputs = (entry.inputs ?? []).map(({ name = "", type, indexed }) => `${name}:${type}${indexed ? ":indexed" : ""}`).join("|");
-  const outputs = (entry.outputs ?? []).map(({ name = "", type }) => `${name}:${type}`).join("|") || "-";
+  const signature = `${entry.name ?? "constructor"}(${JSON.stringify((entry.inputs ?? []).map(({ type }) => type))})`;
+  const inputs = JSON.stringify((entry.inputs ?? []).map(({ name = "", type, indexed }) => [name, type, Boolean(indexed)]));
+  const outputs = JSON.stringify((entry.outputs ?? []).map(({ name = "", type }) => [name, type]));
   if (entry.type === "constructor") return `constructor ${signature}:${entry.stateMutability}:inputs(${inputs})`;
   if (entry.type === "function") return `function ${signature}:${entry.stateMutability}:inputs(${inputs}):outputs(${outputs})`;
   if (entry.type === "event") return `event ${signature}:anonymous=${entry.anonymous ?? false}:inputs(${inputs})`;

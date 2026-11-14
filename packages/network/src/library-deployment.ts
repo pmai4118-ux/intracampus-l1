@@ -136,17 +136,17 @@ function libraryAbiEntry(value: unknown): string {
   const entry = object(value);
   const inputs = abiParameters(entry.inputs ?? []);
   const outputs = abiParameters(entry.outputs ?? []);
-  const signature = `${String(entry.name ?? "constructor")}(${inputs.map((parameter) => String(parameter.type)).join(",")})`;
-  const inputDescription = inputs.map((parameter) => {
+  const signature = `${String(entry.name ?? "constructor")}(${JSON.stringify(inputs.map((parameter) => String(parameter.type)))})`;
+  const inputDescription = JSON.stringify(inputs.map((parameter) => {
     const name = parameter.name ?? "";
     if (typeof name !== "string") throw new Error("INVALID_DEPLOYMENT");
-    return `${name}:${String(parameter.type)}${parameter.indexed ? ":indexed" : ""}`;
-  }).join("|");
-  const outputDescription = outputs.map((parameter) => {
+    return [name, String(parameter.type), Boolean(parameter.indexed)];
+  }));
+  const outputDescription = JSON.stringify(outputs.map((parameter) => {
     const name = parameter.name ?? "";
     if (typeof name !== "string") throw new Error("INVALID_DEPLOYMENT");
-    return `${name}:${String(parameter.type)}`;
-  }).join("|") || "-";
+    return [name, String(parameter.type)];
+  }));
 
   if (entry.type === "constructor") return `constructor ${signature}:${String(entry.stateMutability)}:inputs(${inputDescription})`;
   if (entry.type === "function") return `function ${signature}:${String(entry.stateMutability)}:inputs(${inputDescription}):outputs(${outputDescription})`;
