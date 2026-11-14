@@ -302,9 +302,25 @@ test("required runtime config keys, units and fail-closed domains are explicit",
 
 test("settlement preview response and every transaction action have a typed caller handoff", () => {
   assert.deepEqual(fixture.api?.settlementIntentResponseFields, [
-    "requestId", "loanId", "outcome", "borrower", "chainId", "escrow", "treasury",
+    "intentId", "requestId", "loanId", "outcome", "borrower", "chainId", "escrow", "treasury",
     "walletCall.to", "walletCall.data", "walletCall.valueWei", "preview", "chainTime",
   ]);
+  assert.deepEqual(fixture.api?.settlementIntentRequestFields, {
+    RETURNED: ["outcome", "condition", "reason", "repairRequestedWei"],
+    LOST: ["outcome", "reason"],
+  });
+  assert.deepEqual(fixture.api?.settlementIntentAudit, {
+    conditionValues: ["GOOD", "DAMAGED"],
+    reason: { type: "string", required: true, nonEmptyAfterTrim: true, maxBytes: 8192 },
+    persistBeforeResponse: [
+      "intentId", "requestId", "loanId", "outcome", "librarianWallet", "condition", "reason",
+      "repairRequestedWei", "createdAt",
+    ],
+    reasonVisibility: "LIBRARIAN_ONLY",
+    onChain: false,
+    transactionLinkField: "settlementIntentId",
+    transactionLinkRequiredFor: ["return", "settle"],
+  });
   assert.deepEqual(fixture.api?.settlementIntentPreviewFields, [
     "RETURNED.returnedAt", "RETURNED.lateFeeWei", "RETURNED.repairFeeWei", "RETURNED.overdueForfeitWei",
     "RETURNED.totalRetainedWei", "RETURNED.refundWei", "RETURNED.maintenanceRequired",
@@ -318,5 +334,8 @@ test("settlement preview response and every transaction action have a typed call
     for (const field of ["producer", "endpoint", "contractConsumer", "backendConsumer", "verifiedProof", "persistence", "successTransition", "verification"]) {
       assert.ok(handoff?.[field], `${action} is missing ${field}`);
     }
+  }
+  for (const action of ["return", "settle"]) {
+    assert.ok(fixture.callerMatrix[action].persistence.includes("settlement intent audit linked by settlementIntentId to action/hash"));
   }
 });

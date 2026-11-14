@@ -85,6 +85,17 @@ export type LibraryTransaction = {
   proof: LibraryEventProof | null;
 };
 
+export type LibraryTransactionSubmission =
+  | {
+      action: Exclude<LibraryTransactionAction, "return" | "settle">;
+      txHash: `0x${string}`;
+    }
+  | {
+      action: "return" | "settle";
+      txHash: `0x${string}`;
+      settlementIntentId: string;
+    };
+
 export type LibraryEventProof = {
   chainId: 20261;
   contractAddress: LibraryAddress;
@@ -144,7 +155,22 @@ export type LibrarySettlement =
 
 export type LibrarySettlementPreview = LibrarySettlement;
 
+export type LibrarySettlementCondition = "GOOD" | "DAMAGED";
+
+export type LibrarySettlementIntentRequest =
+  | {
+      outcome: "RETURNED";
+      condition: LibrarySettlementCondition;
+      reason: string;
+      repairRequestedWei: LibraryWei;
+    }
+  | {
+      outcome: "LOST";
+      reason: string;
+    };
+
 type LibrarySettlementIntentBase = {
+  intentId: string;
   requestId: LibraryBytes32;
   loanId: LibraryBytes32;
   borrower: LibraryAddress;

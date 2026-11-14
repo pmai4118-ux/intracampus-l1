@@ -1080,12 +1080,55 @@
       "approve": "LIBRARIAN",
       "refund": "STUDENT_OWNER"
     },
+    "settlementIntentRequestFields": {
+      "RETURNED": [
+        "outcome",
+        "condition",
+        "reason",
+        "repairRequestedWei"
+      ],
+      "LOST": [
+        "outcome",
+        "reason"
+      ]
+    },
+    "settlementIntentAudit": {
+      "conditionValues": [
+        "GOOD",
+        "DAMAGED"
+      ],
+      "reason": {
+        "type": "string",
+        "required": true,
+        "nonEmptyAfterTrim": true,
+        "maxBytes": 8192
+      },
+      "persistBeforeResponse": [
+        "intentId",
+        "requestId",
+        "loanId",
+        "outcome",
+        "librarianWallet",
+        "condition",
+        "reason",
+        "repairRequestedWei",
+        "createdAt"
+      ],
+      "reasonVisibility": "LIBRARIAN_ONLY",
+      "onChain": false,
+      "transactionLinkField": "settlementIntentId",
+      "transactionLinkRequiredFor": [
+        "return",
+        "settle"
+      ]
+    },
     "idempotency": {
       "sameKeyDifferentBookConflicts": true,
       "keyScopedToBorrower": true,
       "sameKeySameBookReturnsExisting": true
     },
     "settlementIntentResponseFields": [
+      "intentId",
       "requestId",
       "loanId",
       "outcome",
@@ -1216,14 +1259,14 @@
       "verification": "N-812 Foundry deadline and recipient tests; N-5DF owner-scope, idempotency and restart tests; N-696 student refund flow"
     },
     "return": {
-      "producer": "LIBRARIAN records physical receipt/condition, reviews the chain-time preview, then signs settleReturn(requestId, repairRequestedWei)",
-      "endpoint": "POST /api/library/loans/:loanId/settlement-intents then POST /api/library/requests/:requestId/transactions with action=return and txHash",
+      "producer": "LIBRARIAN submits condition=GOOD|DAMAGED and a required nonblank reason, reviews the chain-time preview, then signs settleReturn(requestId, repairRequestedWei)",
+      "endpoint": "POST /api/library/loans/:loanId/settlement-intents returns intentId; POST /api/library/requests/:requestId/transactions uses action=return, txHash and settlementIntentId",
       "contractConsumer": "LibraryEscrow.settleReturn reads chain time, clamps fees to the deposit, pays the configured treasury and borrower, then emits ReturnSettled",
       "backendConsumer": "N-5DF verifies canonical ReturnSettled receipt, librarian sender, requestId, borrower, returnedAt and every emitted amount",
       "verifiedProof": "ReturnSettled event for requestId and borrower with matching fee/refund/retention breakdown and chain timestamp",
       "persistence": [
-        "physical return/condition audit before signing",
-        "settlement intent and action/hash",
+        "settlement intent audit (condition, reason, librarianWallet, repairRequestedWei, createdAt) before returning wallet calldata",
+        "settlement intent audit linked by settlementIntentId to action/hash",
         "verified settlement amounts, maintenance state and event cursor",
         "released or maintenance copy state",
         "audit state across restart"
@@ -1232,14 +1275,15 @@
       "verification": "N-812 Foundry late/repair/refund/treasury tests; N-5DF preview, event and restart tests; N-696 librarian return and breakdown UI flow"
     },
     "settle": {
-      "producer": "LIBRARIAN reports a loan lost, reviews sealed replacement-price preview, then signs settleLost(requestId)",
-      "endpoint": "POST /api/library/loans/:loanId/settlement-intents with outcome=LOST then transaction tracking with action=settle",
+      "producer": "LIBRARIAN reports a loan lost with a required nonblank reason, reviews sealed replacement-price preview, then signs settleLost(requestId)",
+      "endpoint": "POST /api/library/loans/:loanId/settlement-intents with outcome=LOST returns intentId; transaction tracking with action=settle requires settlementIntentId",
       "contractConsumer": "LibraryEscrow.settleLost uses the sealed replacement price, retains at most the deposit and emits LostSettled",
       "backendConsumer": "N-5DF verifies canonical LostSettled receipt, librarian sender, requestId, borrower, replacement price, refund and shortfall",
       "verifiedProof": "LostSettled event matching requestId/borrower and sealed replacement-price calculation",
       "persistence": [
-        "loss reason/audit and settlement intent",
-        "action/hash and event cursor",
+        "loss reason and librarianWallet audit before returning wallet calldata",
+        "settlement intent audit linked by settlementIntentId to action/hash",
+        "event cursor",
         "retained/refund/shortfall amounts and resulting hold state",
         "audit state across restart"
       ],

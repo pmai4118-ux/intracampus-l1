@@ -5,7 +5,9 @@ import type {
   LibraryRateLimitConfig,
   LibraryRuntimeConfig,
   LibrarySettlementIntent,
+  LibrarySettlementIntentRequest,
   LibrarySettlementPreview,
+  LibraryTransactionSubmission,
 } from "../src/index.ts";
 
 const bodyLimitBytes: 8192 = LIBRARY_REQUEST_BODY_LIMIT_BYTES;
@@ -19,6 +21,18 @@ const runtimeConfig: LibraryRuntimeConfig = {
 const rateLimit: LibraryRateLimitConfig = runtimeConfig.challengeRateLimit;
 declare const intent: LibrarySettlementIntent;
 declare const loan: LibraryLoan;
+const returnedRequest: LibrarySettlementIntentRequest = {
+  outcome: "RETURNED",
+  condition: "DAMAGED",
+  reason: "Cover torn at binding.",
+  repairRequestedWei: "1000000000000000000",
+};
+const lostRequest: LibrarySettlementIntentRequest = { outcome: "LOST", reason: "Not found after inventory." };
+const returnSubmission: LibraryTransactionSubmission = {
+  action: "return",
+  txHash: "0x1234",
+  settlementIntentId: "intent-1",
+};
 
 const preview: LibrarySettlementPreview = intent.preview;
 const borrower: `0x${string}` = loan.borrower;
@@ -37,3 +51,6 @@ void rateLimit;
 void preview;
 void borrower;
 void payloadTooLarge;
+void returnedRequest;
+void lostRequest;
+void returnSubmission;
