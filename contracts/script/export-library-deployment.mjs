@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, readFile, readlink, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, realpath, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -11,6 +11,7 @@ import { loadVerifiedArtifact } from "./load-verified-artifact.mjs";
 
 export const LIBRARY_CONTRACT_NAME = "LibraryDepositEscrow";
 
+const EXPORT_LOCK_SUFFIX = ".ic-library-lock";
 const CHAIN_ID = libraryFixture.network.chainId;
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const coder = AbiCoder.defaultAbiCoder();
@@ -180,12 +181,14 @@ function validateDeployedLibrarySection(lib, { allowLocal = false, baseAddresses
 
   if (!Array.isArray(lib.books) || lib.books.length === 0) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
   const seenBooks = new Set();
+  const seedSealCoverage = new Map();
   for (const entry of lib.books) {
     const book = assertValidObject(entry);
     if (!isHash(book.bookId)) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     const bookId = book.bookId.toLowerCase();
     if (seenBooks.has(bookId)) throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     seenBooks.add(bookId);
+    seedSealCoverage.set(bookId, { seedBookTerms: null, sealBookTerms: null });
     if (
       book.depositWei !== POLICY_SPEC.depositWei ||
       typeof book.replacementPriceWei !== "string" ||
@@ -199,22 +202,36 @@ function validateDeployedLibrarySection(lib, { allowLocal = false, baseAddresses
   if (!Array.isArray(lib.seedTransactions) || lib.seedTransactions.length !== lib.books.length * 2) {
     throw new Error("INVALID_LIBRARY_DEPLOYMENT");
   }
-  const txHashes = new Set();
+  const txHashes = new Set([escrow.transactionHash.toLowerCase()]);
+  let latestEvidenceBlock = escrow.blockNumber;
   for (const entry of lib.seedTransactions) {
     const tx = assertValidObject(entry);
     if (
       !["seedBookTerms", "sealBookTerms"].includes(String(tx.type)) ||
       !isHash(tx.bookId) ||
       !seenBooks.has(tx.bookId.toLowerCase()) ||
+      seedSealCoverage.get(tx.bookId.toLowerCase())[tx.type] ||
       !isHash(tx.transactionHash) ||
       txHashes.has(tx.transactionHash.toLowerCase()) ||
       !isHash(tx.blockHash) ||
       !Number.isSafeInteger(tx.blockNumber) ||
-      tx.blockNumber < 1
+      tx.blockNumber < escrow.blockNumber
     ) {
       throw new Error("INVALID_LIBRARY_DEPLOYMENT");
     }
     txHashes.add(tx.transactionHash.toLowerCase());
+    seedSealCoverage.get(tx.bookId.toLowerCase())[tx.type] = tx.blockNumber;
+    latestEvidenceBlock = Math.max(latestEvidenceBlock, tx.blockNumber);
+  }
+  if (
+    [...seedSealCoverage.values()].some(
+      (coverage) => coverage.seedBookTerms === null
+        || coverage.sealBookTerms === null
+        || coverage.seedBookTerms > coverage.sealBookTerms,
+    ) ||
+    verifiedAt.blockNumber < latestEvidenceBlock
+  ) {
+    throw new Error("INVALID_LIBRARY_DEPLOYMENT");
   }
 }
 
@@ -603,6 +620,18 @@ function normalizePathForComparison(targetPath) {
   return process.platform === "win32" ? withoutExtendedPrefix.toLowerCase() : withoutExtendedPrefix;
 }
 
+function isInsideExportLockNamespace(targetPath) {
+  let current = resolve(targetPath);
+  while (true) {
+    const segment = basename(current);
+    const normalizedSegment = process.platform === "win32" ? segment.toLowerCase() : segment;
+    if (normalizedSegment.endsWith(EXPORT_LOCK_SUFFIX)) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
 async function resolveCanonicalPath(targetPath) {
   let current = resolve(targetPath);
   const remainder = [];
@@ -655,22 +684,57 @@ async function saveManifest(outputPath, manifest, replace) {
     !(await isCanonicalDeploymentPath(resolved)),
     "Refusing to write onto canonical deployments/intracampus.json",
   );
-  try {
-    const previous = JSON.parse(await readFile(resolved, "utf8"));
-    assert(
-      replace || (previous?.status !== "deployed" && previous?.library?.status !== "deployed"),
-      "Refusing to overwrite a deployed manifest without --replace",
-    );
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
+  const lockTarget = await resolveCanonicalPath(resolved);
+  assert(
+    !isInsideExportLockNamespace(lockTarget),
+    "Refusing to write inside the reserved Library export lock namespace",
+  );
   await mkdir(dirname(resolved), { recursive: true });
-  const temp = `${resolved}.${randomUUID()}.tmp`;
+  const lockPath = lockTarget + EXPORT_LOCK_SUFFIX;
   try {
-    await writeFile(temp, JSON.stringify(manifest, null, 2) + "\n", { flag: "wx" });
-    await rename(temp, resolved);
+    await mkdir(lockPath);
+  } catch (error) {
+    if (error.code === "EEXIST") {
+      throw new Error(
+        "Refusing to write manifest: another export is in progress or a stale lock directory exists; " +
+          "verify no exporter is active before removing the lock directory",
+      );
+    }
+    throw error;
+  }
+
+  const lockMetadataPath = join(lockPath, "owner.json");
+  try {
+    await writeFile(
+      lockMetadataPath,
+      JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + "\n",
+      { flag: "wx" },
+    );
+
+    try {
+      const previous = JSON.parse(await readFile(resolved, "utf8"));
+      assert(
+        replace || (previous?.status !== "deployed" && previous?.library?.status !== "deployed"),
+        "Refusing to overwrite a deployed manifest without --replace",
+      );
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    const temp = `${resolved}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temp, JSON.stringify(manifest, null, 2) + "\n", { flag: "wx" });
+      await rename(temp, resolved);
+    } finally {
+      await unlink(temp).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
   } finally {
-    await unlink(temp).catch((error) => {
+    await unlink(lockMetadataPath).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    await rmdir(lockPath).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
   }

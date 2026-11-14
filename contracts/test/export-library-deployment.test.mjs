@@ -11,6 +11,10 @@ import baseManifest from "../../deployments/intracampus.json" with { type: "json
 import libraryFixture from "../../docs/fixtures/library-v1.json" with { type: "json" };
 import { requireDeployment } from "../../packages/network/src/deployment.ts";
 import {
+  getLibraryDeployment as getSharedLibraryDeployment,
+  requireLibraryDeployment as requireSharedLibraryDeployment,
+} from "../../packages/network/src/library-deployment.ts";
+import {
   LIBRARY_CONTRACT_NAME,
   exportLibraryDeployment,
   getLibraryDeployment,
@@ -279,6 +283,8 @@ test("verified library deployment records ABI, tx/block/runtime hashes, roles, t
   assert.equal(actual.library.seedTransactions.length, 4);
   assert(!JSON.stringify(actual).includes("http"));
   assert.equal(requireLibraryDeployment(actual, { allowLocal: true }).library.escrow.address, actual.library.escrow.address);
+  assert.equal(requireSharedLibraryDeployment(actual, { allowLocal: true }).library.escrow.address, actual.library.escrow.address);
+  assert.equal(getSharedLibraryDeployment(actual).status, "deployed");
 });
 
 test("extended manifest keeps old three-contract loader happy while Library loader rejects 3-contract-only manifest", async () => {
@@ -292,9 +298,13 @@ test("extended manifest keeps old three-contract loader happy while Library load
 
   // Library loader accepts extended manifest and rejects old 3-contract manifest.
   assert.equal(requireLibraryDeployment(extended, { allowLocal: true }).library.escrow.address, extended.library.escrow.address);
+  assert.equal(requireSharedLibraryDeployment(extended, { allowLocal: true }).library.escrow.address, extended.library.escrow.address);
+  assert.equal(getSharedLibraryDeployment(extended).status, "deployed");
   assert.throws(() => requireLibraryDeployment(core, { allowLocal: true }), /LIBRARY_NOT_CONFIGURED/);
   assert.throws(() => requireLibraryDeployment(baseManifest, { allowLocal: true }), /LIBRARY_NOT_CONFIGURED/);
   assert.equal(getLibraryDeployment(baseManifest).status, "unconfigured");
+  assert.equal(getSharedLibraryDeployment(baseManifest).status, "unconfigured");
+  assert.throws(() => requireSharedLibraryDeployment(core, { allowLocal: true }), /LIBRARY_NOT_CONFIGURED/);
 });
 
 for (const [label, change] of [
@@ -361,6 +371,8 @@ test("requireLibraryDeployment rejects missing/invalid escrow ABI, version, chai
   const local = await verifyLibraryBroadcast(f);
   assert.throws(() => requireLibraryDeployment(local), /INVALID_LIBRARY_DEPLOYMENT/);
   assert.equal(requireLibraryDeployment(local, { allowLocal: true }).library.environment, "local-anvil");
+  assert.throws(() => requireSharedLibraryDeployment(local), /INVALID_DEPLOYMENT/);
+  assert.equal(requireSharedLibraryDeployment(local, { allowLocal: true }).library.environment, "local-anvil");
 
   const cases = [
     ["wrong schemaVersion", (m) => { m.library.schemaVersion = 2; }],
@@ -391,13 +403,28 @@ test("requireLibraryDeployment rejects missing/invalid escrow ABI, version, chai
     ["zero replacement price", (m) => { m.library.books[0].replacementPriceWei = "0"; }],
     ["duplicate bookId", (m) => { m.library.books[1].bookId = m.library.books[0].bookId; }],
     ["empty books", (m) => { m.library.books = []; }],
+    ["seed evidence before escrow deployment", (m) => { m.library.escrow.blockNumber = 3; }],
+    ["seed evidence after its seal", (m) => {
+      m.library.seedTransactions[0].blockNumber = m.library.seedTransactions[1].blockNumber + 1;
+    }],
+    ["verified block before seed evidence", (m) => { m.library.verifiedAt.blockNumber = 3; }],
+    ["one book missing its seal transaction", (m) => {
+      m.library.seedTransactions[1].type = "seedBookTerms";
+      m.library.seedTransactions[1].transactionHash = hash(999);
+    }],
   ];
 
   for (const [label, mutate] of cases) {
     const mutated = structuredClone(valid);
     mutate(mutated);
     assert.throws(() => requireLibraryDeployment(mutated), /INVALID_LIBRARY_DEPLOYMENT/, label);
+    assert.throws(() => requireSharedLibraryDeployment(mutated, { allowLocal: true }), /INVALID_DEPLOYMENT/, `shared loader: ${label}`);
   }
+
+  const sameBlockEvidence = structuredClone(local);
+  sameBlockEvidence.library.seedTransactions[0].blockNumber = sameBlockEvidence.library.seedTransactions[1].blockNumber;
+  assert.equal(requireLibraryDeployment(sameBlockEvidence, { allowLocal: true }).library.status, "deployed");
+  assert.equal(requireSharedLibraryDeployment(sameBlockEvidence, { allowLocal: true }).library.status, "deployed");
 });
 
 test("library template and export safety protect canonical deployments/intracampus.json", async (t) => {
@@ -451,6 +478,75 @@ test("library template and export safety protect canonical deployments/intracamp
     template: true,
   });
   assert.deepEqual(JSON.parse(await readFile(join(safeTargetDir, "nested", "library-deployment.json"), "utf8")), aliasedAllowedResult);
+
+  // Concurrent exporters must not both succeed and replace the first manifest at one absent path.
+  const concurrentOutputPath = join(dir, "concurrent", "library-deployment.json");
+  const baseA = coreDeployedFixture();
+  const baseB = coreDeployedFixture();
+  baseA.exportMarker = "A";
+  baseB.exportMarker = "B";
+  const basePathA = join(dir, "base-a.json");
+  const basePathB = join(dir, "base-b.json");
+  await writeFile(basePathA, JSON.stringify(baseA));
+  await writeFile(basePathB, JSON.stringify(baseB));
+  const concurrentResults = await Promise.allSettled([
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathA, template: true }),
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathB, template: true }),
+  ]);
+  const successfulExports = concurrentResults.filter((result) => result.status === "fulfilled");
+  const rejectedExports = concurrentResults.filter((result) => result.status === "rejected");
+  assert.equal(successfulExports.length, 1);
+  assert.equal(rejectedExports.length, 1);
+  assert.match(String(rejectedExports[0].reason?.message), /already in progress|lock|overwrite/i);
+  assert.deepEqual(JSON.parse(await readFile(concurrentOutputPath, "utf8")), successfulExports[0].value);
+
+  const staleLockPath = concurrentOutputPath + ".ic-library-lock";
+  const preservedOutput = await readFile(concurrentOutputPath, "utf8");
+  await mkdir(staleLockPath);
+  await writeFile(join(staleLockPath, "owner.json"), "stale lock");
+  await assert.rejects(
+    exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathB, template: true }),
+    /another export is in progress or a stale lock directory exists/,
+  );
+  assert.equal(await readFile(concurrentOutputPath, "utf8"), preservedOutput);
+  await rm(staleLockPath, { recursive: true, force: true });
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const adjacentPrimaryOutputPath = join(dir, "adjacent", "library-" + attempt + ".json");
+    const adjacentLockLikeOutputPath = adjacentPrimaryOutputPath + ".lock";
+    const adjacentResults = await Promise.all([
+      exportLibraryDeployment({
+        contractsDir: dir,
+        outputPath: adjacentPrimaryOutputPath,
+        basePath: basePathA,
+        template: true,
+      }),
+      exportLibraryDeployment({
+        contractsDir: dir,
+        outputPath: adjacentLockLikeOutputPath,
+        basePath: basePathB,
+        template: true,
+      }),
+    ]);
+    assert.deepEqual(JSON.parse(await readFile(adjacentPrimaryOutputPath, "utf8")), adjacentResults[0]);
+    assert.deepEqual(JSON.parse(await readFile(adjacentLockLikeOutputPath, "utf8")), adjacentResults[1]);
+  }
+
+  const reservedOutputPath = join(dir, "reserved", "manifest.ic-library-lock", "manifest.json");
+  await assert.rejects(
+    exportLibraryDeployment({ contractsDir: dir, outputPath: reservedOutputPath, template: true }),
+    /reserved Library export lock namespace/,
+  );
+  assert.equal(existsSync(join(dir, "reserved")), false);
+
+  const sequentialOutputPath = join(dir, "sequential", "library-deployment.json");
+  await exportLibraryDeployment({ contractsDir: dir, outputPath: sequentialOutputPath, template: true });
+  const sequentialResult = await exportLibraryDeployment({
+    contractsDir: dir,
+    outputPath: sequentialOutputPath,
+    template: true,
+  });
+  assert.deepEqual(JSON.parse(await readFile(sequentialOutputPath, "utf8")), sequentialResult);
 
   // Refuse overwriting an existing deployed manifest without --replace.
   await writeFile(outputPath, JSON.stringify({ status: "deployed", library: { status: "deployed" } }));

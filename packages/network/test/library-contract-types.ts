@@ -8,7 +8,11 @@ import type {
   LibrarySettlementIntentRequest,
   LibrarySettlementPreview,
   LibraryTransactionSubmission,
+  LibraryDeployedManifest,
+  LibraryDeployment,
+  LibraryDeploymentPolicy,
 } from "../src/index.ts";
+import { getLibraryDeployment, requireLibraryDeployment } from "../src/index.ts";
 
 const bodyLimitBytes: 8192 = LIBRARY_REQUEST_BODY_LIMIT_BYTES;
 const runtimeConfig: LibraryRuntimeConfig = {
@@ -41,6 +45,11 @@ const returnSubmission: LibraryTransactionSubmission = {
 const preview: LibrarySettlementPreview = intent.preview;
 const borrower: `0x${string}` = loan.borrower;
 const payloadTooLarge: LibraryApiErrorCode = "PAYLOAD_TOO_LARGE";
+declare const manifest: unknown;
+const libraryDeployment: LibraryDeployment = getLibraryDeployment(manifest);
+const libraryPolicy: LibraryDeploymentPolicy = libraryDeployment.policy;
+const requiredLibrary: LibraryDeployedManifest = requireLibraryDeployment(manifest, { allowLocal: true });
+const escrowAddress: string = requiredLibrary.library.escrow.address;
 
 if (intent.outcome === "RETURNED") {
   const refundWei: string = intent.preview.refundWei;
@@ -55,6 +64,8 @@ void rateLimit;
 void preview;
 void borrower;
 void payloadTooLarge;
+void libraryPolicy;
+void escrowAddress;
 void returnedRequest;
 void lostRequest;
 void confirmedReturnSubmission;
