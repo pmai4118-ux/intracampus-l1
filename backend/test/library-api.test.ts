@@ -43,6 +43,7 @@ const authConfig: LibraryAuthConfig = {
   challengeTtlSeconds: 300, sessionTtlSeconds: 3600,
   challengeRateLimit: { maxRequests: 10, windowSeconds: 60 },
   verifyRateLimit: { maxRequests: 10, windowSeconds: 60 },
+  trustedProxyAddresses: ["127.0.0.1", "::1"],
   cookieName: "library_session", secureCookie: false,
 };
 
@@ -360,7 +361,21 @@ test("overdue hold blocks new Library and grants calls while account and return 
   const repeated = await fetch(`${api}/api/library/requests`, { method: "POST", headers,
     body: JSON.stringify({ bookId, idempotencyKey: "held-idempotent-retry" }) });
   assert.equal(repeated.status, 201, "a retry returns the original request even if the account became held later");
-  assert.equal((await repeated.json()).requestId, retryRequestId);
+  const repeatedRequest = await repeated.json();
+  assert.equal(repeatedRequest.requestId, retryRequestId);
+  assert.equal(repeatedRequest.depositIntent, null, "a held retry preserves request identity but cannot offer a new wallet deposit");
+
+  const heldDetail = await fetch(`${api}/api/library/requests/${retryRequestId}`, { headers: { cookie } });
+  assert.equal(heldDetail.status, 200);
+  assert.equal((await heldDetail.json()).depositIntent, null, "request detail must not reissue a deposit intent while held");
+  const heldList = await fetch(`${api}/api/library/requests`, { headers: { cookie } });
+  assert.equal(heldList.status, 200);
+  const listedRetry = (await heldList.json()).find((request: { requestId: string }) => request.requestId === retryRequestId);
+  assert.equal(listedRetry?.depositIntent, null, "request history must not reissue a deposit intent while held");
+  const staffCookie = await librarianCookie(state);
+  const staffDetail = await fetch(`${api}/api/library/requests/${retryRequestId}`, { headers: { cookie: staffCookie } });
+  assert.equal(staffDetail.status, 200);
+  assert.equal((await staffDetail.json()).depositIntent, null, "staff detail must not reissue a held borrower's deposit intent");
 
   const create = await fetch(`${api}/api/library/requests`, { method: "POST", headers,
     body: JSON.stringify({ bookId, idempotencyKey: "held-request" }) });

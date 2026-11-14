@@ -56,6 +56,7 @@ type RequestRecord = {
   origin: string | undefined;
   cookie: string | undefined;
   forwardedHost: string | undefined;
+  forwardedFor: string | undefined;
   body: unknown;
 };
 
@@ -98,9 +99,9 @@ function stopProcessTree(pid: number | undefined): void {
 }
 
 async function startNextDev(t: TestContext, nextPort: number, backendOrigin: string): Promise<string> {
-  const nextBin = join(frontendDir, "node_modules", "next", "dist", "bin", "next");
+  const nextServer = join(frontendDir, "server.mjs");
   const output: string[] = [];
-  const child = spawn(process.execPath, [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
+  const child = spawn(process.execPath, [nextServer, "--dev", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
     cwd: frontendDir,
     env: childEnvironment(backendOrigin),
     stdio: ["ignore", "pipe", "pipe"],
@@ -202,6 +203,7 @@ test("Next same-origin proxy preserves auth cookies, headers, query, JSON bodies
     sessionTtlSeconds: 3600,
     challengeRateLimit: { maxRequests: 20, windowSeconds: 60 },
     verifyRateLimit: { maxRequests: 20, windowSeconds: 60 },
+    trustedProxyAddresses: ["127.0.0.1", "::1"],
     cookieName: "library_session",
     secureCookie: false,
   };
@@ -219,6 +221,7 @@ test("Next same-origin proxy preserves auth cookies, headers, query, JSON bodies
       origin: req.get("origin"),
       cookie: req.get("cookie"),
       forwardedHost: req.get("x-forwarded-host"),
+      forwardedFor: req.get("x-forwarded-for"),
       body: undefined,
     });
     next();
@@ -405,10 +408,12 @@ test("Next same-origin proxy preserves auth cookies, headers, query, JSON bodies
   // 3. Same-origin challenge -> sign -> verify -> Set-Cookie -> session -> logout round trip via Next.
   const challengeRes = await callNext("/api/auth/challenge", {
     method: "POST",
-    headers: { "content-type": "application/json", origin: nextOrigin },
+    headers: { "content-type": "application/json", origin: nextOrigin, "x-forwarded-for": "203.0.113.77" },
     body: JSON.stringify({ wallet: student.address }),
   });
   assert.equal(challengeRes.status, 201);
+  assert.equal(recorded.find((entry) => entry.url === "/api/auth/challenge" && entry.origin === nextOrigin)?.forwardedFor, "127.0.0.1",
+    "the Next ingress must replace a client-supplied forwarding header with the connected client address");
   assert.match(challengeRes.headers.get("cache-control") ?? "", /\bno-store\b/i);
   const challenge = await challengeRes.json() as { challengeId: string; message: string; expiresAt: number };
   assert.ok(challenge.message.includes(`URI: ${nextOrigin}`));
@@ -606,6 +611,17 @@ test("Next same-origin proxy preserves auth cookies, headers, query, JSON bodies
   assert.match(postLogoutSession.headers.get("cache-control") ?? "", /\bno-store\b/i);
   assert.equal((await postLogoutSession.json()).error.code, "UNAUTHENTICATED");
 
+  authConfig.challengeRateLimit.maxRequests = 1;
+  const spoofedLimitRetry = await callNext("/api/auth/challenge", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: nextOrigin, "x-forwarded-for": "198.51.100.88" },
+    body: JSON.stringify({ wallet: student.address }),
+  });
+  assert.equal(spoofedLimitRetry.status, 429,
+    "changing a client-supplied forwarding header must not obtain a fresh auth rate-limit bucket");
+  assert.equal(recorded.filter((entry) => entry.url === "/api/auth/challenge" && entry.origin === nextOrigin).at(-1)?.forwardedFor,
+    "127.0.0.1");
+
   // Confirm Express saw same-origin forwarded host and preserved headers across the Next proxy,
   // and Next-owned routes were not sent to Express.
   const sessionChecks = recorded.filter((entry) => entry.url === "/api/auth/session");
@@ -686,6 +702,7 @@ test("Next same-origin calls the real Express Library API with its session cooki
     sessionTtlSeconds: 3600,
     challengeRateLimit: { maxRequests: 10, windowSeconds: 60 },
     verifyRateLimit: { maxRequests: 10, windowSeconds: 60 },
+    trustedProxyAddresses: ["127.0.0.1", "::1"],
     cookieName: "library_session",
     secureCookie: false,
   };

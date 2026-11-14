@@ -21,6 +21,7 @@ const config: LibraryAuthConfig = {
   challengeTtlSeconds: 300, sessionTtlSeconds: 3600,
   challengeRateLimit: { maxRequests: 10, windowSeconds: 60 },
   verifyRateLimit: { maxRequests: 10, windowSeconds: 60 },
+  trustedProxyAddresses: ["127.0.0.1", "::1"],
   cookieName: "library_session", secureCookie: false,
 };
 const seed: LibraryDemoSeed = {

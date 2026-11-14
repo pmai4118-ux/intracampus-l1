@@ -21,6 +21,7 @@ test("auth configuration derives trusted domain and secure host-only cookie from
     sessionTtlSeconds: 3600,
     challengeRateLimit: { maxRequests: 10, windowSeconds: 60 },
     verifyRateLimit: { maxRequests: 8, windowSeconds: 60 },
+    trustedProxyAddresses: ["127.0.0.1", "::1"],
     cookieName: "__Host-library_session",
     secureCookie: true,
   });
@@ -42,6 +43,9 @@ test("auth origin rejects paths, credentials, and missing or invalid fail-closed
   }
   assert.throws(() => readLibraryAuthConfig({ ...base, LIBRARY_SESSION_TTL_SECONDS: "1e6" }), { message: "CONFIGURATION_ERROR" });
   assert.throws(() => readLibraryAuthConfig({ ...base, LIBRARY_VERIFY_RATE_LIMIT_MAX_REQUESTS: "9007199254740992" }), { message: "CONFIGURATION_ERROR" });
+  assert.throws(() => readLibraryAuthConfig({ ...base, LIBRARY_TRUSTED_PROXY_ADDRESSES: "localhost,127.0.0.1" }), { message: "CONFIGURATION_ERROR" });
+  assert.deepEqual(readLibraryAuthConfig({ ...base, LIBRARY_TRUSTED_PROXY_ADDRESSES: "::ffff:127.0.0.1,127.0.0.1" }).trustedProxyAddresses,
+    ["127.0.0.1"]);
 });
 
 test("auth TTLs stop at the largest expiry representable by the service", () => {

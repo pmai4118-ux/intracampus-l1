@@ -1,6 +1,7 @@
 import express, { Router, type ErrorRequestHandler, type Request, type Response } from "express";
 import { LIBRARY_REQUEST_BODY_LIMIT_BYTES, type LibraryApiErrorCode } from "@intracampus/network";
 import type { LibraryAuthConfig } from "./auth.config.ts";
+import { authClientAddress } from "./client-address.ts";
 import { AuthError, AuthService } from "./auth.service.ts";
 
 type FailureCode = LibraryApiErrorCode;
@@ -85,7 +86,8 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     if (!req.is("application/json") || !exactBody(req.body, ["wallet"])) return sendFailure(res, "VALIDATION_ERROR", 400, false);
     try {
-      const result = service.createChallenge({ wallet: req.body.wallet, remoteAddress: req.socket.remoteAddress ?? "" });
+      const result = service.createChallenge({ wallet: req.body.wallet,
+        remoteAddress: authClientAddress(req.socket.remoteAddress ?? "", req.get("x-forwarded-for"), config.trustedProxyAddresses) });
       res.status(201).json(result);
     } catch (error) {
       if (error instanceof AuthError) sendFailure(res, error.code, error.httpStatus, error.retryable, error.retryAfterSeconds);
@@ -98,7 +100,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
     if (!req.is("application/json") || !exactBody(req.body, ["challengeId", "signature"])) return sendFailure(res, "VALIDATION_ERROR", 400, false);
     try {
       const result = service.verifyChallenge({ challengeId: req.body.challengeId, signature: req.body.signature,
-        remoteAddress: req.socket.remoteAddress ?? "" });
+        remoteAddress: authClientAddress(req.socket.remoteAddress ?? "", req.get("x-forwarded-for"), config.trustedProxyAddresses) });
       setSessionCookie(res, config, result.token);
       res.status(200).json({ account: result.account, expiresAt: result.expiresAt });
     } catch (error) {

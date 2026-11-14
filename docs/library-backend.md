@@ -81,11 +81,17 @@ Auth configuration is independent of invoice/grant configuration so missing Libr
 | `LIBRARY_CHALLENGE_TTL_SECONDS`, `LIBRARY_SESSION_TTL_SECONDS` | Positive integer TTLs whose expiry remains within the JavaScript date range used for auth timestamps. If the current time makes a configured TTL exceed that range, the auth route fails closed with `503 CONFIGURATION_ERROR`. |
 | `LIBRARY_CHALLENGE_RATE_LIMIT_MAX_REQUESTS`, `LIBRARY_CHALLENGE_RATE_LIMIT_WINDOW_SECONDS` | Positive request count and fixed-window seconds for challenge attempts. |
 | `LIBRARY_VERIFY_RATE_LIMIT_MAX_REQUESTS`, `LIBRARY_VERIFY_RATE_LIMIT_WINDOW_SECONDS` | Positive request count and fixed-window seconds for verify attempts. |
+| `LIBRARY_TRUSTED_PROXY_ADDRESSES` | Exact IP addresses of frontend peers allowed to supply the sanitized single-address `X-Forwarded-For`; defaults to loopback only. |
+| `FRONTEND_TRUSTED_PROXY_ADDRESSES` | Exact IP addresses of trusted ingress peers in front of the Next.js server. Leave empty for direct clients. |
 | `LIBRARY_ALLOW_INSECURE_LOCALHOST` | Must be exactly `true` to allow HTTP on `localhost`, `127.0.0.1`, or `::1`; it never enables non-loopback HTTP. |
+
+The frontend starts through `frontend/server.mjs`. It replaces any client-supplied `X-Forwarded-For` with the socket address, or derives the first untrusted hop from the right only when the immediate ingress peer is in `FRONTEND_TRUSTED_PROXY_ADDRESSES`. The backend consumes exactly one forwarded IP only when its TCP peer is in `LIBRARY_TRUSTED_PROXY_ADDRESSES`; otherwise it uses the peer address. Configure exact peer IPs on both sides, prevent direct access that bypasses the configured ingress, and ensure a trusted edge appends or replaces the forwarded chain with the actual connected client address. Never trust arbitrary forwarding headers or enable a blanket proxy trust setting.
 
 Production uses HTTPS and the host-only `__Host-library_session` cookie (`Secure; HttpOnly; SameSite=Strict; Path=/`, with no `Domain`). Explicit local HTTP uses `library_session` without `Secure` only after the loopback opt-in. `POST /api/auth/challenge`, `POST /api/auth/verify`, and `POST /api/auth/logout` require an `Origin` exactly matching `LIBRARY_AUTH_ORIGIN`. Challenge and verify are JSON-only and share the 8192-byte Library parser limit. A throttled attempt returns `429 RATE_LIMITED`, `retryable: true`, and `Retry-After` seconds until its fixed window resets.
 
 The browser flow is: request a challenge with its wallet, sign the exact message in the wallet, submit only the challenge ID and signature, keep the session cookie out of JavaScript, call `/api/auth/session` with that cookie, and POST logout to revoke it. Verify responses contain the allowlisted account and expiry but never the raw session token; only the `Set-Cookie` header carries that token.
+
+An active account hold blocks new borrowing and prevents a pending request from receiving a fresh deposit intent on create retries, list, or detail reads. The client must refresh request state immediately before opening the wallet and must not reuse a cached intent after a hold. Holds are application policy for this demo and are not enforced by the escrow ABI: previously copied calldata or a direct chain transaction cannot be revoked by the HTTP API. Any mined deposit remains subject to receipt/event reconciliation and the normal refund/recovery paths.
 
 ## API runtime and reconciliation
 

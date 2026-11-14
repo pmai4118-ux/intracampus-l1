@@ -109,27 +109,35 @@ export class LibraryService {
         wallet: input.account.wallet, bookId, idempotencyKey: input.idempotencyKey, createdAt: chain.chainTime,
         chainTime: chain.chainTime, holdAfterSeconds: this.deploymentOrThrow().policy.fullDepositRetentionAfterSeconds });
     } catch (error) { throw serviceFailure(error); }
-    const depositIntent = request.status === "AWAITING_DEPOSIT" ? this.depositIntent(request, book) : null;
+    const held = this.accountStatusAt(input.account.wallet, chain.chainTime).held;
+    const depositIntent = request.status === "AWAITING_DEPOSIT" && !held ? this.depositIntent(request, book) : null;
     return { request: this.publicRequest(request, depositIntent), depositIntent };
   }
 
   async listRequests(account: LibraryAccount, queue = false): Promise<LibraryRequest[]> {
-    await this.reconciled();
+    const chain = await this.reconciled();
     if (queue && account.role !== "LIBRARIAN") throw new LibraryServiceError("FORBIDDEN", 403);
     const records = this.repository.listRequests(account.wallet, queue);
-    return records.map((record) => this.publicRequest(record, record.status === "AWAITING_DEPOSIT"
-      ? this.depositIntent(record, this.findBook(record.bookId)) : null));
+    const heldByWallet = new Map<string, boolean>();
+    return records.map((record) => {
+      if (record.status !== "AWAITING_DEPOSIT") return this.publicRequest(record, null);
+      const wallet = record.wallet.toLowerCase();
+      const held = heldByWallet.get(wallet) ?? this.accountStatusAt(record.wallet, chain.chainTime).held;
+      heldByWallet.set(wallet, held);
+      return this.publicRequest(record, held ? null : this.depositIntent(record, this.findBook(record.bookId)));
+    });
   }
 
   async getRequest(account: LibraryAccount, requestId: string): Promise<LibraryRequest> {
-    await this.reconciled();
+    const chain = await this.reconciled();
     let record: LibraryRequestRecord | undefined;
     try { record = this.repository.getRequest(requestId); }
     catch (error) { throw serviceFailure(error); }
     if (!record || (account.role !== "LIBRARIAN" && record.wallet.toLowerCase() !== account.wallet.toLowerCase())) {
       throw new LibraryServiceError("NOT_FOUND", 404);
     }
-    const intent = record.status === "AWAITING_DEPOSIT" ? this.depositIntent(record, this.findBook(record.bookId)) : null;
+    const held = record.status === "AWAITING_DEPOSIT" && this.accountStatusAt(record.wallet, chain.chainTime).held;
+    const intent = record.status === "AWAITING_DEPOSIT" && !held ? this.depositIntent(record, this.findBook(record.bookId)) : null;
     return this.publicRequest(record, intent);
   }
 
@@ -154,9 +162,14 @@ export class LibraryService {
 
   async accountStatus(account: LibraryAccount): Promise<{ held: boolean; checkedAt: number; blockingLoanIds: `0x${string}`[] }> {
     const chain = await this.reconciled();
+    const status = this.accountStatusAt(account.wallet, chain.chainTime);
+    return { ...status, blockingLoanIds: status.blockingLoanIds as `0x${string}`[] };
+  }
+
+  private accountStatusAt(wallet: string, chainTime: number): ReturnType<LibraryRepository["accountStatus"]> {
     try {
-      const status = this.repository.accountStatus(account.wallet, chain.chainTime, this.deploymentOrThrow().policy.fullDepositRetentionAfterSeconds);
-      return { ...status, blockingLoanIds: status.blockingLoanIds as `0x${string}`[] };
+      return this.repository.accountStatus(wallet, chainTime,
+        this.deploymentOrThrow().policy.fullDepositRetentionAfterSeconds);
     } catch (error) { throw serviceFailure(error); }
   }
 

@@ -1,3 +1,5 @@
+import { parseIpAddressList } from "./client-address.ts";
+
 export type AuthRateLimitConfig = { maxRequests: number; windowSeconds: number };
 export type LibraryAuthConfig = {
   origin: string;
@@ -7,6 +9,7 @@ export type LibraryAuthConfig = {
   sessionTtlSeconds: number;
   challengeRateLimit: AuthRateLimitConfig;
   verifyRateLimit: AuthRateLimitConfig;
+  trustedProxyAddresses: readonly string[];
   cookieName: string;
   secureCookie: boolean;
 };
@@ -53,6 +56,8 @@ export function readLibraryAuthConfig(env: Record<string, string | undefined>, n
       sessionTtlSeconds: positiveInteger(env, "LIBRARY_SESSION_TTL_SECONDS", maxTtlSeconds),
       challengeRateLimit: rateLimit(env, "LIBRARY_CHALLENGE_RATE_LIMIT"),
       verifyRateLimit: rateLimit(env, "LIBRARY_VERIFY_RATE_LIMIT"),
+      trustedProxyAddresses: env.LIBRARY_TRUSTED_PROXY_ADDRESSES === undefined
+        ? ["127.0.0.1", "::1"] : parseIpAddressList(env.LIBRARY_TRUSTED_PROXY_ADDRESSES),
       cookieName: secureCookie ? "__Host-library_session" : "library_session",
       secureCookie,
     };

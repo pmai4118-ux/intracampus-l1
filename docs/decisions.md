@@ -189,3 +189,9 @@ Staff settlement-intent preview dùng shared `LibrarySettlementIntent` với bor
 `docs/scope.md` và `docs/demo-flow.md` mô tả phạm vi hiện hành theo Library; các tài liệu P01/D004 cũ là lịch sử quyết định; phần phạm vi hiện hành được điều chỉnh theo task và không mở rộng giao kèo này. Thay đổi ABI, role, state, tiền hoặc boundary cần cập nhật fixture + caller contract và review liên module trước khi tích hợp.
 
 2026-11-14 — Auth challenge/verify rate limits respond with `RATE_LIMITED`/HTTP 429, `retryable: true` and `Retry-After` seconds. This keeps configured throttling explicit in the shared Library API instead of disguising it as an unrelated error.
+
+## N-5DF · Trusted client address and application hold behavior · 2026-11-15
+
+The frontend's custom Next.js server overwrites client-supplied forwarding headers using the connected socket address. It accepts a forwarded chain only from exact configured ingress IPs and resolves the first untrusted hop from the right; the backend trusts one sanitized address only from its exact configured frontend peers. Local development trusts loopback only by default. Operators behind load balancers must configure the actual peer IPs and prevent direct bypass.
+
+The Library hold remains application-only as approved in the module proposal; the escrow ABI does not gain a hold/revocation mechanism. A held account keeps access to request history and recovery, but create retries/list/detail do not issue a new deposit intent. A client must refresh request state before opening the wallet, and the backend continues reconciling any deposit that is actually mined. This preserves the approved scope while making the boundary explicit.
