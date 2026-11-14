@@ -26,7 +26,7 @@ const EXPECTED_ABI_SURFACE = [
   "constructor constructor(address,address,address):nonpayable:inputs(administrator_:address|librarian_:address|treasury_:address)",
   "function seedBookTerms(bytes32,uint256,uint256):nonpayable:inputs(bookId:bytes32|depositWei:uint256|replacementPriceWei:uint256):outputs(-)",
   "function sealBookTerms(bytes32):nonpayable:inputs(bookId:bytes32):outputs(-)",
-  "function bookTerms(bytes32):view:inputs(bookId:bytes32):outputs(depositWei:uint256|replacementPriceWei:uint256|sealed:bool)",
+  "function bookTerms(bytes32):view:inputs(bookId:bytes32):outputs(depositWei:uint256|replacementPriceWei:uint256|isSealed:bool)",
   "function deposit(bytes32,bytes32):payable:inputs(requestId:bytes32|bookId:bytes32):outputs(-)",
   "function approve(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
   "function reject(bytes32):nonpayable:inputs(requestId:bytes32):outputs(-)",
