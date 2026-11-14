@@ -183,7 +183,8 @@ export class LibraryReconciler {
       const right = await this.reconcileLogRange(midpoint + 1, toBlock, chain);
       return { applied: left.applied + right.applied, ignored: left.ignored + right.ignored };
     }
-    if (logs.length > maxLogsPerRange && fromBlock < toBlock) {
+    if (logs.length > maxLogsPerRange) {
+      if (fromBlock === toBlock) throw new LibraryChainError("RPC_UNAVAILABLE");
       const midpoint = Math.floor((fromBlock + toBlock) / 2);
       const left = await this.reconcileLogRange(fromBlock, midpoint, chain);
       const right = await this.reconcileLogRange(midpoint + 1, toBlock, chain);

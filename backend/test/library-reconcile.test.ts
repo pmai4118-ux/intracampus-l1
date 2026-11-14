@@ -357,6 +357,63 @@ test("dense log ranges subdivide and keep a contiguous restartable cursor", asyn
   assert.deepEqual(calls.slice(3), [[251, 500]]);
 });
 
+test("single-block log results fail closed above 2,000 and accept the exact cap", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "library-reconcile-single-block-cap-"));
+  const path = join(directory, "library.sqlite");
+  const repository = new LibraryRepository(path);
+  t.after(() => { repository.close(); rmSync(directory, { recursive: true, force: true }); });
+  const student = "0x1111111111111111111111111111111111111111";
+  const librarian = "0x2222222222222222222222222222222222222222";
+  const bookId = `0x${"ab".repeat(32)}`;
+  const escrow = "0x4444444444444444444444444444444444444444";
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Single-block cap", author: "Test", isbn: null,
+    depositWei: "50000000000000000000", replacementPriceWei: "30000000000000000000",
+    copies: [{ copyId: "copy-1", barcode: "LR-001" }] }],
+    accounts: [{ wallet: student, role: "STUDENT" }, { wallet: librarian, role: "LIBRARIAN" }] });
+
+  const makeLogs = (count: number) => Array.from({ length: count }, (_, index) => ({ address: escrow,
+    blockNumber: 4, index, transactionIndex: 0, transactionHash: hash(1000 + index), blockHash: hash(4),
+    data: "0x", topics: [], removed: false })) as unknown as Log[];
+  let logs = makeLogs(2001);
+  const rpc = {
+    async getNetwork() { return { chainId: 20261n }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 4 : tag;
+      return { number, timestamp: 1_800_000_000, hash: hash(number) };
+    },
+    async getLogs(filter: { fromBlock?: number; toBlock?: number }) {
+      return Number(filter.fromBlock) <= 4 && Number(filter.toBlock) >= 4 ? logs : [];
+    },
+    async getTransaction() { return null; }, async getTransactionReceipt() { return null; },
+    async getCode() { return "0x6000"; }, async call() { return "0x"; },
+  };
+  const deployment = {
+    schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+    verifiedAt: { blockNumber: 1, blockHash: hash(1) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: libraryFixture.abi },
+    roles: { deployer: librarian, administrator: librarian, librarian }, treasury: librarian,
+    policy: libraryFixture.policy, books: [{ bookId, depositWei: "50000000000000000000",
+      replacementPriceWei: "30000000000000000000", sealed: true }], seedTransactions: [],
+  } as unknown as DeployedLibraryDeployment;
+  const reconciler = new LibraryReconciler(repository, rpc as never, deployment,
+    { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, () => 1_800_000_000);
+  let verified = 0;
+  reconciler.verifierInstance.verify = async () => { verified++; return null; };
+
+  await assert.rejects(reconciler.reconcile(), (error: unknown) =>
+    error instanceof Error && "code" in error && error.code === "RPC_UNAVAILABLE");
+  assert.equal(verified, 0, "the oversized single-block response is rejected before verification");
+  assert.equal(repository.reconcileState().cursorBlock, 3, "the overloaded block is not committed or skipped");
+
+  logs = makeLogs(2000);
+  const result = await reconciler.reconcile();
+  assert.equal(result.caughtUp, true);
+  assert.equal(verified, 2000, "exactly 2,000 raw logs remain within the configured cap");
+  assert.equal(repository.reconcileState().cursorBlock, 4);
+});
+
 test("HTTP 429 fails without log-range subdivision while a provider log cap splits", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "library-reconcile-rate-limit-"));
   const path = join(directory, "library.sqlite");
