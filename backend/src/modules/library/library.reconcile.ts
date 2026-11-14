@@ -18,9 +18,20 @@ const maxLogsPerRange = 2000;
 const canonicalityBatch = 200;
 
 function tooManyLogs(error: unknown): boolean {
-  const value = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
+  const value = error && typeof error === "object" ? error as {
+    code?: unknown; message?: unknown; response?: unknown; info?: unknown;
+  } : {};
+  const info = value.info && typeof value.info === "object" ? value.info as { responseStatus?: unknown } : {};
+  const response = value.response && typeof value.response === "object"
+    ? value.response as { statusCode?: unknown; status?: unknown } : {};
+  const responseStatus = typeof info.responseStatus === "string" ? /^\s*(\d{3})(?:\s|$)/.exec(info.responseStatus) : null;
+  const httpStatus = typeof response.statusCode === "number" ? response.statusCode
+    : typeof response.status === "number" ? response.status
+      : responseStatus ? Number(responseStatus[1]) : null;
+  const message = typeof value.message === "string" ? value.message : "";
+  if (httpStatus === 429 || /rate[- ]limit|too many requests|throttl(?:ed|ing)?/i.test(message)) return false;
   return value.code === -32005 || value.code === "-32005"
-    || (typeof value.message === "string" && /too many|more than \d+ results|response size exceeded/i.test(value.message));
+    || /too many (?:logs|results)|more than \d+ results|response size exceeded/i.test(message);
 }
 
 export class LibraryReconciler {

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { once } from "node:events";
 import type { TestContext } from "node:test";
 import { test } from "node:test";
-import { keccak256, type Log } from "ethers";
+import { FetchResponse, keccak256, type Log } from "ethers";
 import libraryFixture from "../../docs/fixtures/library-v1.json" with { type: "json" };
 import type { DeployedLibraryDeployment } from "@intracampus/network";
 import { LibraryRepository } from "../src/modules/library/library.repository.ts";
@@ -177,6 +177,65 @@ test("dense log ranges subdivide and keep a contiguous restartable cursor", asyn
   assert.equal(result.caughtUp, true);
   assert.equal(repository.reconcileState().cursorBlock, 500, "restart resumes from the first uncommitted block");
   assert.deepEqual(calls.slice(3), [[251, 500]]);
+});
+
+test("HTTP 429 fails without log-range subdivision while a provider log cap splits", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "library-reconcile-rate-limit-"));
+  const path = join(directory, "library.sqlite");
+  const repository = new LibraryRepository(path);
+  t.after(() => { repository.close(); rmSync(directory, { recursive: true, force: true }); });
+  const student = "0x1111111111111111111111111111111111111111";
+  const librarian = "0x2222222222222222222222222222222222222222";
+  const bookId = `0x${"ab".repeat(32)}`;
+  const escrow = "0x4444444444444444444444444444444444444444";
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  repository.seedDemo({ version: 1, books: [{ bookId, title: "Rate limit", author: "Test", isbn: null,
+    depositWei: "50000000000000000000", replacementPriceWei: "30000000000000000000", copies: [{ copyId: "copy-1", barcode: "LR-001" }] }],
+    accounts: [{ wallet: student, role: "STUDENT" }, { wallet: librarian, role: "LIBRARIAN" }] });
+
+  const rateLimitedResponse = new FetchResponse(429, "Too Many Requests", {},
+    new TextEncoder().encode('{"error":{"code":429,"message":"Too Many Requests"}}'));
+  const rateLimitError = assert.throws(() => rateLimitedResponse.assertOk());
+  const calls: Array<[number, number]> = [];
+  let behavior: "rate-limit" | "result-cap" = "rate-limit";
+  const rpc = {
+    async getNetwork() { return { chainId: 20261n }; },
+    async getBlock(tag: "latest" | number) {
+      const number = tag === "latest" ? 500 : tag;
+      return { number, timestamp: 1_800_000_000, hash: hash(number) };
+    },
+    async getLogs(filter: { fromBlock?: number; toBlock?: number }) {
+      const from = Number(filter.fromBlock), to = Number(filter.toBlock);
+      calls.push([from, to]);
+      if (behavior === "rate-limit") throw rateLimitError;
+      if (to - from + 1 > 250) throw Object.assign(new Error("query returned more than 10000 results"), { code: -32005 });
+      return [];
+    },
+    async getTransaction() { return null; }, async getTransactionReceipt() { return null; },
+    async getCode() { return "0x6000"; }, async call() { return "0x"; },
+  };
+  const deployment = {
+    schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+    verifiedAt: { blockNumber: 4, blockHash: hash(4) },
+    escrow: { address: escrow, transactionHash: hash(1), blockNumber: 1, blockHash: hash(1),
+      runtimeCodeHash: keccak256("0x6000"), abiVersion: 1, abi: libraryFixture.abi },
+    roles: { deployer: librarian, administrator: librarian, librarian }, treasury: librarian,
+    policy: libraryFixture.policy, books: [{ bookId, depositWei: "50000000000000000000",
+      replacementPriceWei: "30000000000000000000", sealed: true }], seedTransactions: [],
+  } as unknown as DeployedLibraryDeployment;
+  const reconciler = new LibraryReconciler(repository, rpc as never, deployment,
+    { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, () => 1_800_000_000);
+
+  await assert.rejects(reconciler.reconcile(), (error: unknown) =>
+    error instanceof Error && "code" in error && error.code === "RPC_UNAVAILABLE");
+  assert.deepEqual(calls, [[1, 500]], "HTTP 429 is propagated without generating narrower queries");
+
+  behavior = "result-cap";
+  calls.length = 0;
+  const result = await reconciler.reconcile();
+  assert.equal(result.caughtUp, true);
+  assert.deepEqual(calls, [[1, 500], [1, 250], [251, 500]], "structured result caps subdivide the log range");
+  assert.equal(repository.reconcileState().cursorBlock, 500);
 });
 
 test("canonicality reads 200 distinct blocks through at most two JSON-RPC batches", async (t) => {
