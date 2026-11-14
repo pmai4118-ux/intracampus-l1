@@ -134,3 +134,107 @@ không bỏ qua kiểm tra bytecode. Không thay file `deployed` bằng template
 
 Nghiệm thu thực tế còn cần RPC công khai đang hoạt động và operator ký trên
 máy hwng. Test Foundry/Anvil ở đây không xác nhận Avalanche L1 đã deploy.
+
+## 5. Triển khai và xuất evidence cho `LibraryDepositEscrow`
+
+Module thư viện dùng script và exporter tách riêng với L06 để không tự ý thay
+đổi `deployments/intracampus.json` khi triển khai thử hoặc chạy cục bộ. Hiện tại
+**chưa thực hiện deploy lên Avalanche L1**; mọi chạy thử Anvil chỉ tạo bằng
+chứng `environment: "local-anvil"`.
+
+### Biến môi trường và script Foundry
+
+`contracts/script/DeployLibrary.s.sol` định nghĩa hai entry point:
+
+- `DeployLibrary`: đọc `DEPLOYER_ADDRESS`, `LIBRARY_ADMIN_ADDRESS`,
+  `LIBRARY_LIBRARIAN_ADDRESS`, `LIBRARY_TREASURY_ADDRESS` (khác địa chỉ 0 và
+  khác ba role trên), `LIBRARY_BOOK_IDS` (chuỗi `bytes32` cách nhau bằng dấu
+  phẩy) và `LIBRARY_BOOK_REPLACEMENT_PRICES_WEI` (chuỗi `uint256` đơn vị wei,
+  cách nhau bằng dấu phẩy, khớp số lượng ID). Vì `forge script` chỉ nhận một
+  keystore signer mỗi lần chạy (`--account ... --sender ...`), `DeployLibrary`
+  bắt buộc `LIBRARY_ADMIN_ADDRESS == DEPLOYER_ADDRESS` để deploy,
+  `seedBookTerms` và `sealBookTerms` cùng dùng một signer hợp lệ; nếu hai địa
+  chỉ khác nhau script sẽ fail-fast trước broadcast với lỗi
+  `DistinctDeployerAndAdministratorUnsupported`. Script cũng từ chối
+  `block.chainid != 20261` trước broadcast, deploy `LibraryDepositEscrow`, gọi
+  cặp `seedBookTerms` (với `DEPOSIT_WEI = 50 ether`) rồi `sealBookTerms` cho
+  từng sách bằng `LIBRARY_ADMIN_ADDRESS`, và đọc kiểm tra lại toàn bộ role,
+  hằng số policy cùng `bookTerms(bookId)` (`isSealed == true`).
+- `SeedLibraryBooks`: đọc `LIBRARY_ESCROW_ADDRESS`, `LIBRARY_ADMIN_ADDRESS`,
+  `LIBRARY_BOOK_IDS`, `LIBRARY_BOOK_REPLACEMENT_PRICES_WEI`. Nếu sách đã niêm
+  phong (`isSealed == true`) và khớp điều khoản thì bỏ qua không phát giao dịch;
+  nếu lệch điều khoản đã niêm phong sẽ revert `SealedBookTermsMismatch`. Khi
+  chạy riêng sau deploy, phải truyền keystore của chính `LIBRARY_ADMIN_ADDRESS`
+  (khớp `escrow.administrator()` on-chain).
+
+Ví dụ mô phỏng rồi broadcast trên Anvil local (`chainId = 20261`) trong `contracts/`
+với một keystore deployer/admin (`LIBRARY_ADMIN_ADDRESS == DEPLOYER_ADDRESS`,
+không đưa private key vào CLI hay manifest):
+
+```sh
+forge script script/DeployLibrary.s.sol:DeployLibrary --rpc-url "$INTRACAMPUS_RPC_URL" --account library-deployer --sender "$DEPLOYER_ADDRESS"
+forge script script/DeployLibrary.s.sol:DeployLibrary --rpc-url "$INTRACAMPUS_RPC_URL" --account library-deployer --sender "$DEPLOYER_ADDRESS" --broadcast --slow
+forge script script/DeployLibrary.s.sol:SeedLibraryBooks --rpc-url "$INTRACAMPUS_RPC_URL" --account library-admin --sender "$LIBRARY_ADMIN_ADDRESS" --broadcast --slow
+```
+
+Luôn truyền `--slow` cùng `--broadcast` để từng giao dịch xác nhận tuần tự,
+tránh trường hợp `seedBookTerms`/`sealBookTerms` bị gửi hoặc gán nonce trước
+khi giao dịch `CREATE` tạo contract hoàn tất.
+
+### Xuất và kiểm chứng artifact/evidence thư viện
+
+Từ gốc repo:
+
+```sh
+node contracts/script/export-library-deployment.mjs \
+  --broadcast contracts/broadcast/DeployLibrary.s.sol/20261/run-latest.json \
+  --environment local-anvil \
+  --output /tmp/library-local-deployment.json
+```
+
+Tuỳ chọn:
+
+- `--base <core-manifest.json>`: giữ nguyên thông tin 3 contract L06 đã deploy và
+  gắn khối `library` vào manifest mở rộng, đồng thời kiểm tra `escrow` và
+  `treasury` không trùng địa chỉ trong manifest gốc.
+- `--template --output <unconfigured.json>`: xuất khung `status: "unconfigured"`
+  từ build artifact hiện tại đã xác minh hash nguồn Solidity.
+- `--replace`: bắt buộc truyền nếu ghi đè một file đích đã có `status: "deployed"`.
+  Exporter luôn từ chối ghi trực tiếp lên file chuẩn `deployments/intracampus.json`.
+
+Ứng dụng dùng loader typed từ `@intracampus/network`: `getLibraryDeployment()` trả
+view `unconfigured` khi manifest cũ chỉ có ba contract hoặc Library chưa được deploy;
+`requireLibraryDeployment(manifest, { allowLocal: true })` trả manifest mở rộng đã
+kiểm tra ABI, policy, role, terms và bằng chứng seed/seal. `allowLocal` chỉ bật tường
+minh trong test/demo; API production mặc định từ chối `local-anvil`. `requireDeployment()`
+hiện hữu tiếp tục kiểm tra ba contract gốc và không bắt ứng dụng POS/invoice phụ thuộc
+Library.
+
+### Cấu trúc evidence cục bộ (`local-anvil`)
+
+Khối `library` do `export-library-deployment.mjs` xuất và kiểm chứng qua
+`requireLibraryDeployment(manifest, { allowLocal: true })` gồm các trường:
+
+- Định danh mạng & thời điểm kiểm chứng: `schemaVersion` (`1`), `status`
+  (`"deployed"`), `chainId` (`20261`), `abiVersion` (`1`), `environment`
+  (`"local-anvil"` chỉ chấp nhận loopback RPC và `web3_clientVersion` chứa
+  `anvil`; `"avalanche-l1"` từ chối Anvil), `generatedAt`, `verifiedAt`
+  (`blockNumber`, `blockHash`).
+- Contract escrow: `escrow.{address, abiVersion, abi, transactionHash, blockNumber, blockHash, runtimeCodeHash}`
+  (kiểm tra runtime trên chain khớp artifact vừa build từ nguồn hiện tại).
+- Quyền và quỹ: `roles.{deployer, administrator, librarian}` và `treasury`.
+- Chính sách cố định đối chiếu on-chain: `policy.{depositWei, approvalWindowSeconds, loanDurationSeconds, gracePeriodSeconds, lateFeeIntervalSeconds, lateFeePerIntervalWei, maxLateFeeWei, fullDepositRetentionAfterSeconds}`.
+- Sách đã niêm phong: `books[]` (`bookId`, chuỗi wei nguyên `depositWei` và
+  `replacementPriceWei`, `sealed: true`) và `seedTransactions[]` (`type`,
+  `bookId`, `transactionHash`, `blockNumber`, `blockHash`).
+
+Chạy kiểm tra cục bộ cho module hợp đồng và exporter:
+
+```sh
+cd contracts
+forge fmt --check
+forge build
+forge test --match-contract LibraryDepositEscrow
+cd ..
+node --test contracts/test/export-library-deployment.test.mjs contracts/test/export-deployment.test.mjs
+```

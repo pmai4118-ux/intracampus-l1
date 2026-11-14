@@ -44,8 +44,9 @@ API tách status của request, loan, refund và transaction. Deposit đã xác 
 | Receipt thủ thư từ chối | `REJECTED` | chưa có | `REFUNDED` | chỉ nhả sau receipt |
 | Đến deadline, chain time đã xác minh | `EXPIRED_REFUND_DUE` | chưa có | `REFUND_DUE` | nhả tại/sau deadline, không chờ claim |
 | Receipt `LoanApproved` | `APPROVED` | `ACTIVE` | `NONE` | đang mượn |
-| Sinh viên gửi yêu cầu trả | `RETURN_REQUESTED` | `RETURN_REQUESTED` | `NONE` | đang mượn |
-| Receipt `ReturnSettled` | `RETURNED` | `RETURNED` | `NONE` | sẵn sàng hoặc bảo trì khi có báo hỏng |
+| Sinh viên gửi yêu cầu trả | RETURN_REQUESTED | RETURN_REQUESTED | NONE | đang mượn |
+| Receipt PhysicalReturnConfirmed | SETTLEMENT_PENDING | SETTLEMENT_PENDING | NONE | RETURN_REVIEW; lưu returnReceivedAt, chưa nhả bản |
+| Receipt ReturnSettled | RETURNED | RETURNED | NONE | sẵn sàng hoặc bảo trì khi có báo hỏng |
 | Receipt `LostSettled` còn thiếu tiền | `LOST_SHORTFALL_DUE` | `LOST_SHORTFALL_DUE` | `NONE` | mất |
 | Receipt `ShortfallPaid` | `LOST_SETTLED` | `LOST_SETTLED` | `NONE` | mất |
 
@@ -65,13 +66,13 @@ Express phục vụ các route sau qua proxy Next.js cùng origin. Trường ti�
 | `GET /api/library/requests` | session | Sinh viên chỉ thấy request mình; `?queue=true` chỉ librarian được xem hàng chờ có copy đã giữ. |
 | `POST /api/library/requests` | `STUDENT` | `{ bookId, idempotencyKey }`; idempotent theo borrower/key, chỉ tạo intent nếu hiện có copy. Chưa giữ copy. Trả request ID và `depositIntent` (`chainId`, `to`, `data`, `valueWei`). |
 | `GET /api/library/requests/:requestId` | chủ sở hữu hoặc `LIBRARIAN` | Trả request, refund/transaction, event proof đã xác minh và loan nếu có. Người khác nhận `404` theo scope. |
-| `POST /api/library/requests/:requestId/transactions` | chủ sở hữu hoặc `LIBRARIAN` | `{ action, txHash }`; action `return`/`settle` còn bắt buộc `settlementIntentId` để gắn receipt với audit intent đã lưu. Ghi nhận giao dịch đã được ví ký, không broadcast. |
+| POST /api/library/requests/:requestId/transactions | chủ sở hữu hoặc LIBRARIAN | { action, txHash }; confirmReturn chỉ cho LIBRARIAN và không cần intent; return/settle bắt buộc settlementIntentId để gắn receipt với audit intent. Server không broadcast. |
 | `GET /api/library/loans` | session | Sinh viên thấy loan của mình; librarian có thể lọc danh sách staff bằng query `borrowerWallet`. |
 | `POST /api/library/loans/:loanId/return-requests` | `STUDENT` | Ghi yêu cầu trả idempotent; không tự xác nhận thủ thư đã nhận sách vật lý. |
-| `POST /api/library/loans/:loanId/settlement-intents` | `LIBRARIAN` | `{ outcome: "RETURNED", condition, reason, repairRequestedWei }` hoặc `{ outcome: "LOST", reason }`; `condition` là `GOOD`/`DAMAGED`, `reason` là chuỗi bắt buộc không rỗng sau trim. Trả audit `intentId`, preview theo chain time và calldata ví cho `settleReturn`/`settleLost`. |
+| POST /api/library/loans/:loanId/settlement-intents | LIBRARIAN | RETURNED chỉ tạo sau receipt PhysicalReturnConfirmed; body có condition GOOD/DAMAGED, reason không rỗng và repairRequestedWei. LOST dùng reason. Preview return lấy mốc returnReceivedAt đã xác minh, không lấy thời điểm settlement dự kiến. |
 | `GET /api/library/account-status` | session | Trả hold, chain-time check và loan đang chặn; luôn truy cập được khi hold. |
 
-Idempotency key được scope theo borrower: cùng borrower/key/book trả lại cùng request; cùng borrower/key nhưng khác book trả `409`. Action ánh xạ đúng ABI như sau: `deposit` → `deposit`, `approve` → `approve`, `reject` → `reject`, `refund` → `claimExpiredRefund`, `return` → `settleReturn`, `settle` → `settleLost`, `payShortfall` → `payShortfall`. `deposit`, `refund` và `payShortfall` chỉ do đúng borrower ký; `approve`, `reject`, `return` và `settle` chỉ do librarian ký. Dù contract cho phép bất kỳ ai claim expired refund, app API chỉ cấp giao dịch đó cho borrower của request.
+Idempotency key được scope theo borrower: cùng borrower/key/book trả lại cùng request; cùng borrower/key nhưng khác book trả 409. Action ánh xạ ABI: deposit → deposit, approve → approve, reject → reject, refund → claimExpiredRefund, confirmReturn → confirmPhysicalReturn, return → settleReturn, settle → settleLost, payShortfall → payShortfall. confirmReturn và các action thủ thư chỉ cho LIBRARIAN. Ví borrower ký deposit/refund/payShortfall. Dù contract cho phép bất kỳ ai claim refund hết hạn, API chỉ cấp giao dịch cho borrower. LibraryLoan gồm borrower và returnReceivedAt; staff UI hiển thị người nhận hoàn, treasury, escrow, network và khoản tiền trước khi mở ví. Settlement preview dùng returnReceivedAt đã xác minh. Backend lưu audit intent trước response; action/hash/receipt nối bằng settlementIntentId cho return/settle.
 
 `settlement-intents` trả `LibrarySettlementIntent`: `intentId` opaque do server cấp, `requestId`, `loanId`, `outcome`, `borrower` (người nhận refund/shortfall), `chainId`, `escrow`, `treasury`, `walletCall { to, data, valueWei }`, `preview` dạng `LibrarySettlement` và `chainTime` đã xác minh. Backend persist audit intent vào SQLite trước khi trả response/calldata: intent ID, request/loan, actor wallet từ session librarian, outcome, condition (nếu trả), reason đã trim, repair amount (nếu trả) và createdAt. `reason`/condition chỉ dùng cho audit staff, không vào calldata/event và không trả cho Student. Khi ví gửi giao dịch, transaction tracking bắt buộc `settlementIntentId` cho action `return`/`settle` để liên kết action/hash/receipt với audit intent; các action khác không gửi trường này. `LibraryLoan` cũng mang `borrower`; staff UI hiển thị borrower, treasury, escrow, network và khoản tiền trước khi mở ví. Preview không phải settlement đã hoàn tất; chỉ receipt/event đã xác minh mới cập nhật loan. Caller, contract/backend consumer, persistence, proof và test owner của từng action được khóa trong `callerMatrix` của fixture.
 
@@ -119,7 +120,7 @@ Constructor, function, getter, error, tên/thứ tự/index của event và muta
 - Admin seed `seedBookTerms(bookId, depositWei, replacementPriceWei)` rồi gọi `sealBookTerms(bookId)`. Terms đã seal không đổi được; DB seed phải khớp terms on-chain.
 - Borrower gọi payable `deposit(requestId, bookId)` với đúng cọc. Request ID không được dùng lại, kể cả đã refund hay kết thúc.
 - Librarian gọi `approve` trước deadline hoặc `reject`. Bất kỳ ai cũng có thể gọi `claimExpiredRefund` tại/sau deadline; tiền luôn về borrower ban đầu.
-- Librarian gọi `settleReturn(requestId, repairRequestedWei)` sau khi nhận sách vật lý hoặc `settleLost(requestId)`. Borrower ký `payShortfall` với đúng số còn thiếu.
+- Sau khi nhận sách vật lý, librarian ký confirmPhysicalReturn(requestId). Receipt PhysicalReturnConfirmed lưu timestamp chain returnReceivedAt và đóng băng phí trễ. settleReturn(requestId, repairRequestedWei) có thể ký sau và dùng timestamp đã lưu; settleLost chỉ hợp lệ nếu chưa xác nhận nhận sách. Borrower ký payShortfall đúng số còn thiếu.
 - Backend chỉ nhận projection từ receipt thành công và event khớp tại địa chỉ Library Escrow đã cấu hình trên chain `20261`. Commit DB trước khi API báo trạng thái đã đổi. Khởi động lại và reconcile theo request/read phải idempotent.
 
 `docs/test/library-contract.test.mjs` so sánh toàn bộ ABI chuẩn hóa, bao gồm constructor, mutability/returns của function, indexed fields của event và toàn bộ error set; thêm entry chưa được duyệt làm test thất bại. Vectors deadline trong fixture khóa `deadline - 1`, đúng deadline và `deadline + 1`: chỉ trước deadline được duyệt; tại/sau deadline, refund đến hạn và copy được nhả trước cả khi borrower claim refund.

@@ -28,7 +28,9 @@
     "approvalComparison": "<",
     "refundAtDeadlineComparison": ">=",
     "requestIdNeverReusable": true,
-    "loanIdEqualsRequestId": true
+    "loanIdEqualsRequestId": true,
+    "returnTimestampSource": "PhysicalReturnConfirmed.returnedAt",
+    "lateAccrualFreezesOnPhysicalReturnConfirmation": true
   },
   "states": {
     "request": [
@@ -70,7 +72,8 @@
       "REFUNDED",
       "RETURN_SETTLED",
       "LOST_SHORTFALL_DUE",
-      "LOST_SETTLED"
+      "LOST_SETTLED",
+      "RETURN_RECEIVED"
     ],
     "escrowStateCodes": {
       "NONE": 0,
@@ -79,7 +82,8 @@
       "REFUNDED": 3,
       "RETURN_SETTLED": 4,
       "LOST_SHORTFALL_DUE": 5,
-      "LOST_SETTLED": 6
+      "LOST_SETTLED": 6,
+      "RETURN_RECEIVED": 7
     }
   },
   "transitions": [
@@ -119,6 +123,13 @@
       "requestStatus": "EXPIRED_REFUND_DUE",
       "loanStatus": "NONE",
       "refundStatus": "REFUNDED"
+    },
+    {
+      "event": "PhysicalReturnConfirmed",
+      "requestStatus": "SETTLEMENT_PENDING",
+      "loanStatus": "SETTLEMENT_PENDING",
+      "refundStatus": "NONE",
+      "copyStatus": "RETURN_REVIEW"
     },
     {
       "event": "ReturnSettled",
@@ -209,7 +220,7 @@
           "type": "uint256"
         },
         {
-          "name": "sealed",
+          "name": "isSealed",
           "type": "bool"
         }
       ],
@@ -258,6 +269,18 @@
     {
       "type": "function",
       "name": "claimExpiredRefund",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "confirmPhysicalReturn",
       "inputs": [
         {
           "name": "requestId",
@@ -352,6 +375,10 @@
         {
           "name": "shortfallWei",
           "type": "uint256"
+        },
+        {
+          "name": "returnReceivedAt",
+          "type": "uint64"
         }
       ],
       "stateMutability": "view"
@@ -583,6 +610,28 @@
         }
       ],
       "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PhysicalReturnConfirmed",
+      "anonymous": false,
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "returnedAt",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
     },
     {
       "type": "event",
@@ -1039,6 +1088,7 @@
       "approve",
       "reject",
       "refund",
+      "confirmReturn",
       "return",
       "settle",
       "payShortfall"
@@ -1069,7 +1119,8 @@
       "return": "settleReturn",
       "payShortfall": "payShortfall",
       "approve": "approve",
-      "refund": "claimExpiredRefund"
+      "refund": "claimExpiredRefund",
+      "confirmReturn": "confirmPhysicalReturn"
     },
     "transactionActionRoles": {
       "settle": "LIBRARIAN",
@@ -1078,7 +1129,8 @@
       "return": "LIBRARIAN",
       "payShortfall": "STUDENT_OWNER",
       "approve": "LIBRARIAN",
-      "refund": "STUDENT_OWNER"
+      "refund": "STUDENT_OWNER",
+      "confirmReturn": "LIBRARIAN"
     },
     "settlementIntentRequestFields": {
       "RETURNED": [
@@ -1151,6 +1203,7 @@
       "approvedAt",
       "dueAt",
       "returnRequestedAt",
+      "returnReceivedAt",
       "settlement"
     ],
     "settlementIntentPreviewFields": [
@@ -1259,11 +1312,11 @@
       "verification": "N-812 Foundry deadline and recipient tests; N-5DF owner-scope, idempotency and restart tests; N-696 student refund flow"
     },
     "return": {
-      "producer": "LIBRARIAN submits condition=GOOD|DAMAGED and a required nonblank reason, reviews the chain-time preview, then signs settleReturn(requestId, repairRequestedWei)",
-      "endpoint": "POST /api/library/loans/:loanId/settlement-intents returns intentId; POST /api/library/requests/:requestId/transactions uses action=return, txHash and settlementIntentId",
-      "contractConsumer": "LibraryEscrow.settleReturn reads chain time, clamps fees to the deposit, pays the configured treasury and borrower, then emits ReturnSettled",
-      "backendConsumer": "N-5DF verifies canonical ReturnSettled receipt, librarian sender, requestId, borrower, returnedAt and every emitted amount",
-      "verifiedProof": "ReturnSettled event for requestId and borrower with matching fee/refund/retention breakdown and chain timestamp",
+      "producer": "After verified PhysicalReturnConfirmed, LIBRARIAN records condition/reason, reviews a preview based on the stored returnReceivedAt, then signs settleReturn(requestId, repairRequestedWei)",
+      "endpoint": "POST /api/library/loans/:loanId/settlement-intents requires a confirmed physical return; POST /api/library/requests/:requestId/transactions uses action=return, txHash and settlementIntentId",
+      "contractConsumer": "LibraryEscrow.settleReturn calculates late/repair/retention amounts from returnReceivedAt, transfers the treasury/refund amounts and emits ReturnSettled with the original returnedAt",
+      "backendConsumer": "N-5DF verifies canonical ReturnSettled receipt, librarian sender, requestId, borrower, returnedAt matching the confirmed return event and every emitted amount",
+      "verifiedProof": "ReturnSettled event for requestId and borrower with matching fee/refund/retention breakdown and returnedAt equal to PhysicalReturnConfirmed",
       "persistence": [
         "settlement intent audit (condition, reason, librarianWallet, repairRequestedWei, createdAt) before returning wallet calldata",
         "settlement intent audit linked by settlementIntentId to action/hash",
@@ -1272,7 +1325,7 @@
         "audit state across restart"
       ],
       "successTransition": "matching verified ReturnSettled => RETURNED / loan RETURNED / refund NONE; copy ready unless maintenanceRequired",
-      "verification": "N-812 Foundry late/repair/refund/treasury tests; N-5DF preview, event and restart tests; N-696 librarian return and breakdown UI flow"
+      "verification": "N-812 delayed-settlement and late/repair/refund/treasury tests; N-5DF preview, event and restart tests; N-696 librarian return and breakdown UI flow"
     },
     "settle": {
       "producer": "LIBRARIAN reports a loan lost with a required nonblank reason, reviews sealed replacement-price preview, then signs settleLost(requestId)",
@@ -1303,6 +1356,21 @@
       ],
       "successTransition": "matching verified ShortfallPaid => LOST_SETTLED / hold released; copy remains lost",
       "verification": "N-812 Foundry exact/wrong payment and recipient tests; N-5DF receipt/idempotency/restart tests; N-5DF student shortfall flow"
+    },
+    "confirmReturn": {
+      "producer": "LIBRARIAN confirms physical receipt of the book after inspection and signs confirmPhysicalReturn(requestId)",
+      "endpoint": "POST /api/library/requests/:requestId/transactions with action=confirmReturn and txHash; server requires LIBRARIAN role",
+      "contractConsumer": "LibraryEscrow.confirmPhysicalReturn records the chain timestamp, transitions ACTIVE to RETURN_RECEIVED and emits PhysicalReturnConfirmed",
+      "backendConsumer": "N-5DF verifies canonical PhysicalReturnConfirmed receipt, configured escrow, librarian sender, requestId, borrower and timestamp before projection",
+      "verifiedProof": "PhysicalReturnConfirmed event for requestId and original borrower; returnedAt is the immutable fee cutoff",
+      "persistence": [
+        "action/hash, event cursor and returnReceivedAt",
+        "request and loan status SETTLEMENT_PENDING",
+        "copy status RETURN_REVIEW; inventory remains unavailable until settlement receipt",
+        "audit state across restart"
+      ],
+      "successTransition": "matching verified PhysicalReturnConfirmed => SETTLEMENT_PENDING / loan SETTLEMENT_PENDING / refund NONE / copy RETURN_REVIEW",
+      "verification": "N-812 role/state/timestamp tests including delayed settlement; N-5DF receipt, restart and projection tests; N-696 librarian return flow"
     }
   },
   "approvalDeadlineVectors": [
@@ -1382,5 +1450,15 @@
         "domain": "positiveSafeInteger"
       }
     }
-  }
+  },
+  "returnTimingVectors": [
+    {
+      "name": "settlement after day-30 boundary preserves the confirmed physical return time",
+      "returnedAtElapsedSinceDueSeconds": 2592000,
+      "settlementAtElapsedSinceDueSeconds": 2592001,
+      "expectedLateFeeWei": "2700000000000000000",
+      "expectedRefundWei": "47300000000000000000",
+      "expectedOverdueForfeitWei": "0"
+    }
+  ]
 }

@@ -8,7 +8,11 @@ import type {
   LibrarySettlementIntentRequest,
   LibrarySettlementPreview,
   LibraryTransactionSubmission,
+  LibraryDeployedManifest,
+  LibraryDeployment,
+  LibraryDeploymentPolicy,
 } from "../src/index.ts";
+import { getLibraryDeployment, requireLibraryDeployment } from "../src/index.ts";
 
 const bodyLimitBytes: 8192 = LIBRARY_REQUEST_BODY_LIMIT_BYTES;
 const runtimeConfig: LibraryRuntimeConfig = {
@@ -28,6 +32,10 @@ const returnedRequest: LibrarySettlementIntentRequest = {
   repairRequestedWei: "1000000000000000000",
 };
 const lostRequest: LibrarySettlementIntentRequest = { outcome: "LOST", reason: "Not found after inventory." };
+const confirmedReturnSubmission: LibraryTransactionSubmission = {
+  action: "confirmReturn",
+  txHash: "0x1234",
+};
 const returnSubmission: LibraryTransactionSubmission = {
   action: "return",
   txHash: "0x1234",
@@ -37,6 +45,11 @@ const returnSubmission: LibraryTransactionSubmission = {
 const preview: LibrarySettlementPreview = intent.preview;
 const borrower: `0x${string}` = loan.borrower;
 const payloadTooLarge: LibraryApiErrorCode = "PAYLOAD_TOO_LARGE";
+declare const manifest: unknown;
+const libraryDeployment: LibraryDeployment = getLibraryDeployment(manifest);
+const libraryPolicy: LibraryDeploymentPolicy = libraryDeployment.policy;
+const requiredLibrary: LibraryDeployedManifest = requireLibraryDeployment(manifest, { allowLocal: true });
+const escrowAddress: string = requiredLibrary.library.escrow.address;
 
 if (intent.outcome === "RETURNED") {
   const refundWei: string = intent.preview.refundWei;
@@ -51,6 +64,9 @@ void rateLimit;
 void preview;
 void borrower;
 void payloadTooLarge;
+void libraryPolicy;
+void escrowAddress;
 void returnedRequest;
 void lostRequest;
+void confirmedReturnSubmission;
 void returnSubmission;
