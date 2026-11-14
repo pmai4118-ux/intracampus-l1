@@ -426,10 +426,19 @@ test("library template and export safety protect canonical deployments/intracamp
   const result = await exportLibraryDeployment({ contractsDir: dir, outputPath, template: true });
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), result);
 
-  // Allow ordinary nested destinations (including isolated temp junctions).
+  // Allow ordinary nested destinations (including deep >64 missing segments and isolated temp junctions).
   const nestedOutputPath = join(dir, "nested", "subdir", "library-deployment.json");
   const nestedResult = await exportLibraryDeployment({ contractsDir: dir, outputPath: nestedOutputPath, template: true });
   assert.deepEqual(JSON.parse(await readFile(nestedOutputPath, "utf8")), nestedResult);
+
+  const deepMissingDirs = Array.from({ length: 65 }, () => "d");
+  const deepNestedOutputPath = join(dir, ...deepMissingDirs, "library-deployment.json");
+  const deepNestedResult = await exportLibraryDeployment({
+    contractsDir: dir,
+    outputPath: deepNestedOutputPath,
+    template: true,
+  });
+  assert.deepEqual(JSON.parse(await readFile(deepNestedOutputPath, "utf8")), deepNestedResult);
 
   const safeTargetDir = join(dir, "safe-target");
   const safeAliasDir = join(dir, "safe-alias");

@@ -606,7 +606,9 @@ function normalizePathForComparison(targetPath) {
 async function resolveCanonicalPath(targetPath) {
   let current = resolve(targetPath);
   const remainder = [];
-  for (let depth = 0; depth < 64; depth += 1) {
+  const seenLinks = new Set();
+
+  while (true) {
     try {
       const existingReal = await realpath(current);
       return remainder.reduceRight((acc, segment) => join(acc, segment), existingReal);
@@ -617,8 +619,16 @@ async function resolveCanonicalPath(targetPath) {
         throw statErr;
       });
       if (linkStats?.isSymbolicLink()) {
+        const parentReal = await realpath(dirname(current));
+        const linkKey = normalizePathForComparison(join(parentReal, basename(current)));
+        if (seenLinks.has(linkKey)) {
+          const loopError = new Error(`ELOOP: too many symbolic links encountered, resolve '${targetPath}'`);
+          loopError.code = "ELOOP";
+          throw loopError;
+        }
+        seenLinks.add(linkKey);
         const linkTarget = await readlink(current);
-        current = resolve(dirname(current), linkTarget);
+        current = resolve(parentReal, linkTarget);
         continue;
       }
       const parent = dirname(current);
@@ -629,7 +639,6 @@ async function resolveCanonicalPath(targetPath) {
       current = parent;
     }
   }
-  throw new Error(`Exceeded symlink resolution depth for ${targetPath}`);
 }
 
 async function isCanonicalDeploymentPath(targetPath) {
