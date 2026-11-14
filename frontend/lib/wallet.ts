@@ -214,7 +214,7 @@ export class WalletController {
       ]);
       if (chainAfter !== BigInt(campusNetwork.chainId)) throw fail("WRONG_CHAIN");
       if (!selected() || !accountsAfter.includes(expectedAccount.toLowerCase())) throw fail("WALLET_SESSION_CHANGED");
-      if (typeof signature !== "string" || !/^0x[0-9a-f]{130}$/i.test(signature)) throw fail("INVALID_SIGNATURE");
+      if (typeof signature !== "string" || !/^0x(?:[0-9a-f]{128}|[0-9a-f]{130})$/i.test(signature)) throw fail("INVALID_SIGNATURE");
       return signature;
     } catch (error) {
       if (error instanceof WalletTransactionError) throw error;

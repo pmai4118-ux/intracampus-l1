@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Interface } from 'ethers';
+import { Interface, Signature, verifyMessage, Wallet } from 'ethers';
 import { WalletController, WalletTransactionError, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
 import { formatWalletBalance, validateWalletConfig, walletChainParameters } from '../lib/chains.ts';
 
@@ -21,6 +21,7 @@ class Provider implements WalletProvider {
   chainPending?: Promise<unknown>;
   signPending?: Promise<unknown>;
   signature = `0x${'ab'.repeat(65)}`;
+  signingAccount = A;
   listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
     this.calls.push(method);
@@ -32,7 +33,7 @@ class Provider implements WalletProvider {
     }
     if (method === 'personal_sign') {
       assert.equal(typeof params?.[0], 'string');
-      assert.equal(params?.[1], A);
+      assert.equal(params?.[1], this.signingAccount);
       if (this.reject) throw { code: this.reject };
       return this.signPending ?? this.signature;
     }
@@ -122,6 +123,22 @@ test('message signing uses UTF-8 personal_sign and rechecks selected wallet and 
   provider.chain = '0x1';
   await assert.rejects(c.signMessage(A, message), (error: unknown) =>
     error instanceof WalletTransactionError && error.code === 'WRONG_CHAIN');
+});
+test('message signing accepts a valid compact 64-byte Ethereum signature', async (t) => {
+  const signer = new Wallet(`0x${'11'.repeat(32)}`);
+  const message = 'IntraCampus Library compact signature';
+  const signature = Signature.from(await signer.signMessage(message)).compactSerialized;
+  assert.equal((signature.length - 2) / 2, 64);
+  assert.equal(verifyMessage(message, signature).toLowerCase(), signer.address.toLowerCase());
+
+  const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
+  provider.accounts = [signer.address];
+  provider.signingAccount = signer.address;
+  provider.signature = signature;
+  const mutableController = c as unknown as { state: ReturnType<WalletController['getSnapshot']> };
+  mutableController.state = { ...c.getSnapshot(), address: signer.address, accounts: [signer.address.toLowerCase()] };
+
+  assert.equal(await c.signMessage(signer.address, message), signature);
 });
 test('account changes while the user approves a message discard that signature', async (t) => {
   const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
