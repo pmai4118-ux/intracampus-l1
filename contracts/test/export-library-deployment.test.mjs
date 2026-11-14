@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -403,6 +403,11 @@ test("requireLibraryDeployment rejects missing/invalid escrow ABI, version, chai
     ["zero replacement price", (m) => { m.library.books[0].replacementPriceWei = "0"; }],
     ["duplicate bookId", (m) => { m.library.books[1].bookId = m.library.books[0].bookId; }],
     ["empty books", (m) => { m.library.books = []; }],
+    ["seed evidence before escrow deployment", (m) => { m.library.escrow.blockNumber = 3; }],
+    ["seed evidence after its seal", (m) => {
+      m.library.seedTransactions[0].blockNumber = m.library.seedTransactions[1].blockNumber + 1;
+    }],
+    ["verified block before seed evidence", (m) => { m.library.verifiedAt.blockNumber = 3; }],
     ["one book missing its seal transaction", (m) => {
       m.library.seedTransactions[1].type = "seedBookTerms";
       m.library.seedTransactions[1].transactionHash = hash(999);
@@ -415,6 +420,11 @@ test("requireLibraryDeployment rejects missing/invalid escrow ABI, version, chai
     assert.throws(() => requireLibraryDeployment(mutated), /INVALID_LIBRARY_DEPLOYMENT/, label);
     assert.throws(() => requireSharedLibraryDeployment(mutated, { allowLocal: true }), /INVALID_DEPLOYMENT/, `shared loader: ${label}`);
   }
+
+  const sameBlockEvidence = structuredClone(local);
+  sameBlockEvidence.library.seedTransactions[0].blockNumber = sameBlockEvidence.library.seedTransactions[1].blockNumber;
+  assert.equal(requireLibraryDeployment(sameBlockEvidence, { allowLocal: true }).library.status, "deployed");
+  assert.equal(requireSharedLibraryDeployment(sameBlockEvidence, { allowLocal: true }).library.status, "deployed");
 });
 
 test("library template and export safety protect canonical deployments/intracampus.json", async (t) => {
@@ -490,15 +500,44 @@ test("library template and export safety protect canonical deployments/intracamp
   assert.match(String(rejectedExports[0].reason?.message), /already in progress|lock|overwrite/i);
   assert.deepEqual(JSON.parse(await readFile(concurrentOutputPath, "utf8")), successfulExports[0].value);
 
-  const staleLockPath = concurrentOutputPath + ".lock";
+  const staleLockPath = concurrentOutputPath + ".ic-library-lock";
   const preservedOutput = await readFile(concurrentOutputPath, "utf8");
-  await writeFile(staleLockPath, "stale lock");
+  await mkdir(staleLockPath);
+  await writeFile(join(staleLockPath, "owner.json"), "stale lock");
   await assert.rejects(
     exportLibraryDeployment({ contractsDir: dir, outputPath: concurrentOutputPath, basePath: basePathB, template: true }),
-    /another export is in progress or a stale export lock exists/,
+    /another export is in progress or a stale lock directory exists/,
   );
   assert.equal(await readFile(concurrentOutputPath, "utf8"), preservedOutput);
-  await unlink(staleLockPath);
+  await rm(staleLockPath, { recursive: true, force: true });
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const adjacentPrimaryOutputPath = join(dir, "adjacent", "library-" + attempt + ".json");
+    const adjacentLockLikeOutputPath = adjacentPrimaryOutputPath + ".lock";
+    const adjacentResults = await Promise.all([
+      exportLibraryDeployment({
+        contractsDir: dir,
+        outputPath: adjacentPrimaryOutputPath,
+        basePath: basePathA,
+        template: true,
+      }),
+      exportLibraryDeployment({
+        contractsDir: dir,
+        outputPath: adjacentLockLikeOutputPath,
+        basePath: basePathB,
+        template: true,
+      }),
+    ]);
+    assert.deepEqual(JSON.parse(await readFile(adjacentPrimaryOutputPath, "utf8")), adjacentResults[0]);
+    assert.deepEqual(JSON.parse(await readFile(adjacentLockLikeOutputPath, "utf8")), adjacentResults[1]);
+  }
+
+  const reservedOutputPath = join(dir, "reserved", "manifest.ic-library-lock", "manifest.json");
+  await assert.rejects(
+    exportLibraryDeployment({ contractsDir: dir, outputPath: reservedOutputPath, template: true }),
+    /reserved Library export lock namespace/,
+  );
+  assert.equal(existsSync(join(dir, "reserved")), false);
 
   const sequentialOutputPath = join(dir, "sequential", "library-deployment.json");
   await exportLibraryDeployment({ contractsDir: dir, outputPath: sequentialOutputPath, template: true });

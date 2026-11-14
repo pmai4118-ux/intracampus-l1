@@ -285,7 +285,7 @@ function validateDeployedLibrary(
 
   const policy = validatePolicy(library.policy);
   if (!Array.isArray(library.books) || library.books.length === 0) throw new Error("INVALID_DEPLOYMENT");
-  const books = new Map<string, { seedBookTerms: boolean; sealBookTerms: boolean }>();
+  const books = new Map<string, { seedBookTerms: number | null; sealBookTerms: number | null }>();
   for (const item of library.books) {
     const book = object(item);
     if (!isHash(book.bookId) || book.depositWei !== policy.depositWei
@@ -296,7 +296,7 @@ function validateDeployedLibrary(
     }
     const bookId = book.bookId.toLowerCase();
     if (books.has(bookId)) throw new Error("INVALID_DEPLOYMENT");
-    books.set(bookId, { seedBookTerms: false, sealBookTerms: false });
+    books.set(bookId, { seedBookTerms: null, sealBookTerms: null });
   }
 
   if (!Array.isArray(library.seedTransactions) || library.seedTransactions.length !== books.size * 2) {
@@ -314,14 +314,17 @@ function validateDeployedLibrary(
     const bookId = transaction.bookId.toLowerCase();
     const coverage = books.get(bookId);
     const transactionHash = transaction.transactionHash.toLowerCase();
-    if (!coverage || coverage[transaction.type] || transactionHashes.has(transactionHash)) {
+    const blockNumber = Number(transaction.blockNumber);
+    if (!coverage || coverage[transaction.type] !== null || transactionHashes.has(transactionHash)
+      || blockNumber < Number(escrow.blockNumber)) {
       throw new Error("INVALID_DEPLOYMENT");
     }
-    coverage[transaction.type] = true;
+    coverage[transaction.type] = blockNumber;
     transactionHashes.add(transactionHash);
-    latestEvidenceBlock = Math.max(latestEvidenceBlock, Number(transaction.blockNumber));
+    latestEvidenceBlock = Math.max(latestEvidenceBlock, blockNumber);
   }
-  if ([...books.values()].some((coverage) => !coverage.seedBookTerms || !coverage.sealBookTerms)
+  if ([...books.values()].some((coverage) => coverage.seedBookTerms === null || coverage.sealBookTerms === null
+    || coverage.seedBookTerms > coverage.sealBookTerms)
     || Number(verifiedAt.blockNumber) < latestEvidenceBlock) {
     throw new Error("INVALID_DEPLOYMENT");
   }
