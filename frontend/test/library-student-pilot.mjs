@@ -43,8 +43,8 @@ try {
   const registry = await deploy('CampusPaymentRegistry', [accounts[0], accounts[1], await sbt.getAddress()]);
   await deploy('PurposeBoundGrantVault', [accounts[0], await registry.getAddress()]);
   const escrow = await deploy('LibraryDepositEscrow', [accounts[0], accounts[1], accounts[2]]);
-  const seedTransactions = [], prices = ['30000000000000000000','80000000000000000000','50000000000000000000'];
-  const titles = ['Lập trình căn bản','Cấu trúc dữ liệu','Mạng máy tính'];
+  const seedTransactions = [], prices = ['30000000000000000000','80000000000000000000','50000000000000000000','40000000000000000000'];
+  const titles = ['Lập trình căn bản','Cấu trúc dữ liệu','Mạng máy tính','Hệ điều hành'];
   const books = [];
   for (let i = 0; i < prices.length; i++) {
     const bookId = id(`n471-pilot-${i}`); books.push({ bookId, depositWei: fixture.policy.depositWei, replacementPriceWei: prices[i], sealed: true });
@@ -112,8 +112,144 @@ try {
   await page.getByLabel('Tên sách, tác giả hoặc ISBN').fill('no-such-book'); await page.getByRole('button', { name: 'Tìm sách', exact: true }).click();
   await page.getByText('Chưa có sách phù hợp.', { exact: false }).waitFor(); record('search empty state');
   await page.getByLabel('Tên sách, tác giả hoặc ISBN').fill(''); await page.getByRole('button', { name: 'Tìm sách', exact: true }).click();
-  const student = { wallet: accounts[3], role: 'STUDENT' }, staff = { wallet: accounts[1], role: 'LIBRARIAN' };
+  const student = { wallet: accounts[3], role: 'STUDENT' };
+  // Separate browser contexts preserve separate Student and LIBRARIAN cookies.
+  // Both wallets use unlocked accounts on the dedicated Anvil, never a real key.
+  const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await staffContext.exposeBinding('pilotRpc', async (_source, { method, params }) => {
+    if (method === 'personal_sign') return provider.send('eth_sign', [params[1], params[0]]);
+    const result = await provider.send(method, params);
+    if (method === 'eth_sendTransaction') sends.push(result);
+    return result;
+  });
+  await staffContext.addInitScript(({ account, studentAccount }) => {
+    let selected = account; const listeners = new Map();
+    window.pilotWallet = { unknown: false, switchAccount() { selected = studentAccount; for (const f of listeners.get('accountsChanged') ?? []) f([selected]); } };
+    window.ethereum = { on(name, f) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(f); }, removeListener(name, f) { listeners.get(name)?.delete(f); },
+      async request({ method, params = [] }) {
+        if (['eth_accounts','eth_requestAccounts'].includes(method)) return [selected];
+        if (method === 'eth_chainId') return '0x4f25';
+        const result = await window.pilotRpc({ method, params });
+        if (method === 'eth_sendTransaction' && window.pilotWallet.unknown) { window.pilotWallet.unknown = false; throw new Error('transport interrupted after send'); }
+        return result;
+      } };
+  }, { account: accounts[1], studentAccount: accounts[3] });
+  const staffPage = await staffContext.newPage(); staffPage.on('pageerror', e => errors.push(e.message));
+  await staffPage.goto(origin + '/staff/library');
+  await staffPage.getByRole('button', { name: 'Ký đăng nhập thủ thư' }).click();
+  await staffPage.getByRole('button', { name: 'Làm mới trạng thái' }).waitFor();
   async function refresh() { await page.getByRole('button', { name: 'Làm mới trạng thái', exact: true }).click(); await page.getByRole('status').filter({ hasText: 'Đang xử lý' }).waitFor({ state: 'hidden' }); }
+  async function refreshStaff() {
+    await staffPage.getByRole('button', { name: 'Làm mới trạng thái', exact: true }).click();
+    await staffPage.getByRole('status').filter({ hasText: 'Đang xử lý' }).waitFor({ state: 'hidden' });
+  }
+  async function staffSend(eventName, failTrack = false) {
+    const before = sends.length;
+    const trackPattern = '**/api/library/requests/*/transactions';
+    if (failTrack) await staffPage.route(trackPattern, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'RPC_UNAVAILABLE' } }) }));
+    await staffPage.getByRole('button', { name: 'Xác nhận và mở ví', exact: true }).click();
+    for (let attempt = 0; sends.length === before && attempt < 100; attempt++) await delay(100);
+    assert.equal(sends.length, before + 1, 'staff UI must broadcast exactly once');
+    await provider.waitForTransaction(sends.at(-1), 1, 30000);
+    const journal = staffPage.getByRole('article').filter({ hasText: sends.at(-1) });
+    if (failTrack) {
+      await staffPage.locator('#staff-error').waitFor();
+      assert.equal(sends.length, before + 1, 'failed reconcile must retain the original send');
+      await staffPage.unroute(trackPattern);
+      record('staff reconcile failure retains hash and allows safe retry');
+    }
+    await journal.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
+    await staffPage.getByText(`Đã xác minh ${eventName}`, { exact: false }).first().waitFor();
+    await refreshStaff();
+  }
+  async function approve(requestId, failTrack = false) {
+    await refreshStaff();
+    await staffPage.getByRole('article', { name: `Yêu cầu ${requestId}` }).getByRole('button', { name: 'Duyệt', exact: true }).click();
+    await staffSend('LoanApproved', failTrack);
+  }
+  async function returnBook(requestId) {
+    await refreshStaff();
+    const loan = staffPage.getByRole('article', { name: `Khoản mượn ${requestId}` });
+    await loan.getByRole('button', { name: 'Xác nhận nhận sách', exact: true }).click();
+    await staffSend('PhysicalReturnConfirmed');
+    await loan.getByRole('button', { name: 'Quyết toán trả', exact: true }).click();
+    await staffPage.getByLabel('Lý do').fill('Local pilot physical return');
+    await staffPage.getByLabel('Tình trạng sách').selectOption('DAMAGED');
+    const amount = staffPage.getByLabel('Phí sửa chữa (CAMPUS)');
+    const count = sends.length;
+    for (const invalid of ['0', '-1', '1e2', '0.0000000000000000001', ((2n ** 256n) / (10n ** 18n) + 1n).toString()]) {
+      await amount.fill(invalid);
+      await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+      await staffPage.locator('#staff-error').waitFor();
+      assert.equal(sends.length, count, `invalid repair amount ${invalid} must not broadcast`);
+    }
+    await amount.fill('0.000000000000000001');
+    const intentPattern = '**/api/library/loans/*/settlement-intents';
+    await staffPage.route(intentPattern, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'RPC_UNAVAILABLE' } }) }));
+    await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+    await staffPage.locator('#staff-error').waitFor();
+    assert.equal(sends.length, count, 'failed preview must not broadcast');
+    await staffPage.unroute(intentPattern);
+    record('repair input rejects invalid precision and range; preview API failure does not send');
+    let releaseIntent, receivedIntent, deliveredIntent;
+    const heldIntent = new Promise(resolve => { releaseIntent = resolve; });
+    const intentReceived = new Promise(resolve => { receivedIntent = resolve; });
+    const intentDelivered = new Promise(resolve => { deliveredIntent = resolve; });
+    let intentRequestCount = 0;
+    await staffPage.route(intentPattern, async route => {
+      intentRequestCount++;
+      if (intentRequestCount > 1) { await route.continue(); return; }
+      receivedIntent(); await heldIntent; const response = await route.fetch(); await route.fulfill({ response }); deliveredIntent();
+    });
+    await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+    await intentReceived;
+    await staffPage.getByRole('region', { name: 'Thông tin quyết toán' }).getByRole('button', { name: 'Hủy', exact: true }).click();
+    // Retry the same loan while the first response is still held: cancel must
+    // release the per-action Web Lock, not merely clear the visual busy state.
+    await loan.getByRole('button', { name: 'Quyết toán trả', exact: true }).click();
+    await staffPage.getByLabel('Lý do').fill('Retry cancelled preview');
+    await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+    const retriedReview = staffPage.getByRole('region', { name: 'Kiểm tra trước khi ký' });
+    await retriedReview.waitFor({ timeout: 5000 });
+    assert.equal(intentRequestCount, 2, 'same-loan retry must reach API while old response is held');
+    await retriedReview.getByRole('button', { name: 'Hủy', exact: true }).click();
+    let releaseRefresh, receivedRefresh;
+    const heldRefresh = new Promise(resolve => { releaseRefresh = resolve; });
+    const refreshReceived = new Promise(resolve => { receivedRefresh = resolve; });
+    const booksPattern = /\/api\/library\/books(?:\?|$)/;
+    await staffPage.route(booksPattern, async route => { receivedRefresh(); await heldRefresh; await route.continue(); });
+    const refreshButton = staffPage.getByRole('button', { name: 'Làm mới trạng thái', exact: true });
+    await refreshButton.click({ timeout: 5000 });
+    await refreshReceived;
+    assert.equal(await refreshButton.isDisabled(), true, 'new refresh must be busy while its response is held');
+    releaseIntent();
+    await intentDelivered;
+    await delay(300);
+    assert.equal(await refreshButton.isDisabled(), true, 'old preview response must not clear newer refresh busy state');
+    releaseRefresh();
+    await staffPage.getByRole('status').filter({ hasText: 'Đang xử lý' }).waitFor({ state: 'hidden' });
+    await staffPage.unroute(intentPattern);
+    await staffPage.unroute(booksPattern);
+    assert.equal(await staffPage.getByRole('region', { name: 'Thông tin quyết toán' }).count(), 0);
+    assert.equal(await staffPage.getByRole('region', { name: 'Kiểm tra trước khi ký' }).count(), 0);
+    assert.equal(sends.length, count, 'cancelled delayed preview must not broadcast');
+    record('cancel delayed preview releases same-loan lock and old response preserves newer operation busy state');
+    await loan.getByRole('button', { name: 'Quyết toán trả', exact: true }).click();
+    await staffPage.getByLabel('Lý do').fill('Local pilot physical return');
+    await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+    await staffSend('ReturnSettled');
+  }
+  async function markLost(requestId) {
+    await refreshStaff();
+    const loan = staffPage.getByRole('article', { name: `Khoản mượn ${requestId}` });
+    await loan.getByRole('button', { name: 'Báo mất', exact: true }).click();
+    const form = staffPage.getByRole('region', { name: 'Thông tin quyết toán' }).locator('form');
+    assert.equal(await form.evaluate(element => element.checkValidity()), false, 'lost form must require confirmation and reason');
+    await staffPage.getByLabel('Tôi xác nhận chưa nhận lại sách vật lý').check();
+    await staffPage.getByLabel('Lý do').fill('Local pilot lost book');
+    await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
+    await staffSend('LostSettled');
+  }
   async function sendReview() {
     const before = sends.length;
     await page.getByRole('button', { name: 'Xác nhận và mở ví', exact: true }).click();
@@ -134,31 +270,75 @@ try {
   await page.reload(); await page.getByText('Đã cọc · chờ thủ thư duyệt', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Đối chiếu nộp cọc', exact: true }).click(); await page.getByText('Nộp cọc', { exact: true }).waitFor();
   assert.equal(sends.length, 1); record('unknown send + reload reconciles by request with one broadcast');
-  const staffEscrow = escrow.connect(signers[1]);
-  await (await staffEscrow.approve(request.requestId)).wait(); await refresh();
+  await approve(request.requestId, true); await refresh();
   await page.getByText('Đang mượn', { exact: true }).waitFor(); record('staff chain approval projects to Student ACTIVE');
   await page.getByRole('button', { name: 'Yêu cầu trả sách', exact: true }).click(); await page.getByText('Đưa sách cho thủ thư kiểm tra.', { exact: false }).first().waitFor();
-  await (await staffEscrow.confirmPhysicalReturn(request.requestId)).wait(); await service.getRequest(student, request.requestId);
-  const returnIntent = await service.createSettlementIntent(staff, request.requestId, { outcome: 'RETURNED', condition: 'GOOD', reason: 'Local pilot physical return', repairRequestedWei: '0' });
-  const returned = await signers[1].sendTransaction({ to: returnIntent.walletCall.to, data: returnIntent.walletCall.data, value: BigInt(returnIntent.walletCall.valueWei) }); await returned.wait();
-  await service.submitTransaction(staff, request.requestId, { action: 'return', txHash: returned.hash, settlementIntentId: returnIntent.intentId });
+  await returnBook(request.requestId);
   await refresh(); await page.getByText('Đã trả và quyết toán', { exact: true }).first().waitFor(); record('return request → physical receipt → verified settlement/refund');
-  const lost = await deposit(1); await (await staffEscrow.approve(lost.requestId)).wait(); await service.getRequest(student, lost.requestId);
-  const lostIntent = await service.createSettlementIntent(staff, lost.requestId, { outcome: 'LOST', reason: 'Local pilot lost book' });
-  const lostTx = await signers[1].sendTransaction({ to: lostIntent.walletCall.to, data: lostIntent.walletCall.data, value: 0 }); await lostTx.wait();
-  await service.submitTransaction(staff, lost.requestId, { action: 'settle', txHash: lostTx.hash, settlementIntentId: lostIntent.intentId });
+  const lost = await deposit(1); await approve(lost.requestId); await markLost(lost.requestId);
+  await staffPage.reload();
+  const returnedLoan = staffPage.getByRole('article', { name: `Khoản mượn ${request.requestId}` });
+  const lostLoan = staffPage.getByRole('article', { name: `Khoản mượn ${lost.requestId}` });
+  await returnedLoan.getByText('Kết quả: Sách trả', { exact: false }).waitFor();
+  await lostLoan.getByText('Kết quả: Sách mất', { exact: false }).waitFor();
+  async function assertBreakdown(card, label, value) {
+    const row = card.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }).locator('..');
+    assert.equal(await row.locator('dd').innerText(), value, `${label} must match the verified API projection`);
+  }
+  for (const label of ['Phí trễ', 'Phí sửa chữa', 'Cọc giữ do quá hạn', 'Tổng giữ lại']) await assertBreakdown(returnedLoan, label, '0 CAMPUS');
+  await assertBreakdown(returnedLoan, 'Hoàn cho người mượn', '50 CAMPUS');
+  await assertBreakdown(lostLoan, 'Giá thay thế', '80 CAMPUS');
+  await assertBreakdown(lostLoan, 'Tổng giữ lại', '50 CAMPUS');
+  await assertBreakdown(lostLoan, 'Hoàn cho người mượn', '0 CAMPUS');
+  await assertBreakdown(lostLoan, 'Sinh viên cần trả thêm', '30 CAMPUS');
+  record('settlement breakdown persists after reload including zero values');
   await refresh(); await page.getByRole('button', { name: 'Xem phần thiếu trước khi ký' }).click();
   await page.getByRole('heading', { name: 'Thanh toán phần thiếu · kiểm tra trước khi ký' }).waitFor();
   await sendReview(); await page.getByText('Đã tất toán sách mất', { exact: true }).first().waitFor(); record('lost book exact 30 CAMPUS shortfall paid by Student wallet');
   const expired = await deposit(2); await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
   await refresh(); await page.getByRole('button', { name: 'Xem hoàn cọc hết hạn' }).click(); await sendReview();
   await page.getByText('Đã hoàn cọc', { exact: true }).waitFor(); assert.equal((await service.getRequest(student, expired.requestId)).refundStatus, 'REFUNDED'); record('expired refund returns original borrower funds');
+  const rejected = await deposit(3); await refreshStaff();
+  await staffPage.getByRole('article', { name: `Yêu cầu ${rejected.requestId}` }).getByRole('button', { name: 'Từ chối', exact: true }).click();
+  await staffPage.evaluate(() => { window.pilotWallet.unknown = true; });
+  const beforeReject = sends.length;
+  await staffPage.getByRole('button', { name: 'Xác nhận và mở ví', exact: true }).click();
+  for (let attempt = 0; sends.length === beforeReject && attempt < 100; attempt++) await delay(100);
+  assert.equal(sends.length, beforeReject + 1);
+  await provider.waitForTransaction(sends.at(-1), 1, 30000);
+  await service.getRequest(student, rejected.requestId);
+  await staffPage.reload();
+  const recovery = staffPage.getByRole('region', { name: 'Đối chiếu giao dịch' }).getByRole('article').filter({ hasText: rejected.requestId });
+  await recovery.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
+  await recovery.getByText('Đã xác minh RequestRejected', { exact: false }).waitFor();
+  assert.equal(sends.length, beforeReject + 1, 'unknown reject recovery must not rebroadcast');
+  assert.equal(await staffPage.getByRole('article', { name: `Yêu cầu ${rejected.requestId}` }).count(), 0);
+  record('unknown reject remains recoverable after queue removal and reload');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); record('390px no horizontal overflow');
   await page.keyboard.press('Tab');
   assert.ok(await page.evaluate(() => document.activeElement && document.activeElement !== document.body)); record('keyboard focus and inline confirmation focus');
   await page.evaluate(() => document.activeElement?.blur());
   await page.screenshot({ path: join(evidenceDir, 'student-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: join(evidenceDir, 'student-desktop.png'), fullPage: true });
+  assert.equal(await staffPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await staffPage.keyboard.press('Tab');
+  assert.ok(await staffPage.evaluate(() => document.activeElement && document.activeElement !== document.body));
+  await staffPage.screenshot({ path: join(evidenceDir, 'staff-mobile.png'), fullPage: true });
+  await staffPage.setViewportSize({ width: 1280, height: 900 });
+  assert.equal(await staffPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await staffPage.screenshot({ path: join(evidenceDir, 'staff-desktop.png'), fullPage: true });
+  record('staff route renders at mobile and desktop without horizontal overflow');
+  await staffPage.evaluate(() => window.pilotWallet.switchAccount());
+  await staffPage.getByRole('button', { name: 'Ký đăng nhập thủ thư' }).waitFor();
+  assert.equal(await staffPage.getByRole('region', { name: 'Hàng chờ duyệt' }).count(), 0);
+  record('staff account switch removes private queue and requires new sign-in');
+  await staffPage.getByRole('button', { name: 'Ký đăng nhập thủ thư' }).click();
+  await staffPage.locator('#staff-error').waitFor();
+  assert.equal(await staffPage.getByRole('region', { name: 'Hàng chờ duyệt' }).count(), 0);
+  // The original Student context has its own Student cookie; switching an injected
+  // wallet must not be assumed to replace a prior Librarian cookie immediately.
+  assert.equal((await context.request.get(origin + '/api/library/requests?queue=true')).status(), 403);
+  record('student wallet cannot access librarian queue');
   const challenge = await (await context.request.post(origin + '/api/auth/challenge', { headers: { Origin: origin }, data: { wallet: accounts[6] } })).json();
   const signature = await provider.send('eth_sign', [accounts[6], '0x' + Buffer.from(challenge.message, 'utf8').toString('hex')]);
   assert.equal((await context.request.post(origin + '/api/auth/verify', { headers: { Origin: origin }, data: { challengeId: challenge.challengeId, signature } })).status(), 200);
@@ -169,11 +349,27 @@ try {
   await page.evaluate(() => window.pilotWallet.switchAccount()); await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).waitFor();
   assert.equal(await page.getByText('Đã trả và quyết toán', { exact: true }).count(), 0); record('account switch clears prior private history and requires new login');
   assert.deepEqual(errors, []);
-  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, errors,
-    sourceHash: createHash('sha256').update(readFileSync(join(workspace,'frontend/app/student/library/LibrarySession.tsx'))).digest('hex') }, null, 2));
+  const receipts = await Promise.all(sends.map(async txHash => {
+    const receipt = await provider.getTransactionReceipt(txHash);
+    assert.equal(receipt?.status, 1);
+    const events = receipt.logs.filter(log => log.address.toLowerCase() === library.escrow.address.toLowerCase()).map(log => {
+      try { const event = escrow.interface.parseLog(log); return { name: event.name, requestId: event.args.requestId, contractAddress: log.address, logIndex: log.index }; }
+      catch { return null; }
+    }).filter(Boolean);
+    return { txHash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, events };
+  }));
+  for (const event of ['LoanApproved', 'PhysicalReturnConfirmed', 'ReturnSettled', 'LostSettled']) {
+    assert.ok(receipts.some(receipt => receipt.events.some(item => item.name === event)), `missing ${event} escrow event`);
+  }
+  record('staff librarian flows complete on isolated stack with no errors');
+  const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/staff/library/LibraryStaffSession.tsx'];
+  const sourceHashes = Object.fromEntries(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(workspace, file))).digest('hex')]));
+  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, receipts, errors, sourceHashes }, null, 2));
 } catch (error) {
-  const page = browser?.contexts()[0]?.pages()[0];
-  if (page) { await page.screenshot({ path: join(evidenceDir, 'failure.png'), fullPage: true }); console.error(await page.locator('body').innerText()); }
+  for (const [index, context] of (browser?.contexts() ?? []).entries()) {
+    const page = context.pages()[0];
+    if (page) { await page.screenshot({ path: join(evidenceDir, `failure-${index}.png`), fullPage: true }); console.error(`Browser context ${index}:`, await page.locator('body').innerText()); }
+  }
   throw error;
 } finally {
   await browser?.close();
