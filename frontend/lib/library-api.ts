@@ -1,4 +1,4 @@
-import type { LibraryBook, LibraryRequest, LibraryLoan, LibrarySession, LibraryTransactionAction } from '@intracampus/network';
+import type { LibraryBook, LibraryRequest, LibraryLoan, LibrarySession, LibraryTransactionAction, LibraryRole, LibrarySettlementIntent, LibrarySettlementIntentRequest } from '@intracampus/network';
 
 export class LibraryUiError extends Error {
   readonly code: string;
@@ -54,6 +54,17 @@ export function parseLibraryLoan(value: unknown): LibraryLoan {
   return v as LibraryLoan;
 }
 function list<T>(value: unknown, parser: (v: unknown) => T): T[] { check(Array.isArray(value)); return value.map(parser); }
+export function parseSettlementIntent(value: unknown): LibrarySettlementIntent {
+  const v = object(value), call = object(v.walletCall), preview = object(v.preview);
+  check(typeof v.intentId === 'string' && /^[0-9a-f]{64}$/i.test(v.intentId) && bytes32(v.loanId) && bytes32(v.requestId)
+    && address(v.borrower) && address(v.escrow) && address(v.treasury) && v.chainId === 20261 && timestamp(v.chainTime)
+    && address(call.to) && typeof call.data === 'string' && /^0x(?:[0-9a-f]{2})+$/i.test(call.data) && wei(call.valueWei)
+    && ['RETURNED','LOST'].includes(v.outcome) && preview.outcome === v.outcome);
+  const fields = v.outcome === 'RETURNED' ? ['lateFeeWei','repairFeeWei','overdueForfeitWei','totalRetainedWei','refundWei'] : ['replacementPriceWei','totalRetainedWei','refundWei','shortfallWei'];
+  check(fields.every(key => wei(preview[key])));
+  if (v.outcome === 'RETURNED') check(timestamp(preview.returnedAt) && typeof preview.maintenanceRequired === 'boolean');
+  return v as LibrarySettlementIntent;
+}
 export class LibraryApi {
   readonly fetcher: typeof fetch;
   constructor(fetcher: typeof fetch = fetch) { this.fetcher = (input, init) => fetcher(input, init); }
@@ -70,20 +81,21 @@ export class LibraryApi {
     }
     return data;
   }
-  async session(wallet: string): Promise<LibrarySession> {
+  async session(wallet: string, role: LibraryRole = 'STUDENT'): Promise<LibrarySession> {
     const s = object(await this.request('/api/auth/session'));
     check(address(s.account?.wallet) && ['STUDENT','LIBRARIAN'].includes(s.account.role) && timestamp(s.expiresAt));
-    if (s.account.wallet.toLowerCase() !== wallet.toLowerCase() || s.account.role !== 'STUDENT') throw new LibraryUiError('WALLET_SESSION_CHANGED');
+    if (s.account.wallet.toLowerCase() !== wallet.toLowerCase() || s.account.role !== role) throw new LibraryUiError('WALLET_SESSION_CHANGED');
     return s as LibrarySession;
   }
   async books(q = '') { return list(await this.request(`/api/library/books?q=${encodeURIComponent(q)}`), parseLibraryBook); }
-  async requests() { return list(await this.request('/api/library/requests'), parseLibraryRequest); }
+  async requests(queue = false) { return list(await this.request(`/api/library/requests${queue ? '?queue=true' : ''}`), parseLibraryRequest); }
   async getRequest(id: string) { check(bytes32(id)); const r = parseLibraryRequest(await this.request(`/api/library/requests/${id}`)); check(r.requestId === id); return r; }
   async create(bookId: string, idempotencyKey: string) { return parseLibraryRequest(await this.request('/api/library/requests', { bookId, idempotencyKey })); }
   async loans() { return list(await this.request('/api/library/loans'), parseLibraryLoan); }
-  async track(id: string, action: LibraryTransactionAction, txHash: string) {
+  async settlementIntent(id: string, input: LibrarySettlementIntentRequest) { check(bytes32(id)); const result = parseSettlementIntent(await this.request(`/api/library/loans/${id}/settlement-intents`, input)); check(result.loanId === id && result.outcome === input.outcome); return result; }
+  async track(id: string, action: LibraryTransactionAction, txHash: string, settlementIntentId?: string) {
     check(bytes32(id) && bytes32(txHash));
-    const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash }));
+    const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash, ...(settlementIntentId ? { settlementIntentId } : {}) }));
     return parseLibraryRequest(result.request);
   }
   async returnBook(id: string) { check(bytes32(id)); await this.request(`/api/library/loans/${id}/return-requests`, {}); }
