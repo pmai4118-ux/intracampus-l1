@@ -39,6 +39,9 @@ importers:
       '@intracampus/network':
         specifier: workspace:*
         version: link:../packages/network
+      ethers:
+        specifier: 6.15.0
+        version: 6.15.0
       next:
         specifier: 16.4.5
         version: 16.4.5(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

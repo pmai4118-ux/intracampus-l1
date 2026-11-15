@@ -1,0 +1,131 @@
+{
+  "environment": "local-anvil",
+  "chainId": 20261,
+  "cases": [
+    "wallet challenge → Next cookie → real Express/SQLite catalog",
+    "search empty state",
+    "real deposit is pending approval, never ACTIVE",
+    "unknown send + reload reconciles by request with one broadcast",
+    "staff chain approval projects to Student ACTIVE",
+    "return request → physical receipt → verified settlement/refund",
+    "lost book exact 30 CAMPUS shortfall paid by Student wallet",
+    "expired refund returns original borrower funds",
+    "390px no horizontal overflow",
+    "keyboard focus and inline confirmation focus",
+    "another-tab session mismatch clears private state and exposes sign-in",
+    "account switch clears prior private history and requires new login"
+  ],
+  "sends": [
+    "0xc0af7a6b9bbfaf0421cffe010ea40659e3d271f8dd56d0cbdf0108a5ba892618",
+    "0x8c7fdf550f2ab043b3da2f30ab9817f6411100d9ab6626875b36a32f33df0b9e",
+    "0x9fc9eaf7df81555ddc55dfb81cc55993d9ac86c86bb784200edad4dd155ef5cb",
+    "0x02be8d65a35343037aa2f0e2155f29d78ac51c7ade82cd24690ecc83db104799",
+    "0xc8343067f6377f0af6e0f65e7ab9295f971c8e2f1dd218e1c5fad2810f00526b"
+  ],
+  "errors": [],
+  "sourceHash": "e247838588ca0cdeb39ee2133f506290c3ef6b9a85d3143af3d8b26e2fb1dab2",
+  "receipts": [
+    {
+      "txHash": "0xc0af7a6b9bbfaf0421cffe010ea40659e3d271f8dd56d0cbdf0108a5ba892618",
+      "status": 1,
+      "blockNumber": 1458,
+      "blockHash": "0x180394d5cd87a37138b702d2f1336c3625118b474f1238df39c84c695e5bbc09",
+      "events": [
+        {
+          "name": "DepositReceived",
+          "requestId": "0xb1b16ecc0ae7b9431c47530d3c86e77ffd9e42ea98e8b92f6027375a99ef06f8",
+          "contractAddress": "0xD84379CEae14AA33C123Af12424A37803F885889",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x8c7fdf550f2ab043b3da2f30ab9817f6411100d9ab6626875b36a32f33df0b9e",
+      "status": 1,
+      "blockNumber": 1464,
+      "blockHash": "0x1274812805577d981eb1956c814b1f968c99d538c6f5404f2317e418d0e98a1d",
+      "events": [
+        {
+          "name": "DepositReceived",
+          "requestId": "0xfd533aed99e2d039a4bafce423f448183393eaeadf73ea03d08998f780e423bf",
+          "contractAddress": "0xD84379CEae14AA33C123Af12424A37803F885889",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x9fc9eaf7df81555ddc55dfb81cc55993d9ac86c86bb784200edad4dd155ef5cb",
+      "status": 1,
+      "blockNumber": 1469,
+      "blockHash": "0x4cd5aecfd26f14eb2a105402c9a209ce0ca699e575c0e58682bcefc7b7ad1def",
+      "events": [
+        {
+          "name": "ShortfallPaid",
+          "requestId": "0xfd533aed99e2d039a4bafce423f448183393eaeadf73ea03d08998f780e423bf",
+          "contractAddress": "0xD84379CEae14AA33C123Af12424A37803F885889",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x02be8d65a35343037aa2f0e2155f29d78ac51c7ade82cd24690ecc83db104799",
+      "status": 1,
+      "blockNumber": 1471,
+      "blockHash": "0xcca5c48d97c8f2318bb418a4c1c4ee6f898b3c7a81bce1f7b40ba30c63cff9c5",
+      "events": [
+        {
+          "name": "DepositReceived",
+          "requestId": "0x5f1fa0a78cfac884ef66ec24780f7eeeaca069e42ae91e00df2dac381774547e",
+          "contractAddress": "0xD84379CEae14AA33C123Af12424A37803F885889",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0xc8343067f6377f0af6e0f65e7ab9295f971c8e2f1dd218e1c5fad2810f00526b",
+      "status": 1,
+      "blockNumber": 1474,
+      "blockHash": "0x75a313f20b9f0d80e2c5435d136c7fa8f0302720f9469fdcd30b068aebc3cbbf",
+      "events": [
+        {
+          "name": "ExpiredRefundClaimed",
+          "requestId": "0x5f1fa0a78cfac884ef66ec24780f7eeeaca069e42ae91e00df2dac381774547e",
+          "contractAddress": "0xD84379CEae14AA33C123Af12424A37803F885889",
+          "logIndex": 0
+        }
+      ]
+    }
+  ],
+  "sourceFiles": {
+    "frontend/app/student/library/LibraryCatalog.tsx": "5fd0a636c1ed33fd9f20d3a8522dc43501effb90c42cad9d609f4b30bdc98fa8",
+    "frontend/app/student/library/LibraryLoans.tsx": "a521c29adbe4a41fa0dcef638c4b5765f9ffa80fd872ba4fe0cf83429bcb40fa",
+    "frontend/app/student/library/LibraryRequests.tsx": "a242256790c2a18b9dec510c4c86772eef7395761ebd39f6a8187b7f366fb293",
+    "frontend/app/student/library/LibrarySession.tsx": "e247838588ca0cdeb39ee2133f506290c3ef6b9a85d3143af3d8b26e2fb1dab2",
+    "frontend/app/student/library/page.tsx": "8c8f248bd3712bd4a3ff1dab63598dda85da27df647e258e6d77dfe05bf6a4e0",
+    "frontend/lib/library-api.ts": "01ace907d816bd761318ef82e4828b5ca8e52ceb9d80fed3ef82e0bcba430177",
+    "frontend/lib/library-transactions.ts": "b3d2cc8ae3dc7f028b938c1b04386a5171b01cd0314abd90081d94416ebd6136",
+    "frontend/lib/library.ts": "e44618aab65c9fc97a24ae07ad767e0db48b162f8d4276ba77be75ac6f87861f",
+    "frontend/lib/chains.ts": "e792ceafdd14b7677b6fd1986d9e4b6c294ebdaab9492fd9612068132a6f6bb1",
+    "frontend/test/library-student-pilot.mjs": "8103d046354746b179a57ff8bd43a11399742c43e26d44f360e3ca583393a1a6"
+  },
+  "baseCommit": "d5696124eef4c87aa32357c51db8362b06b5989e",
+  "gates": [
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "seconds": 3.15
+    },
+    {
+      "command": "pnpm test",
+      "exitCode": 0,
+      "seconds": 22.81
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0,
+      "seconds": 5.47
+    }
+  ],
+  "manualCore": "NOT_RUN",
+  "avalancheL1": "NOT_RUN"
+}

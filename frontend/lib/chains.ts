@@ -21,10 +21,14 @@ export function validateWalletConfig(config: WalletConfig): WalletConfig {
   return { rpcUrl, sbtAddress, paymentRegistryAddress, posSignerAddress };
 }
 // Only public, build-time configuration. Never expose a key or RPC secret here.
-export function walletConfigFromDeployment(config: WalletConfig, manifest: unknown = getDeployment()): WalletConfig {
+export function walletConfigFromDeployment(config: WalletConfig, manifest: unknown = getDeployment(), allowLocal = false): WalletConfig {
   const data = getDeployment(manifest);
   if (data.status !== "deployed") return validateWalletConfig(config);
-  const shared = requireDeployment(data);
+  if (allowLocal) {
+    const url = new URL(config.rpcUrl ?? '');
+    if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('INVALID_WALLET_CONFIG');
+  }
+  const shared = requireDeployment(data, { allowLocal });
   const addresses = { sbtAddress: shared.contracts.StudentSBTIdentity.address,
     paymentRegistryAddress: shared.contracts.CampusPaymentRegistry.address, posSignerAddress: shared.roles.posSigner };
   for (const key of Object.keys(addresses) as Array<keyof typeof addresses>) {
@@ -38,7 +42,7 @@ export function browserWalletConfig(): WalletConfig {
   return walletConfigFromDeployment({ rpcUrl: process.env.NEXT_PUBLIC_INTRACAMPUS_RPC_URL,
     sbtAddress: process.env.NEXT_PUBLIC_STUDENT_SBT_ADDRESS,
     paymentRegistryAddress: process.env.NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS,
-    posSignerAddress: process.env.NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS });
+    posSignerAddress: process.env.NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS }, getDeployment(), process.env.NEXT_PUBLIC_ALLOW_LOCAL_ANVIL === 'true');
 }
 export function walletChainParameters(config: WalletConfig) {
   const { rpcUrl } = validateWalletConfig(config);
