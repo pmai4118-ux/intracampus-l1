@@ -9,10 +9,14 @@
     "staff reconcile failure retains hash and allows safe retry",
     "staff chain approval projects to Student ACTIVE",
     "repair input rejects invalid precision and range; preview API failure does not send",
+    "DAMAGED preview matches server and fixture with nonzero repair",
     "cancel delayed preview releases same-loan lock and old response preserves newer operation busy state",
     "return request → physical receipt → verified settlement/refund",
+    "lost preview matches fixture: replacement above deposit",
     "settlement breakdown persists after reload including zero values",
     "lost book exact 30 CAMPUS shortfall paid by Student wallet",
+    "lost preview matches fixture: replacement below deposit",
+    "lost preview matches fixture: replacement equals deposit",
     "expired refund returns original borrower funds",
     "unknown reject remains recoverable after queue removal and reload",
     "390px no horizontal overflow",
@@ -25,171 +29,227 @@
     "staff librarian flows complete on isolated stack with no errors"
   ],
   "sends": [
-    "0xbde0faa7889fe1cc1a5aa2418182d0f1fb675dc1da11699a6644a0e083ab8241",
-    "0x588f0d045efb38717db297845781098b3ac0ed8da4619d3ec5784f1969659f96",
-    "0x165ec36d964aa5d86dd2c09720f5effabc2dfd05a1069fa88af5347ed0d36a6c",
-    "0x4fc1a3f562b537c73e808330c0ad92c5e6ff25d397a1df15824925ceecd633a9",
-    "0x86e0a6538d9bd0b40b1421fef51ea31205ae0dcdfcd64d5a2173841c51b5d528",
-    "0x30c1030141a9317a3db6e73a00eaae1c4440f7ee4eb94ac0ec70743f8b59c892",
-    "0x9d230b98fdb327b675e171d7dfff5b5ad68299d0ca6c6ee74dd6623fda676b9c",
-    "0xb21723dd9781d86aa3d952c258e6e25952323825b4d3363d5f79d29a8f765cdb",
-    "0xb630c641e936d0743fb3f5426473a95691eb43460f507ac1073cf24ca760a9df",
-    "0x191834e082bd5a2a49b9328796eb54a7087067fd0d5ba055a53e2b7c27171c0d",
-    "0xefa3a96cd69ba89d047dc2b2486cab360301d358d65a1c1ff8e3920e3e959e56",
-    "0x9c45105888dc75bf41cf41a06397932782abe5915db9d764154fa72e552f9523"
+    "0x62f010312cbf052f2ef81c6406a87adeda5c4df69e59e938e34879198c474b02",
+    "0x303a5477b4d5c766b2ed5f873b8f5681d8693b25b7155364f37014a57795eeda",
+    "0x814e16d9cfbb719e8a2694e9cd6e30b2670f2583ba7df37114f645d004a98d5e",
+    "0xbc8382984be09865cf839e4141cc5512302a637daf94f1f589437cf28081bc41",
+    "0x08c64c1eacef1d1bc94b4f22830163ee79aa793526633049b801771c1977793d",
+    "0xa16ffbe90b1cd36a68c86c916b204b5dc288bd8c1c38a769e634fe7fe9b7aaba",
+    "0x4b922f299ed2d84f0c7103fa35b72d836f9c1c2b1b28ee804496092377859702",
+    "0x1a3de9d829ade2105e3c02e36ab4a53481951c58685ee0201b5e452e50508551",
+    "0x60040db6fb07f1f7b5230ce4111c417877150ba0f04dc9ec25f62b46017696ba",
+    "0x2d94ddc4de0fe4194cfa00552a01785c439e9d4e050b27d7c56d4e99fe3fa7e7",
+    "0x1283de9f005392609aa7d65f175f73b0c7d180559a2700991b815efbfe698d23",
+    "0xe053f2f6370ebbc453e319223f7ebafeb4571f60ff1718f68056107f1e0cd9e3",
+    "0x76c9c63f23d48ade9413f584b20846a5568ef6267ab7e1d351ceb52ae7996c80",
+    "0x172d207b52ed3df350e92e87265314e589d8b2da6d4c9d0015eeceb2756cffec",
+    "0xf8d5ce3287b87387096f337c952c35a6fe53d978bc40f5751f8aebe7dfe6b163",
+    "0x80596664f62ed2caf79095144a5bf1084b05ee3b3e5d2bc510639f647dc40894"
   ],
   "receipts": [
     {
-      "txHash": "0xbde0faa7889fe1cc1a5aa2418182d0f1fb675dc1da11699a6644a0e083ab8241",
+      "txHash": "0x62f010312cbf052f2ef81c6406a87adeda5c4df69e59e938e34879198c474b02",
       "blockNumber": 39,
-      "blockHash": "0x69521d5b6cea609810905c6248a172b7a12c6555537e15e9aa90b7fe93fefe2a",
+      "blockHash": "0x7e4825cc89900f9a23300671b3f2491595212a12a7186d5f97cbf54a0dd72e13",
       "events": [
         {
           "name": "DepositReceived",
-          "requestId": "0xb9db7aff9f65c3e67672ad40970d1aeed9087a0cf27ebdeb5c6d2e1fbf88e12a",
+          "requestId": "0xef5a039d312027dd4e51c8aa1ab05d1c8adf782c2d566e313da1b6ce14e78f16",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x588f0d045efb38717db297845781098b3ac0ed8da4619d3ec5784f1969659f96",
+      "txHash": "0x303a5477b4d5c766b2ed5f873b8f5681d8693b25b7155364f37014a57795eeda",
       "blockNumber": 41,
-      "blockHash": "0x39af61fc28437911762c20bef787f3c8dca1faa617286817bfafb7e11564a957",
+      "blockHash": "0x63895756c8b03c2c3fdcb17ffafed59a2ff68ebd1c88d7610514f4ee1884a332",
       "events": [
         {
           "name": "LoanApproved",
-          "requestId": "0xb9db7aff9f65c3e67672ad40970d1aeed9087a0cf27ebdeb5c6d2e1fbf88e12a",
+          "requestId": "0xef5a039d312027dd4e51c8aa1ab05d1c8adf782c2d566e313da1b6ce14e78f16",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x165ec36d964aa5d86dd2c09720f5effabc2dfd05a1069fa88af5347ed0d36a6c",
-      "blockNumber": 44,
-      "blockHash": "0xfd800f271857f2e74612805fd19a2bb1a59f76ec08d55a1738501cee998d51a2",
+      "txHash": "0x814e16d9cfbb719e8a2694e9cd6e30b2670f2583ba7df37114f645d004a98d5e",
+      "blockNumber": 45,
+      "blockHash": "0xa0a3df3144d58941ee1813499788a08c7d98e16b01223ef1023107080bcb18dd",
       "events": [
         {
           "name": "PhysicalReturnConfirmed",
-          "requestId": "0xb9db7aff9f65c3e67672ad40970d1aeed9087a0cf27ebdeb5c6d2e1fbf88e12a",
+          "requestId": "0xef5a039d312027dd4e51c8aa1ab05d1c8adf782c2d566e313da1b6ce14e78f16",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x4fc1a3f562b537c73e808330c0ad92c5e6ff25d397a1df15824925ceecd633a9",
-      "blockNumber": 49,
-      "blockHash": "0x88e3cedc1956f2a913856862b75ebec8c9e872987348b407125268b7b35ca9f4",
+      "txHash": "0xbc8382984be09865cf839e4141cc5512302a637daf94f1f589437cf28081bc41",
+      "blockNumber": 50,
+      "blockHash": "0x4335760ef442a99f840a495e69af960ac51ebcda15fafc70c27119fc8a7d43c7",
       "events": [
         {
           "name": "ReturnSettled",
-          "requestId": "0xb9db7aff9f65c3e67672ad40970d1aeed9087a0cf27ebdeb5c6d2e1fbf88e12a",
+          "requestId": "0xef5a039d312027dd4e51c8aa1ab05d1c8adf782c2d566e313da1b6ce14e78f16",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x86e0a6538d9bd0b40b1421fef51ea31205ae0dcdfcd64d5a2173841c51b5d528",
-      "blockNumber": 52,
-      "blockHash": "0x26b3de18bf6627f2790b228fae37cf0ca83f0ea0103b4480edfe6abbbf7f3419",
+      "txHash": "0x08c64c1eacef1d1bc94b4f22830163ee79aa793526633049b801771c1977793d",
+      "blockNumber": 53,
+      "blockHash": "0xacbd49db8d534dcf6f9acef295483560c37a8fcdf39bc9847d4d61d506a956a6",
       "events": [
         {
           "name": "DepositReceived",
-          "requestId": "0x152f881e712c8e43e73f5e8a3f8fff499b67acabc80a096846e79b8ad414b27d",
+          "requestId": "0x48431395815dad93bc59814936d4dc830e06b2496e511a53e30b012b03d16b62",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x30c1030141a9317a3db6e73a00eaae1c4440f7ee4eb94ac0ec70743f8b59c892",
-      "blockNumber": 54,
-      "blockHash": "0x17e4aae8a2a3f8a236def98689e490b45cb55e0a769bdef00580c172f81e9687",
+      "txHash": "0xa16ffbe90b1cd36a68c86c916b204b5dc288bd8c1c38a769e634fe7fe9b7aaba",
+      "blockNumber": 55,
+      "blockHash": "0xab5e19513c36b9d72522e7f747ba9f8ea1fdc7545722c924aa8caa7bebdffb7f",
       "events": [
         {
           "name": "LoanApproved",
-          "requestId": "0x152f881e712c8e43e73f5e8a3f8fff499b67acabc80a096846e79b8ad414b27d",
+          "requestId": "0x48431395815dad93bc59814936d4dc830e06b2496e511a53e30b012b03d16b62",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x9d230b98fdb327b675e171d7dfff5b5ad68299d0ca6c6ee74dd6623fda676b9c",
-      "blockNumber": 57,
-      "blockHash": "0x93ed509926a4b9ea46848c66e9245f144d7bdb65d0ad8e2193088a6a8074d97c",
+      "txHash": "0x4b922f299ed2d84f0c7103fa35b72d836f9c1c2b1b28ee804496092377859702",
+      "blockNumber": 58,
+      "blockHash": "0x2fd6c80d67d5ffbfc5864c00f6afb0afed1210d9a2114d372d0232214bd1380b",
       "events": [
         {
           "name": "LostSettled",
-          "requestId": "0x152f881e712c8e43e73f5e8a3f8fff499b67acabc80a096846e79b8ad414b27d",
+          "requestId": "0x48431395815dad93bc59814936d4dc830e06b2496e511a53e30b012b03d16b62",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0xb21723dd9781d86aa3d952c258e6e25952323825b4d3363d5f79d29a8f765cdb",
-      "blockNumber": 60,
-      "blockHash": "0x1c48ed236fd35d62e3dd9a67ebe8a969d4ad151460b53296e791e7f6750d4811",
+      "txHash": "0x1a3de9d829ade2105e3c02e36ab4a53481951c58685ee0201b5e452e50508551",
+      "blockNumber": 61,
+      "blockHash": "0xd9d4279d2e6aad0b20becafd670db1bf1d337aa8ae24c8fb3303e874d49208bc",
       "events": [
         {
           "name": "ShortfallPaid",
-          "requestId": "0x152f881e712c8e43e73f5e8a3f8fff499b67acabc80a096846e79b8ad414b27d",
+          "requestId": "0x48431395815dad93bc59814936d4dc830e06b2496e511a53e30b012b03d16b62",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0xb630c641e936d0743fb3f5426473a95691eb43460f507ac1073cf24ca760a9df",
-      "blockNumber": 62,
-      "blockHash": "0xa91850b539a1b60901d6862a941d169166e96560003089e34685ee0457fb2816",
+      "txHash": "0x60040db6fb07f1f7b5230ce4111c417877150ba0f04dc9ec25f62b46017696ba",
+      "blockNumber": 64,
+      "blockHash": "0xc203aaf4637e457607b404f7941ea0f820d57a9735670779c4a3310fc7799f33",
       "events": [
         {
           "name": "DepositReceived",
-          "requestId": "0x066988e305f8dfcb4607699055a515dbfea0057977dc35a65063eb0546026b09",
+          "requestId": "0x2128eadef8b7ac1d8963a0ee27a251b8e63a656295206f3e4d48a5a225c8691c",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x191834e082bd5a2a49b9328796eb54a7087067fd0d5ba055a53e2b7c27171c0d",
-      "blockNumber": 65,
-      "blockHash": "0x1004d86e97c18b8ca9d04c120397c3922fef9a2ace10b4da9a017c4cbf466d89",
+      "txHash": "0x2d94ddc4de0fe4194cfa00552a01785c439e9d4e050b27d7c56d4e99fe3fa7e7",
+      "blockNumber": 66,
+      "blockHash": "0x3db30f61fc8fb40692bb6822ba60c05147a254f5cf0dde353fbf7954dc1070a3",
+      "events": [
+        {
+          "name": "LoanApproved",
+          "requestId": "0x2128eadef8b7ac1d8963a0ee27a251b8e63a656295206f3e4d48a5a225c8691c",
+          "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x1283de9f005392609aa7d65f175f73b0c7d180559a2700991b815efbfe698d23",
+      "blockNumber": 70,
+      "blockHash": "0x7f2b663daec127848c4115c598483c48add58c7bccdec6b35e43264e23ad82c5",
+      "events": [
+        {
+          "name": "DepositReceived",
+          "requestId": "0xf8033a6e072e7ee0cd0bf7440b436a42409961c385c530e928fe16b34286e4b4",
+          "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0xe053f2f6370ebbc453e319223f7ebafeb4571f60ff1718f68056107f1e0cd9e3",
+      "blockNumber": 72,
+      "blockHash": "0xaa1cde342b56991d14c435c01bf7ec04197642f7592f8ef999bd85467e0d1c7d",
+      "events": [
+        {
+          "name": "LoanApproved",
+          "requestId": "0xf8033a6e072e7ee0cd0bf7440b436a42409961c385c530e928fe16b34286e4b4",
+          "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x76c9c63f23d48ade9413f584b20846a5568ef6267ab7e1d351ceb52ae7996c80",
+      "blockNumber": 76,
+      "blockHash": "0xc3fa3060f431fc23f4b2097db05e27078829fae199a4a15b4a032fffe5239d43",
+      "events": [
+        {
+          "name": "DepositReceived",
+          "requestId": "0xce9d43ca2715b089b0783e75149593409ad0507ac7850197bd4d50515ab39c7a",
+          "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+          "logIndex": 0
+        }
+      ]
+    },
+    {
+      "txHash": "0x172d207b52ed3df350e92e87265314e589d8b2da6d4c9d0015eeceb2756cffec",
+      "blockNumber": 79,
+      "blockHash": "0x7fad07faa32b331e5896706f9e0a8e6ec399e7fd943a137015dc69661c802069",
       "events": [
         {
           "name": "ExpiredRefundClaimed",
-          "requestId": "0x066988e305f8dfcb4607699055a515dbfea0057977dc35a65063eb0546026b09",
+          "requestId": "0xce9d43ca2715b089b0783e75149593409ad0507ac7850197bd4d50515ab39c7a",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0xefa3a96cd69ba89d047dc2b2486cab360301d358d65a1c1ff8e3920e3e959e56",
-      "blockNumber": 67,
-      "blockHash": "0x82e29a34895a0be123f31e377835e8de26662c9d742b10f42f272a9fb147fc39",
+      "txHash": "0xf8d5ce3287b87387096f337c952c35a6fe53d978bc40f5751f8aebe7dfe6b163",
+      "blockNumber": 81,
+      "blockHash": "0xc0eb187014d1fef7b32b7255320d27a55f5cf878306afa9330e5c52196401375",
       "events": [
         {
           "name": "DepositReceived",
-          "requestId": "0x43582413e9b1b361b309c8334f7be41dfa6a86c9db38ed67ede7e74fe374f2e7",
+          "requestId": "0xcb13a0b8ba7c4bca9d8cff550aa05690cc6185e443555b0a12bf41a0398d43ad",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }
       ]
     },
     {
-      "txHash": "0x9c45105888dc75bf41cf41a06397932782abe5915db9d764154fa72e552f9523",
-      "blockNumber": 69,
-      "blockHash": "0x9bd7be83a1260a5acfbacab61e4454edcaba7673a4c9a7264aade18f7105b286",
+      "txHash": "0x80596664f62ed2caf79095144a5bf1084b05ee3b3e5d2bc510639f647dc40894",
+      "blockNumber": 83,
+      "blockHash": "0x09fc1dba74980bca66f217ef872deb837501c74fe62ca5c342de0d4cafa5592e",
       "events": [
         {
           "name": "RequestRejected",
-          "requestId": "0x43582413e9b1b361b309c8334f7be41dfa6a86c9db38ed67ede7e74fe374f2e7",
+          "requestId": "0xcb13a0b8ba7c4bca9d8cff550aa05690cc6185e443555b0a12bf41a0398d43ad",
           "contractAddress": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
           "logIndex": 0
         }

@@ -43,8 +43,8 @@ try {
   const registry = await deploy('CampusPaymentRegistry', [accounts[0], accounts[1], await sbt.getAddress()]);
   await deploy('PurposeBoundGrantVault', [accounts[0], await registry.getAddress()]);
   const escrow = await deploy('LibraryDepositEscrow', [accounts[0], accounts[1], accounts[2]]);
-  const seedTransactions = [], prices = ['30000000000000000000','80000000000000000000','50000000000000000000','40000000000000000000'];
-  const titles = ['Lập trình căn bản','Cấu trúc dữ liệu','Mạng máy tính','Hệ điều hành'];
+  const seedTransactions = [], prices = ['30000000000000000000','80000000000000000000','50000000000000000000','40000000000000000000','30000000000000000000','50000000000000000000'];
+  const titles = ['Lập trình căn bản','Cấu trúc dữ liệu','Mạng máy tính','Hệ điều hành','Cơ sở dữ liệu','Kỹ thuật phần mềm'];
   const books = [];
   for (let i = 0; i < prices.length; i++) {
     const bookId = id(`n471-pilot-${i}`); books.push({ bookId, depositWei: fixture.policy.depositWei, replacementPriceWei: prices[i], sealed: true });
@@ -159,13 +159,22 @@ try {
       record('staff reconcile failure retains hash and allows safe retry');
     }
     await journal.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
-    await staffPage.getByText(`Đã xác minh ${eventName}`, { exact: false }).first().waitFor();
+    await journal.getByText(`Đã xác minh ${eventName}`, { exact: false }).waitFor();
     await refreshStaff();
   }
   async function approve(requestId, failTrack = false) {
     await refreshStaff();
     await staffPage.getByRole('article', { name: `Yêu cầu ${requestId}` }).getByRole('button', { name: 'Duyệt', exact: true }).click();
     await staffSend('LoanApproved', failTrack);
+  }
+  function formatWei(value) {
+    const unit = 10n ** 18n, wei = BigInt(value), fraction = (wei % unit).toString().padStart(18, '0').replace(/0+$/, '');
+    const whole = (wei / unit).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `${whole}${fraction ? `,${fraction}` : ''} CAMPUS`;
+  }
+  async function assertBreakdown(card, label, value) {
+    const row = card.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }).locator('..');
+    assert.equal(await row.locator('dd').innerText(), value, `${label} must match the API/fixture oracle`);
   }
   async function returnBook(requestId) {
     await refreshStaff();
@@ -195,10 +204,10 @@ try {
     const heldIntent = new Promise(resolve => { releaseIntent = resolve; });
     const intentReceived = new Promise(resolve => { receivedIntent = resolve; });
     const intentDelivered = new Promise(resolve => { deliveredIntent = resolve; });
-    let intentRequestCount = 0;
+    let intentRequestCount = 0, retryIntent;
     await staffPage.route(intentPattern, async route => {
       intentRequestCount++;
-      if (intentRequestCount > 1) { await route.continue(); return; }
+      if (intentRequestCount > 1) { const response = await route.fetch(); retryIntent = await response.json(); await route.fulfill({ response }); return; }
       receivedIntent(); await heldIntent; const response = await route.fetch(); await route.fulfill({ response }); deliveredIntent();
     });
     await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
@@ -208,10 +217,18 @@ try {
     // release the per-action Web Lock, not merely clear the visual busy state.
     await loan.getByRole('button', { name: 'Quyết toán trả', exact: true }).click();
     await staffPage.getByLabel('Lý do').fill('Retry cancelled preview');
+    await staffPage.getByLabel('Tình trạng sách').selectOption('DAMAGED');
+    const damagedRepair = fixture.returnVectors.find(vector => vector.name === 'thirty days late plus repair').repairRequestedWei;
+    await staffPage.getByLabel('Phí sửa chữa (CAMPUS)').fill((BigInt(damagedRepair) / 10n ** 18n).toString());
     await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
     const retriedReview = staffPage.getByRole('region', { name: 'Kiểm tra trước khi ký' });
     await retriedReview.waitFor({ timeout: 5000 });
     assert.equal(intentRequestCount, 2, 'same-loan retry must reach API while old response is held');
+    assert.equal(retryIntent.preview.repairFeeWei, damagedRepair);
+    assert.equal(retryIntent.preview.lateFeeWei, fixture.returnVectors.find(vector => vector.name === 'on time').expectedLateFeeWei);
+    assert.equal(BigInt(retryIntent.preview.refundWei), BigInt(fixture.policy.depositWei) - BigInt(damagedRepair));
+    for (const [label, value] of [['Phí trễ', retryIntent.preview.lateFeeWei], ['Phí sửa chữa', retryIntent.preview.repairFeeWei], ['Tổng giữ lại', retryIntent.preview.totalRetainedWei], ['Hoàn cho người mượn', retryIntent.preview.refundWei]]) await assertBreakdown(retriedReview, label, formatWei(value));
+    record('DAMAGED preview matches server and fixture with nonzero repair');
     await retriedReview.getByRole('button', { name: 'Hủy', exact: true }).click();
     let releaseRefresh, receivedRefresh;
     const heldRefresh = new Promise(resolve => { releaseRefresh = resolve; });
@@ -239,7 +256,7 @@ try {
     await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
     await staffSend('ReturnSettled');
   }
-  async function markLost(requestId) {
+  async function markLost(requestId, vectorName, commit = true) {
     await refreshStaff();
     const loan = staffPage.getByRole('article', { name: `Khoản mượn ${requestId}` });
     await loan.getByRole('button', { name: 'Báo mất', exact: true }).click();
@@ -247,8 +264,18 @@ try {
     assert.equal(await form.evaluate(element => element.checkValidity()), false, 'lost form must require confirmation and reason');
     await staffPage.getByLabel('Tôi xác nhận chưa nhận lại sách vật lý').check();
     await staffPage.getByLabel('Lý do').fill('Local pilot lost book');
+    const pattern = '**/api/library/loans/*/settlement-intents'; let apiIntent;
+    await staffPage.route(pattern, async route => { const response = await route.fetch(); apiIntent = await response.json(); await route.fulfill({ response }); });
     await staffPage.getByRole('button', { name: 'Xem quyết toán', exact: true }).click();
-    await staffSend('LostSettled');
+    const preview = staffPage.getByRole('region', { name: 'Kiểm tra trước khi ký' }); await preview.waitFor();
+    await staffPage.unroute(pattern);
+    const vector = fixture.lostVectors.find(item => item.name === vectorName); assert.ok(vector);
+    for (const [key, expected, label] of [['replacementPriceWei', vector.replacementPriceWei, 'Giá thay thế'], ['totalRetainedWei', vector.expectedRetainedWei, 'Tổng giữ lại'], ['refundWei', vector.expectedRefundWei, 'Hoàn cho người mượn'], ['shortfallWei', vector.expectedShortfallWei, 'Sinh viên cần trả thêm']]) {
+      assert.equal(apiIntent.preview[key], expected, `${vectorName} ${key}`); await assertBreakdown(preview, label, formatWei(expected));
+    }
+    record(`lost preview matches fixture: ${vectorName}`);
+    if (commit) await staffSend('LostSettled');
+    else await preview.getByRole('button', { name: 'Hủy', exact: true }).click();
   }
   async function sendReview() {
     const before = sends.length;
@@ -263,7 +290,7 @@ try {
     await page.waitForFunction(() => document.activeElement?.getAttribute('aria-labelledby') === 'review-title');
     if (unknown) await page.evaluate(() => { window.pilotWallet.unknown = true; });
     await sendReview();
-    await page.getByText('Đã cọc · chờ thủ thư duyệt', { exact: true }).waitFor();
+    await page.getByText('Đã cọc · chờ thủ thư duyệt', { exact: true }).first().waitFor();
     const request = (await service.listRequests(student)).find(r => r.bookId === books[index].bookId); assert.ok(request); return request;
   }
   const request = await deposit(0, true); assert.equal((await service.listLoans(student)).length, 0); record('real deposit is pending approval, never ACTIVE');
@@ -275,16 +302,12 @@ try {
   await page.getByRole('button', { name: 'Yêu cầu trả sách', exact: true }).click(); await page.getByText('Đưa sách cho thủ thư kiểm tra.', { exact: false }).first().waitFor();
   await returnBook(request.requestId);
   await refresh(); await page.getByText('Đã trả và quyết toán', { exact: true }).first().waitFor(); record('return request → physical receipt → verified settlement/refund');
-  const lost = await deposit(1); await approve(lost.requestId); await markLost(lost.requestId);
+  const lost = await deposit(1); await approve(lost.requestId); await markLost(lost.requestId, 'replacement above deposit');
   await staffPage.reload();
   const returnedLoan = staffPage.getByRole('article', { name: `Khoản mượn ${request.requestId}` });
   const lostLoan = staffPage.getByRole('article', { name: `Khoản mượn ${lost.requestId}` });
   await returnedLoan.getByText('Kết quả: Sách trả', { exact: false }).waitFor();
   await lostLoan.getByText('Kết quả: Sách mất', { exact: false }).waitFor();
-  async function assertBreakdown(card, label, value) {
-    const row = card.locator('dt').filter({ hasText: new RegExp(`^${label}$`) }).locator('..');
-    assert.equal(await row.locator('dd').innerText(), value, `${label} must match the verified API projection`);
-  }
   for (const label of ['Phí trễ', 'Phí sửa chữa', 'Cọc giữ do quá hạn', 'Tổng giữ lại']) await assertBreakdown(returnedLoan, label, '0 CAMPUS');
   await assertBreakdown(returnedLoan, 'Hoàn cho người mượn', '50 CAMPUS');
   await assertBreakdown(lostLoan, 'Giá thay thế', '80 CAMPUS');
@@ -295,6 +318,9 @@ try {
   await refresh(); await page.getByRole('button', { name: 'Xem phần thiếu trước khi ký' }).click();
   await page.getByRole('heading', { name: 'Thanh toán phần thiếu · kiểm tra trước khi ký' }).waitFor();
   await sendReview(); await page.getByText('Đã tất toán sách mất', { exact: true }).first().waitFor(); record('lost book exact 30 CAMPUS shortfall paid by Student wallet');
+  for (const [index, vectorName] of [[4, 'replacement below deposit'], [5, 'replacement equals deposit']]) {
+    const loan = await deposit(index); await approve(loan.requestId); await markLost(loan.requestId, vectorName, false);
+  }
   const expired = await deposit(2); await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
   await refresh(); await page.getByRole('button', { name: 'Xem hoàn cọc hết hạn' }).click(); await sendReview();
   await page.getByText('Đã hoàn cọc', { exact: true }).waitFor(); assert.equal((await service.getRequest(student, expired.requestId)).refundStatus, 'REFUNDED'); record('expired refund returns original borrower funds');
