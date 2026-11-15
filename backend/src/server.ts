@@ -7,6 +7,13 @@ import { ReceiptService } from "./modules/invoices/receipt.service.ts";
 import { GrantsService } from "./modules/grants/grants.service.ts";
 import { InvoiceCreationService } from "./modules/invoices/invoices.service.ts";
 import { readInvoiceCreationConfig } from "./modules/invoices/invoice.config.ts";
+import { LibraryRepository } from "./modules/library/library.repository.ts";
+import { AuthRepository } from "./modules/auth/auth.repository.ts";
+import { AuthService } from "./modules/auth/auth.service.ts";
+import { readLibraryAuthConfig, type LibraryAuthConfig } from "./modules/auth/auth.config.ts";
+import { readLibraryConfig } from "./modules/library/library.config.ts";
+import { LibraryService } from "./modules/library/library.service.ts";
+import libraryManifest from "../../deployments/intracampus.json" with { type: "json" };
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4000);
@@ -20,10 +27,26 @@ const receiptService = new ReceiptService({ repository, deployment,
   rpc, log: (entry) => console.log(JSON.stringify(entry)) });
 const creationService = new InvoiceCreationService({ repository, deployment, rpc, config: readInvoiceCreationConfig(process.env) });
 const grantsService = new GrantsService({ rpcUrl: process.env.INTRACAMPUS_RPC_URL });
-const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService).listen(port, host, () => {
+const libraryRepository = new LibraryRepository(process.env.LIBRARY_DB_PATH?.trim()
+  || fileURLToPath(new URL("../data/library.sqlite", import.meta.url)));
+let libraryService = new LibraryService(libraryRepository);
+try { libraryService = new LibraryService(libraryRepository, readLibraryConfig(process.env, libraryManifest)); }
+catch {
+  // Keep unrelated API modules available; Library business endpoints fail closed with CONFIGURATION_ERROR.
+}
+let libraryAuthConfig: LibraryAuthConfig | undefined;
+let authService: AuthService | undefined;
+try {
+  libraryAuthConfig = readLibraryAuthConfig(process.env);
+  authService = new AuthService(new AuthRepository(libraryRepository), libraryAuthConfig);
+} catch {
+  // Keep unrelated API modules available; auth endpoints fail closed with CONFIGURATION_ERROR.
+}
+const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
+  authService, libraryAuthConfig, libraryService).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => server.close(() => { grantsService.close(); repository.close(); process.exit(0); }));
+  process.once(signal, () => server.close(() => { grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
 }

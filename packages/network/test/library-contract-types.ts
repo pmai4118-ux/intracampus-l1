@@ -45,6 +45,8 @@ const returnSubmission: LibraryTransactionSubmission = {
 const preview: LibrarySettlementPreview = intent.preview;
 const borrower: `0x${string}` = loan.borrower;
 const payloadTooLarge: LibraryApiErrorCode = "PAYLOAD_TOO_LARGE";
+const rateLimited: LibraryApiErrorCode = "RATE_LIMITED";
+void rateLimited;
 declare const manifest: unknown;
 const libraryDeployment: LibraryDeployment = getLibraryDeployment(manifest);
 const libraryPolicy: LibraryDeploymentPolicy = libraryDeployment.policy;

@@ -224,6 +224,7 @@ export type LibraryApiErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "RATE_LIMITED"
   | "RPC_UNAVAILABLE"
   | "WRONG_CHAIN"
   | "STALE_CHAIN_STATE"

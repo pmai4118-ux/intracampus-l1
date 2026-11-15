@@ -181,6 +181,47 @@ export class WalletController {
     if (this.state.accounts.includes(address)) await this.refresh(this.state.accounts, address);
   }
   /** The connected student signs. A returned hash survives account changes while Core is open. */
+  async signMessage(expectedAccount: string, message: string): Promise<string> {
+    const fail = (code: string, outcome: WalletTransactionError["outcome"] = "not-sent") => new WalletTransactionError(code, outcome);
+    if (this.sending) throw fail("WALLET_REQUEST_PENDING");
+    if (!isWalletAddress(expectedAccount) || typeof message !== "string" || !message.trim() || message.length > 4096) {
+      throw fail("INVALID_SIGN_MESSAGE");
+    }
+    const selected = () => !this.stopped && !this.locallyDisconnected
+      && this.state.address?.toLowerCase() === expectedAccount.toLowerCase()
+      && this.state.chainId === BigInt(campusNetwork.chainId);
+    const provider = this.provider;
+    if (!provider || !selected()) throw fail("WALLET_SESSION_CHANGED");
+    this.sending = true;
+    try {
+      const [available, chain] = await Promise.all([
+        provider.request({ method: "eth_accounts" }).then(accounts),
+        provider.request({ method: "eth_chainId" }).then(quantity),
+      ]);
+      if (chain !== BigInt(campusNetwork.chainId)) throw fail("WRONG_CHAIN");
+      if (!selected() || !available.includes(expectedAccount.toLowerCase())) throw fail("WALLET_SESSION_CHANGED");
+      const data = `0x${Array.from(new TextEncoder().encode(message), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+      let signature: unknown;
+      try {
+        signature = await provider.request({ method: "personal_sign", params: [data, expectedAccount] });
+      } catch (error) {
+        if (errorCode(error) === 4001) throw fail("SIGNATURE_REJECTED", "rejected");
+        throw fail("WALLET_UNAVAILABLE");
+      }
+      const [accountsAfter, chainAfter] = await Promise.all([
+        provider.request({ method: "eth_accounts" }).then(accounts),
+        provider.request({ method: "eth_chainId" }).then(quantity),
+      ]);
+      if (chainAfter !== BigInt(campusNetwork.chainId)) throw fail("WRONG_CHAIN");
+      if (!selected() || !accountsAfter.includes(expectedAccount.toLowerCase())) throw fail("WALLET_SESSION_CHANGED");
+      if (typeof signature !== "string" || !/^0x(?:[0-9a-f]{128}|[0-9a-f]{130})$/i.test(signature)) throw fail("INVALID_SIGNATURE");
+      return signature;
+    } catch (error) {
+      if (error instanceof WalletTransactionError) throw error;
+      throw fail("WALLET_UNAVAILABLE");
+    } finally { this.sending = false; }
+  }
+  /** The connected student signs. A returned hash survives account changes while Core is open. */
   async sendTransaction(expectedAccount: string, transaction: WalletTransaction): Promise<string> {
     return this.sendTransactionWithGuard(expectedAccount, transaction, () => {});
   }
