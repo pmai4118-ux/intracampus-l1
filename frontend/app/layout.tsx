@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             <Link href="/student">Sinh viên</Link>
             <Link href="/student/library">Thư viện</Link>
+            <Link href="/staff/library">Thủ thư</Link>
             <Link href="/pos">Điểm thu</Link>
           </nav>
         </header>
