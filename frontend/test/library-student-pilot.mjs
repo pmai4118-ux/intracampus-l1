@@ -285,6 +285,8 @@ try {
     await provider.waitForTransaction(sends.at(-1), 1, 30000); await refresh();
   }
   async function deposit(index, unknown = false) {
+    await page.bringToFront();
+    await refresh();
     await page.getByRole('button', { name: `Tạo yêu cầu: ${titles[index]}`, exact: true }).click();
     await page.getByRole('heading', { name: 'Nộp cọc · kiểm tra trước khi ký' }).waitFor();
     await page.waitForFunction(() => document.activeElement?.getAttribute('aria-labelledby') === 'review-title');
@@ -333,13 +335,54 @@ try {
   assert.equal(sends.length, beforeReject + 1);
   await provider.waitForTransaction(sends.at(-1), 1, 30000);
   await service.getRequest(student, rejected.requestId);
+  const damagedJournalId = id('pilot-damaged-journal');
+  await staffPage.evaluate(requestId => {
+    const key = Object.keys(localStorage).find(name => name.startsWith('intracampus.library.v1:') && name.endsWith(':reject'));
+    if (!key) throw new Error('Missing reject journal in fixture');
+    localStorage.setItem(key.replace(/:[^:]+:reject$/, ':' + requestId + ':confirmReturn'), '{');
+  }, damagedJournalId);
   await staffPage.reload();
-  const recovery = staffPage.getByRole('region', { name: 'Đối chiếu giao dịch' }).getByRole('article').filter({ hasText: rejected.requestId });
+  const recoveryRegion = staffPage.getByRole('region', { name: 'Đối chiếu giao dịch' });
+  await recoveryRegion.getByRole('alert').filter({ hasText: damagedJournalId }).getByText('Không đọc được nhật ký này.', { exact: false }).waitFor();
+  const recovery = recoveryRegion.getByRole('article').filter({ hasText: rejected.requestId });
   await recovery.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
   await recovery.getByText('Đã xác minh RequestRejected', { exact: false }).waitFor();
   assert.equal(sends.length, beforeReject + 1, 'unknown reject recovery must not rebroadcast');
   assert.equal(await staffPage.getByRole('article', { name: `Yêu cầu ${rejected.requestId}` }).count(), 0);
   record('unknown reject remains recoverable after queue removal and reload');
+  record('a corrupt staff journal does not hide healthy entries or the dashboard');
+  const second = { wallet: accounts[6], role: 'STUDENT' };
+  const bookId = books[2].bookId;
+  const [reserved, noCopy] = await Promise.all([
+    service.createRequest({ account: second, bookId, idempotencyKey: 'pilot-last-copy-first' }),
+    service.createRequest({ account: student, bookId, idempotencyKey: 'pilot-last-copy-second' }),
+  ]);
+  assert.equal((await service.listBooks(student.wallet)).find(book => book.bookId === bookId).copiesAvailable, 1);
+  await (await escrow.connect(signers[6]).deposit(reserved.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+  await (await escrow.connect(signers[3]).deposit(noCopy.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+  await refresh();
+  const missed = await service.getRequest(student, noCopy.request.requestId);
+  assert.equal(missed.status, 'REJECTED_NO_COPY');
+  assert.equal(missed.loanId, null);
+  const noCopyCard = page.locator('li.library-record').filter({ hasText: missed.requestId });
+  const claim = noCopyCard.getByRole('button', { name: 'Xem hoàn cọc hết hạn' });
+  assert.equal(await claim.count(), 0);
+  await refreshStaff();
+  const staffNoCopy = staffPage.getByRole('article', { name: `Yêu cầu ${missed.requestId}` });
+  await staffNoCopy.getByRole('button', { name: 'Từ chối' }).waitFor();
+  await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
+  await refresh();
+  await claim.click();
+  await sendReview();
+  await noCopyCard.getByText('Hết bản · đã hoàn cọc', { exact: true }).waitFor();
+  assert.equal(await claim.count(), 0);
+  const refunded = await service.getRequest(student, missed.requestId);
+  assert.equal(refunded.refundStatus, 'REFUNDED');
+  assert.equal(refunded.transactions.find(tx => tx.action === 'refund')?.proof?.eventName, 'ExpiredRefundClaimed');
+  record('last-copy contention preserves one allocation and lets the other borrower claim after deadline');
+  await refreshStaff();
+  assert.equal(await staffNoCopy.count(), 0);
+  record('a no-copy request leaves the staff queue once the borrower refund is verified');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); record('390px no horizontal overflow');
   await page.keyboard.press('Tab');
   assert.ok(await page.evaluate(() => document.activeElement && document.activeElement !== document.body)); record('keyboard focus and inline confirmation focus');
@@ -382,15 +425,18 @@ try {
       try { const event = escrow.interface.parseLog(log); return { name: event.name, requestId: event.args.requestId, contractAddress: log.address, logIndex: log.index }; }
       catch { return null; }
     }).filter(Boolean);
-    return { txHash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, events };
+    return { txHash, status: receipt.status, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, events };
   }));
   for (const event of ['LoanApproved', 'PhysicalReturnConfirmed', 'ReturnSettled', 'LostSettled']) {
     assert.ok(receipts.some(receipt => receipt.events.some(item => item.name === event)), `missing ${event} escrow event`);
   }
   record('staff librarian flows complete on isolated stack with no errors');
-  const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/staff/library/LibraryStaffSession.tsx'];
+  const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/student/library/LibraryRequests.tsx', 'frontend/app/staff/library/LibraryStaffSession.tsx',
+    'frontend/lib/library-transactions.ts', 'frontend/lib/library-api.ts', 'frontend/lib/library-session.ts',
+    'backend/src/modules/library/library.repository.ts', 'frontend/test/library-student-pilot.mjs'];
   const sourceHashes = Object.fromEntries(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(workspace, file))).digest('hex')]));
-  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, receipts, errors, sourceHashes }, null, 2));
+  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, receipts, errors,
+    sourceHashes, manualCore: 'NOT_RUN', avalancheL1: 'NOT_RUN' }, null, 2) + '\n');
 } catch (error) {
   for (const [index, context] of (browser?.contexts() ?? []).entries()) {
     const page = context.pages()[0];

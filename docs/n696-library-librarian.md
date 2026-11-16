@@ -17,7 +17,9 @@ Trang `/staff/library` sử dụng session ví thư viện và API thật qua Ne
 
 ## Recovery
 
-Khi ví hoặc RPC không trả kết quả rõ ràng, giữ nguyên journal và dùng chức năng đối chiếu; có thể cần hash trong lịch sử ví. Request đã rời hàng chờ vẫn có thể xuất hiện trong vùng recovery. Không gửi lại khi giao dịch còn unknown hoặc pending. Chỉ coi giao dịch hoàn tất khi API xác minh receipt và event khớp. Nếu đổi ví, đăng nhập lại bằng ví thủ thư trước khi xử lý tiếp.
+Khi ví hoặc RPC không trả kết quả rõ ràng, giữ nguyên journal và dùng chức năng đối chiếu; có thể cần hash trong lịch sử ví. Request đã rời hàng chờ vẫn có thể xuất hiện trong vùng recovery. Duyệt/từ chối dùng chung khóa theo yêu cầu; nhận sách và hai lựa chọn quyết toán dùng chung khóa theo khoản mượn. Đối chiếu lượt còn unknown hoặc pending trước khi chọn hành động xung đột. Mục journal hỏng hiện cảnh báo riêng, giữ khóa cho thao tác liên quan và vẫn cho phép đối chiếu mục còn đọc được. Chỉ coi giao dịch hoàn tất khi API xác minh receipt và event khớp. Nếu đổi ví, đăng nhập lại bằng ví thủ thư trước khi xử lý tiếp.
+
+Yêu cầu hết bản còn nằm trong hàng chờ khi cọc đang `REFUND_DUE`. Khi sinh viên đã tự nhận lại cọc và receipt được xác minh, yêu cầu rời hàng chờ.
 
 ## Pilot cô lập
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Interface } from 'ethers';
 import fixture from '../../docs/fixtures/library-v1.json' with { type: 'json' };
-import { LibraryApi } from '../lib/library-api.ts';
+import { LibraryApi, parseSettlementIntent } from '../lib/library-api.ts';
 import { LibraryTransactions } from '../lib/library-transactions.ts';
 import { WalletTransactionError } from '../lib/wallet.ts';
 const librarian = `0x${'11'.repeat(20)}`, borrower = `0x${'44'.repeat(20)}`, escrow = `0x${'22'.repeat(20)}`, treasury = `0x${'33'.repeat(20)}`, id = `0x${'ab'.repeat(32)}`, bookId = `0x${'bc'.repeat(32)}`, hash = `0x${'cd'.repeat(32)}`;
@@ -66,8 +66,75 @@ test('incorrect event proof cannot complete staff recovery', async () => {
   await assert.rejects(s.controller.send(call), /SEND_OUTCOME_UNKNOWN/);
   s.request.transactions.push({ action:'reject', txHash:hash, status:'CONFIRMED', submittedAt:2,
     proof:{...s.proof, eventName:'LoanApproved'} });
-  await assert.rejects(s.controller.reconcile(id, 'reject'), /INTENT_MISMATCH/);
+  await assert.rejects(s.controller.reconcile(id, 'reject'), /INVALID_RESPONSE/);
   assert.equal(s.controller.journal(id, 'reject')?.phase, 'unknown');
+});
+
+test('pending confirmation of physical return blocks a conflicting lost settlement after reload', async () => {
+  const s = setup();
+  s.loan.status = 'ACTIVE';
+  s.loan.returnReceivedAt = null;
+  s.request.status = 'APPROVED';
+  s.request.transactions.pop();
+  const confirmation = await s.controller.prepare(id, 'confirmReturn');
+  await assert.rejects(s.controller.send(confirmation), /SEND_OUTCOME_UNKNOWN/);
+  const reloaded = new LibraryTransactions(s.options);
+  const lost = { ...s.intent, outcome: 'LOST',
+    preview: { outcome: 'LOST', replacementPriceWei: '200', totalRetainedWei: '100', refundWei: '0', shortfallWei: '100' },
+    walletCall: { ...s.intent.walletCall, data: iface.encodeFunctionData('settleLost', [id]) } };
+  await assert.rejects(reloaded.prepare(id, 'settle', lost), /RECOVERY_REQUIRED/);
+  assert.equal(s.sends(), 1);
+});
+
+test('approve and reject share a send lock and recheck the competing action', async () => {
+  const s = setup();
+  const approve = await s.controller.prepare(id, 'approve');
+  const reject = await s.controller.prepare(id, 'reject');
+  const tails = new Map<string, Promise<void>>();
+  const controller = new LibraryTransactions({ ...s.options, lock: (key, run) => {
+    const next = (tails.get(key) ?? Promise.resolve()).then(run);
+    tails.set(key, next.catch(() => {}));
+    return next;
+  } });
+  const results = await Promise.allSettled([controller.send(approve), controller.send(reject)]);
+  assert.deepEqual(results.map(r => r.status === 'rejected' ? r.reason.code : 'sent'), ['SEND_OUTCOME_UNKNOWN', 'RECOVERY_REQUIRED']);
+  assert.equal(s.sends(), 1);
+});
+
+test('pending competing actions reported by the API block a fresh browser', async () => {
+  const s = setup();
+  s.request.transactions.push({ action: 'reject', txHash: hash, status: 'SUBMITTED', submittedAt: 2, proof: null });
+  await assert.rejects(s.controller.prepare(id, 'approve'), /RECOVERY_REQUIRED/);
+  assert.equal(s.sends(), 0);
+});
+
+test('a no-copy request with a verified refund cannot open a second refund', async () => {
+  const s = setup();
+  s.request.status = 'REJECTED_NO_COPY';
+  s.request.refundStatus = 'REFUNDED';
+  await assert.rejects(s.controller.prepare(id, 'reject'), /ACTION_UNAVAILABLE/);
+  assert.equal(s.sends(), 0);
+});
+
+test('corrupt journal quarantines that request and preserves access to a healthy journal', async () => {
+  const s = setup();
+  const otherId = `0x${'ae'.repeat(32)}`;
+  const call = await s.controller.prepare(id, 'reject');
+  await assert.rejects(s.controller.send(call), /SEND_OUTCOME_UNKNOWN/);
+  s.storage.setItem(s.controller.key(otherId, 'confirmReturn'), '{');
+  const reloaded = new LibraryTransactions(s.options);
+  assert.deepEqual(reloaded.listJournals().map(entry => [entry.requestId, entry.phase]), [[id, 'unknown'], [otherId, 'unreadable']]);
+  await assert.rejects(reloaded.prepare(otherId, 'settle'), /STORAGE_BLOCKED/);
+});
+
+test('settlement preview uses the verified physical-return timestamp and an opaque ID', async () => {
+  const s = setup();
+  const mismatched = { ...s.intent, preview: { ...s.intent.preview, returnedAt: 5 } };
+  await assert.rejects(s.controller.prepare(id, 'return', mismatched, '1'), /INTENT_MISMATCH/);
+  const opaque = parseSettlementIntent({ ...s.intent, intentId: 'settlement-intent:v2_1' });
+  const call = await s.controller.prepare(id, 'return', opaque, '1');
+  await assert.rejects(s.controller.send(call), /SEND_OUTCOME_UNKNOWN/);
+  assert.equal(s.controller.journal(id, 'return')?.settlementIntentId, opaque.intentId);
 });
 
 test('cancelling settlement preview or reloading before send creates no unknown journal', async () => {
@@ -98,6 +165,7 @@ test('approval uses chain deadline boundary and no-copy only permits rejection',
   s.state.blockTimestamp = BigInt(201);
   await assert.rejects(s.controller.prepare(id, 'approve'), /ACTION_UNAVAILABLE/);
   s.request.status = 'REJECTED_NO_COPY';
+  s.request.refundStatus = 'REFUND_DUE';
   await assert.rejects(s.controller.prepare(id, 'approve'), /ACTION_UNAVAILABLE/);
   await s.controller.prepare(id, 'reject');
   assert.equal(s.sends(), 0);

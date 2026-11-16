@@ -974,7 +974,7 @@ export class LibraryRepository {
     const rows = queue
       ? this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE (r.status = 'PENDING_APPROVAL' AND r.copy_id IS NOT NULL)
-          OR (r.status = 'REJECTED_NO_COPY' AND r.copy_id IS NULL) ORDER BY r.created_at, r.request_id`).all()
+          OR (r.status = 'REJECTED_NO_COPY' AND r.refund_status = 'REFUND_DUE' AND r.copy_id IS NULL) ORDER BY r.created_at, r.request_id`).all()
       : this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE a.wallet = ? COLLATE NOCASE ORDER BY r.created_at DESC, r.request_id`).all(wallet);
     return rows.map((row) => rowToRequest(row)!).filter(Boolean);

@@ -13,7 +13,8 @@ function setup() {
   const iface = new Interface(fixture.abi);
   const request = { requestId: id, bookId, status: 'AWAITING_DEPOSIT', refundStatus: 'NONE', depositWei: null as string | null,
     depositIntent: { chainId: 20261, to: escrow, data: iface.encodeFunctionData('deposit', [id, bookId]), valueWei: fixture.policy.depositWei, requestId: id, bookId },
-    approvalDeadline: null, loanId: null, transactions: [] as any[], createdAt: 1, updatedAt: 1 };
+    approvalDeadline: null as number | null, loanId: null, transactions: [] as any[], createdAt: 1, updatedAt: 1 };
+  const accountStatus = { held: false, checkedAt: 1, blockingLoanIds: [] };
   let sends = 0;
   const state = { address: account, chainId: BigInt(20261), canProceed: true };
   const values = new Map<string, string>();
@@ -22,11 +23,11 @@ function setup() {
   const api = new LibraryApi(async path => {
     const p = String(path);
     if (p.endsWith('/session')) return Response.json({ account: { wallet: account, role: 'STUDENT' }, expiresAt: 1800000000 });
-    if (p.endsWith('account-status')) return Response.json({ held: false, checkedAt: 1, blockingLoanIds: [] });
+    if (p.endsWith('account-status')) return Response.json(accountStatus);
     return Response.json(p.endsWith('/transactions') ? { request } : request);
   });
   const options = { deployment, account, api, wallet, storage, lock: async (_key: string, run: () => Promise<void>) => run() };
-  return { controller: new LibraryTransactions(options), options, request, wallet, state, storage, sends: () => sends };
+  return { controller: new LibraryTransactions(options), options, request, accountStatus, wallet, state, storage, sends: () => sends };
 }
 test('preflight validates canonical calldata, recipient, value and selected account', async () => {
   const s = setup(); const call = await s.controller.prepare(id, 'deposit'); assert.equal(call.amountWei, fixture.policy.depositWei);
@@ -59,11 +60,19 @@ test('storage failure stops before broadcast; known wallet refusal permits retry
   r.wallet.sendTransactionWithGuard = async (_a, _tx, guard) => { guard(); throw new WalletTransactionError('USER_REJECTED', 'rejected'); };
   await assert.rejects(r.controller.send(next)); assert.equal(r.controller.journal(id, 'deposit'), null);
 });
-test('refund preflight allows recovery under hold only after server projects expiry', async () => {
-  const s = setup(); s.request.status = 'REJECTED_NO_COPY'; s.request.refundStatus = 'REFUND_DUE';
+test('borrower can claim a no-copy refund at the verified deadline even while held', async () => {
+  const s = setup();
+  s.request.status = 'REJECTED_NO_COPY';
+  s.request.refundStatus = 'REFUND_DUE';
+  s.request.approvalDeadline = 2;
+  s.request.depositWei = fixture.policy.depositWei;
+  s.accountStatus.held = true;
   await assert.rejects(s.controller.prepare(id, 'refund'), /ACTION_UNAVAILABLE/);
-  s.request.status = 'EXPIRED_REFUND_DUE'; s.request.depositWei = fixture.policy.depositWei;
+  s.accountStatus.checkedAt = 2;
   const call = await s.controller.prepare(id, 'refund'); assert.equal(call.amountWei, '0'); assert.equal(call.recipient, account);
+  assert.equal(call.refundWei, fixture.policy.depositWei);
+  s.request.refundStatus = 'REFUNDED';
+  await assert.rejects(s.controller.prepare(id, 'refund'), /ACTION_UNAVAILABLE/);
 });
 test('server-known pending action blocks a fresh browser before any send', async () => {
   const s = setup(); s.request.transactions = [{ action: 'deposit', txHash: hash, status: 'SUBMITTED', submittedAt: 1, proof: null }];
