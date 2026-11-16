@@ -195,3 +195,11 @@ Staff settlement-intent preview dùng shared `LibrarySettlementIntent` với bor
 The frontend's custom Next.js server overwrites client-supplied forwarding headers using the connected socket address. It accepts a forwarded chain only from exact configured ingress IPs and resolves the first untrusted hop from the right; the backend trusts one sanitized address only from its exact configured frontend peers. Local development trusts loopback only by default. Operators behind load balancers must configure the actual peer IPs and prevent direct bypass.
 
 The Library hold remains application-only as approved in the module proposal; the escrow ABI does not gain a hold/revocation mechanism. A held account keeps access to request history and recovery, but create retries/list/detail do not issue a new deposit intent. A client must refresh request state before opening the wallet, and the backend continues reconciling any deposit that is actually mined. This preserves the approved scope while making the boundary explicit.
+
+## N-471 · Student Library và journal giao dịch · 2026-11-15
+
+Student Library dùng lại WalletSession, signed login và API same-origin đã merge. Các thành phần catalog/request/loan chỉ hiển thị dữ liệu qua props; API client và transaction controller sở hữu kiểm tra tiền/calldata, session, journal và recovery để UI có thể nâng cấp độc lập.
+
+Mỗi lần gửi có attempt ID riêng trong journal, scope theo chain/escrow/deployment/account/request/action. Send và reconcile dùng cùng Web Lock; receipt cũ và cache ở tab khác không được ghi đè attempt mới chưa rõ kết quả. Hash ví đã trả được giữ trong bộ nhớ nếu storage hết quota, nhưng lỗi đọc journal vẫn chặn ghi recovery và ký thêm.
+
+Demo Anvil qua manifest chuẩn cần `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=true` và RPC HTTP loopback tường minh; mặc định loader ví tiếp tục từ chối manifest local. Đây là cấu hình demo cùng chain ID, không phải bằng chứng Avalanche L1. Xem [runbook N-471](n471-library-student.md).

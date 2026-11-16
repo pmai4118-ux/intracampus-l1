@@ -16,3 +16,9 @@ test("B04 wallet derives SBT/verifier/signer from L06 and rejects every conflict
   assert.equal(walletConfigFromDeployment({ rpcUrl: "http://127.0.0.1:8545" }, { schemaVersion: 1, abiVersion: 1, chainId: 20261, status: "unconfigured" }).rpcUrl, "http://127.0.0.1:8545");
   assert.throws(() => walletConfigFromDeployment({}, { ...manifest, chainId: 43113 }));
 });
+test('local demo manifest needs explicit opt-in and loopback RPC', () => {
+  const local = { ...manifest, environment: 'local-anvil' };
+  assert.throws(() => walletConfigFromDeployment({ rpcUrl: 'http://127.0.0.1:8545' }, local));
+  assert.equal(walletConfigFromDeployment({ rpcUrl: 'http://127.0.0.1:8545' }, local, true).sbtAddress, local.contracts.StudentSBTIdentity.address);
+  assert.throws(() => walletConfigFromDeployment({ rpcUrl: 'https://rpc.example' }, local, true));
+});

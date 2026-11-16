@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import StudentDemo from "./StudentDemo";
 import { StudentWallet, WalletSession } from "./WalletPanel";
 
 export default function StudentPage() {
   const [mode, setMode] = useState<"live" | "demo">("live");
   return <>
+    <p><Link href="/student/library" className="secondary-btn">Mở thư viện · mượn và trả sách</Link></p>
     <div className="student-mode-switch" role="group" aria-label="Chế độ ví sinh viên">
       <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>Ví thật</button>
       <button type="button" className="secondary-btn" aria-pressed={mode === "demo"} onClick={() => setMode("demo")}>Xem bản minh họa</button>

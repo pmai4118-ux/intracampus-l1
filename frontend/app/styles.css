@@ -34,6 +34,43 @@
   color: var(--ink-primary);
 }
 
+/* Library: keep the Student/POS form system; page components own layout only. */
+.library-shell { width: min(100%, 68rem); margin-inline: auto; padding-block: 1.5rem 4rem; }
+.library-shell h1 { margin: .35rem 0; }
+.library-shell h2 { margin: .45rem 0 1rem; }
+.library-shell h3 { margin: 0 0 .45rem; }
+.library-shell p { line-height: 1.65; }
+.library-heading, .library-wallet, .library-section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.library-heading { margin-bottom: 1.5rem; flex-wrap: wrap; }
+.library-heading header { position: static; }
+.library-section, .library-review, .library-wallet { margin-bottom: 1.25rem; }
+.library-wallet { flex-wrap: wrap; }
+.library-actions { display: flex; gap: .65rem; flex-wrap: wrap; align-items: center; }
+.library-list { list-style: none; padding: 0; margin: 1.25rem 0 0; display: grid; gap: 1rem; }
+.library-book, .library-record { border: 1px solid var(--border-hairline); border-radius: 1rem; padding: 1.15rem; min-width: 0; }
+.library-book { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, .85fr); align-items: start; gap: 1rem; }
+.library-book .metric-note { grid-column: 1 / -1; margin: 0; }
+.library-details { display: grid; grid-template-columns: minmax(7rem, .3fr) minmax(0, 1fr); gap: .6rem 1rem; }
+.library-details dt { font-weight: 600; }
+.library-details dd { margin: 0; min-width: 0; }
+.library-shell code { overflow-wrap: anywhere; word-break: break-word; font-size: .8rem; }
+.library-shell input { width: 100%; min-width: 0; min-height: 2.8rem; padding: .65rem .8rem; border: 1px solid var(--border-hairline); border-radius: .65rem; background: var(--bg-surface); color: inherit; font: inherit; }
+.library-search { display: flex; align-items: end; gap: .75rem; }
+.library-search > div { flex: 1; min-width: 0; }
+.library-shell label { display: block; margin-bottom: .45rem; }
+.library-shell button { white-space: normal; }
+.library-recovery { border-top: 1px solid var(--border-hairline); margin-top: 1rem; padding-top: .65rem; }
+.library-recovery > button { margin-block: .75rem; }
+.library-review { border: 2px solid var(--accent-emerald); scroll-margin-top: 6rem; }
+.library-shell :focus-visible { outline: 3px solid var(--accent-emerald); outline-offset: 4px; }
+@media (max-width: 56rem) { .library-book { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 28rem) {
+  .library-search { align-items: stretch; flex-direction: column; }
+  .library-details { grid-template-columns: minmax(0, 1fr); gap: .3rem; }
+  .library-details dd { margin-bottom: .6rem; }
+  .library-heading > .secondary-btn, .library-actions > button { flex: 1 1 auto; }
+}
+
 *,
 *::before,
 *::after {

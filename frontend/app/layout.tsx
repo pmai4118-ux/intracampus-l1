@@ -22,6 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               IntraCampus L1
             </Link>
             <Link href="/student">Sinh viên</Link>
+            <Link href="/student/library">Thư viện</Link>
             <Link href="/pos">Điểm thu</Link>
           </nav>
         </header>

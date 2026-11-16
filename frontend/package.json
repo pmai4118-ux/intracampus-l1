@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@intracampus/network": "workspace:*",
+    "ethers": "6.15.0",
     "next": "16.4.5",
     "qrcode": "1.5.4",
     "react": "19.3.1",
