@@ -265,8 +265,11 @@ export class LibraryService {
     if (action === "reject" && !((record.status === "PENDING_APPROVAL" && record.copyId !== null)
       || (record.status === "REJECTED_NO_COPY" && record.copyId === null))) throw new LibraryServiceError("CONFLICT", 409);
     if (action === "deposit" && record.status !== "AWAITING_DEPOSIT") throw new LibraryServiceError("CONFLICT", 409);
-    if (action === "refund" && (!(["EXPIRED_REFUND_DUE", "REJECTED_NO_COPY"].includes(record.status))
-      || record.approvalDeadline === null || chain.chainTime < record.approvalDeadline)) throw new LibraryServiceError("CONFLICT", 409);
+    const recoveringRejectedRefund = action === "refund" && record.status === "REJECTED" && record.refundStatus === "REFUNDED";
+    if (action === "refund" && (record.approvalDeadline === null || chain.chainTime < record.approvalDeadline
+      || (!recoveringRejectedRefund && !["EXPIRED_REFUND_DUE", "REJECTED_NO_COPY"].includes(record.status)))) {
+      throw new LibraryServiceError("CONFLICT", 409);
+    }
     if (action === "confirmReturn" && !["APPROVED", "RETURN_REQUESTED"].includes(record.status)) throw new LibraryServiceError("CONFLICT", 409);
     if (action === "return" || action === "settle") {
       const intent = input.settlementIntentId ? this.repository.getSettlementIntent(input.settlementIntentId) : undefined;
@@ -281,6 +284,7 @@ export class LibraryService {
     try { tx = await rpc.getTransaction(input.txHash); }
     catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
     if (!tx) {
+      if (recoveringRejectedRefund) throw new LibraryServiceError("CONFLICT", 409);
       if (confirmed?.status === "CONFIRMED" && settlementAction) {
         throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
       }
@@ -290,6 +294,7 @@ export class LibraryService {
       }
       return { request: await this.getRequest(account, record.requestId), transaction: existing ? this.publicTransaction(existing, record) : null };
     }
+    if (tx.hash.toLowerCase() !== input.txHash.toLowerCase()) throw new LibraryServiceError("CONFLICT", 409);
     const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
     let parsed;
     try { parsed = iface.parseTransaction({ data: tx.data, value: tx.value }); }
@@ -315,28 +320,46 @@ export class LibraryService {
       }
     }
     if (tx.value !== expectedValue) throw new LibraryServiceError("CONFLICT", 409);
+    // The competing librarian refund can close the request before the borrower's first
+    // tracking call. Require a verified revert before recording that attempt.
+    const historicalReceipt = recoveringRejectedRefund ? await this.readTransactionReceipt(input.txHash, chain.safeBlock) : null;
+    if (recoveringRejectedRefund && !historicalReceipt?.revertedBlock) throw new LibraryServiceError("CONFLICT", 409);
     let submitted;
     try { submitted = this.repository.recordTransactionSubmission({ requestId: record.requestId, action, txHash: input.txHash,
       submittedAt: chain.chainTime, ...(settlementAction ? { settlementIntentId: input.settlementIntentId!, librarianWallet: account.wallet } : {}) }); }
     catch (error) { throw serviceFailure(error); }
-    let receipt;
-    try { receipt = await rpc.getTransactionReceipt(input.txHash); }
-    catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
-    if (receipt?.status === 0 && receipt.blockNumber <= chain.safeBlock) {
-      let block;
-      try { block = await rpc.getBlock(receipt.blockNumber); }
-      catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
-      if (block?.hash?.toLowerCase() === receipt.blockHash.toLowerCase()) {
-        try { submitted = this.repository.markTransactionReverted({ requestId: record.requestId, action, txHash: input.txHash,
-          blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, checkedAt: chain.checkedAt }); }
-        catch (error) { throw serviceFailure(error); }
-      }
+    const receipt = historicalReceipt ?? await this.readTransactionReceipt(input.txHash, chain.safeBlock);
+    if (receipt.revertedBlock) {
+      try { submitted = this.repository.markTransactionReverted({ requestId: record.requestId, action, txHash: input.txHash,
+        ...receipt.revertedBlock, checkedAt: chain.checkedAt }); }
+      catch (error) { throw serviceFailure(error); }
     }
-    if (receipt?.status === 1) {
+    if (receipt.successful) {
       await this.reconciled();
       submitted = this.repository.getTransaction(record.requestId, action) ?? submitted;
     }
     return { request: await this.getRequest(account, record.requestId), transaction: this.publicTransaction(submitted, record) };
+  }
+
+  private async readTransactionReceipt(txHash: string, safeBlock: number): Promise<{
+    successful: boolean;
+    revertedBlock?: { blockNumber: number; blockHash: string };
+  }> {
+    const rpc = this.rpcClient();
+    try {
+      const receipt = await rpc.getTransactionReceipt(txHash);
+      if (receipt?.hash.toLowerCase() !== txHash.toLowerCase()) return { successful: false };
+      if (receipt.status === 1) return { successful: true };
+      if (receipt.status === 0 && receipt.blockNumber <= safeBlock) {
+        const block = await rpc.getBlock(receipt.blockNumber);
+        if (block?.number === receipt.blockNumber && block.hash?.toLowerCase() === receipt.blockHash.toLowerCase()) {
+          return { successful: false, revertedBlock: { blockNumber: receipt.blockNumber, blockHash: receipt.blockHash } };
+        }
+      }
+      return { successful: false };
+    } catch {
+      throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
+    }
   }
 
   private async reconciled() {
