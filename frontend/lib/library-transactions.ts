@@ -1,9 +1,10 @@
 import { Interface, type InterfaceAbi } from 'ethers';
-import type { DeployedLibraryDeployment, LibraryRequest } from '@intracampus/network';
+import { campusNetwork, type DeployedLibraryDeployment, type LibraryRequest, type LibraryTransaction } from '@intracampus/network';
 import type { WalletSnapshot, WalletTransaction } from './wallet.ts';
 import { WalletTransactionError } from './wallet.ts';
 import { requireLibraryStudentNotHeld } from './library-session.ts';
-import { LibraryApi, LibraryUiError, bytes32, check } from './library-api.ts';
+import { LibraryApi, LibraryUiError, bytes32, check, libraryTransactionProof } from './library-api.ts';
+import { canClaimLibraryRefund } from './library.ts';
 
 export type StudentAction = 'deposit' | 'refund' | 'payShortfall';
 export type LibraryCall = { requestId: string; action: StudentAction; transaction: WalletTransaction; amountWei: string; recipient: string; refundWei: string; previousHash: string | null };
@@ -21,7 +22,7 @@ export class LibraryTransactions {
   private readonly transient = new Map<string, LibraryJournal>();
   constructor(options: Options) {
     this.options = options;
-    this.deploymentKey = `20261:${options.deployment.escrow.address.toLowerCase()}:${options.deployment.escrow.transactionHash.toLowerCase()}`;
+    this.deploymentKey = `${campusNetwork.chainId}:${options.deployment.escrow.address.toLowerCase()}:${options.deployment.escrow.transactionHash.toLowerCase()}`;
   }
   key(id: string, action: StudentAction) { return `intracampus.library.v1:${this.deploymentKey}:${this.options.account.toLowerCase()}:${id}:${action}`; }
   journal(id: string, action: StudentAction): LibraryJournal | null {
@@ -47,7 +48,10 @@ export class LibraryTransactions {
   }
   private walletReady() {
     const s = this.options.wallet.getSnapshot();
-    if (!s.address || !same(s.address, this.options.account) || s.chainId !== BigInt(20261) || !s.canProceed) throw new LibraryUiError('WALLET_SESSION_CHANGED');
+    if (!s.address || !same(s.address, this.options.account) || s.chainId !== BigInt(campusNetwork.chainId) || !s.canProceed) throw new LibraryUiError('WALLET_SESSION_CHANGED');
+  }
+  confirmedProof(id: string, tx: LibraryTransaction | undefined) {
+    return libraryTransactionProof(tx, id, this.options.deployment.escrow.address, this.options.account);
   }
   async prepare(id: string, action: StudentAction): Promise<LibraryCall> {
     this.walletReady();
@@ -63,10 +67,10 @@ export class LibraryTransactions {
       const i = request.depositIntent, book = d.books.find(b => same(b.bookId, request.bookId));
       if (request.status !== 'AWAITING_DEPOSIT' || !i || !book) throw new LibraryUiError('ACTION_UNAVAILABLE');
       data = iface.encodeFunctionData('deposit', [id, request.bookId]); amountWei = book.depositWei;
-      if (i.chainId !== 20261 || !same(i.to, d.escrow.address) || i.data.toLowerCase() !== data.toLowerCase() || i.valueWei !== amountWei) throw new LibraryUiError('INTENT_MISMATCH');
+      if (i.chainId !== campusNetwork.chainId || !same(i.to, d.escrow.address) || i.data.toLowerCase() !== data.toLowerCase() || i.valueWei !== amountWei) throw new LibraryUiError('INTENT_MISMATCH');
       recipient = d.escrow.address;
     } else if (action === 'refund') {
-      if (request.status !== 'EXPIRED_REFUND_DUE' || request.refundStatus !== 'REFUND_DUE') throw new LibraryUiError('ACTION_UNAVAILABLE');
+      if (!canClaimLibraryRefund(request, (await api.accountStatus()).checkedAt)) throw new LibraryUiError('ACTION_UNAVAILABLE');
       const terms = d.books.find(b => same(b.bookId, request.bookId));
       if (!terms || request.depositWei !== terms.depositWei) throw new LibraryUiError('INTENT_MISMATCH');
       refundWei = request.depositWei;
@@ -127,10 +131,7 @@ export class LibraryTransactions {
     const request = hash ? await this.options.api.track(id, action, hash) : await this.options.api.getRequest(id);
     const tx = request.transactions.find(t => t.action === action);
     if (tx && (!hash || same(tx.txHash, hash)) && !(record?.phase === 'unknown' && !hash && record.previousHash && same(tx.txHash, record.previousHash))) {
-      if (tx.status === 'CONFIRMED') {
-        const p = tx.proof!;
-        if (!same(p.contractAddress, this.options.deployment.escrow.address) || !same(p.borrower, this.options.account)) throw new LibraryUiError('INTENT_MISMATCH');
-      }
+      if (tx.status === 'CONFIRMED' && !this.confirmedProof(id, tx)) throw new LibraryUiError('INTENT_MISMATCH');
       record = { version: 1, attemptId: record?.attemptId ?? crypto.randomUUID(), requestId: id, action, account: this.options.account, deployment: this.deploymentKey,
         hash: tx.txHash, previousHash: record?.previousHash ?? null, phase: tx.status === 'CONFIRMED' ? 'confirmed' : tx.status === 'REVERTED' ? 'reverted' : 'pending' };
       if (JSON.stringify(this.journal(id, action)) !== initialRecord) throw new LibraryUiError('RECOVERY_REQUIRED');

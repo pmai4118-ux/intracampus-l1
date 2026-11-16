@@ -1,4 +1,3 @@
-'use client';
 import type { LibraryBook, LibraryLoan } from '@intracampus/network';
 import { formatWalletBalance } from '../../../lib/chains';
 import { libraryDate, libraryLabels } from '../../../lib/library';

@@ -28,9 +28,9 @@ function parseSession(value: unknown): LibraryStudentSession {
   }
   return { account: { wallet: account.wallet, role: account.role as LibraryStudentSession["account"]["role"] }, expiresAt: body.expiresAt };
 }
-function parseAccountStatus(value: unknown): LibraryAccountStatus {
+export function parseAccountStatus(value: unknown): LibraryAccountStatus {
   const body = object(value);
-  if (typeof body.held !== "boolean" || typeof body.checkedAt !== "number" || !Number.isSafeInteger(body.checkedAt)
+  if (typeof body.held !== "boolean" || typeof body.checkedAt !== "number" || !Number.isSafeInteger(body.checkedAt) || body.checkedAt < 0
     || !Array.isArray(body.blockingLoanIds) || !body.blockingLoanIds.every((id) => typeof id === "string" && /^0x[0-9a-f]{64}$/i.test(id))) {
     throw new LibrarySessionError("INVALID_RESPONSE");
   }

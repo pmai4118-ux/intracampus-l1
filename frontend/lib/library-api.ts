@@ -1,4 +1,6 @@
-import type { LibraryBook, LibraryRequest, LibraryLoan, LibrarySession, LibraryTransactionAction } from '@intracampus/network';
+import { campusNetwork, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibrarySession,
+  type LibraryEventProof, type LibraryTransaction, type LibraryTransactionAction } from '@intracampus/network';
+import { parseAccountStatus } from './library-session.ts';
 
 export class LibraryUiError extends Error {
   readonly code: string;
@@ -12,6 +14,18 @@ export const wei = (v: unknown): v is string => typeof v === 'string' && /^(0|[1
 export const timestamp = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 export const address = (v: unknown): v is `0x${string}` => typeof v === 'string' && /^0x[0-9a-f]{40}$/i.test(v) && !/^0x0{40}$/i.test(v);
 const requestStates = ['AWAITING_DEPOSIT','PENDING_APPROVAL','REJECTED_NO_COPY','REJECTED','EXPIRED_REFUND_DUE','APPROVED','RETURN_REQUESTED','SETTLEMENT_PENDING','RETURNED','LOST_SHORTFALL_DUE','LOST_SETTLED'];
+const eventForAction = {
+  deposit: 'DepositReceived', approve: 'LoanApproved', reject: 'RequestRejected', refund: 'ExpiredRefundClaimed',
+  confirmReturn: 'PhysicalReturnConfirmed', return: 'ReturnSettled', settle: 'LostSettled', payShortfall: 'ShortfallPaid',
+} as const satisfies Record<LibraryTransactionAction, LibraryEventProof['eventName']>;
+
+export function libraryTransactionProof(tx: LibraryTransaction | undefined, requestId: string, escrow: string, borrower?: string) {
+  const proof = tx?.proof;
+  if (tx?.status !== 'CONFIRMED' || !proof || proof.chainId !== campusNetwork.chainId || proof.eventName !== eventForAction[tx.action]
+    || proof.requestId !== requestId || proof.txHash !== tx.txHash || proof.contractAddress.toLowerCase() !== escrow.toLowerCase()
+    || (borrower && proof.borrower.toLowerCase() !== borrower.toLowerCase())) return null;
+  return proof;
+}
 export function parseLibraryBook(value: unknown): LibraryBook {
   const v = object(value);
   check(bytes32(v.bookId) && typeof v.title === 'string' && typeof v.author === 'string' && (v.isbn === null || typeof v.isbn === 'string')
@@ -25,17 +39,19 @@ export function parseLibraryRequest(value: unknown): LibraryRequest {
     && (v.approvalDeadline === null || timestamp(v.approvalDeadline)) && timestamp(v.createdAt) && timestamp(v.updatedAt) && Array.isArray(v.transactions));
   if (v.depositIntent !== null) {
     const i = object(v.depositIntent);
-    check(i.chainId === 20261 && address(i.to) && typeof i.data === 'string' && /^0x(?:[0-9a-f]{2})+$/i.test(i.data)
+    check(i.chainId === campusNetwork.chainId && address(i.to) && typeof i.data === 'string' && /^0x(?:[0-9a-f]{2})+$/i.test(i.data)
       && wei(i.valueWei) && i.requestId === v.requestId && i.bookId === v.bookId);
   }
-  for (const tx of v.transactions) {
-    check(['deposit','approve','reject','refund','confirmReturn','return','settle','payShortfall'].includes(tx.action)
+  for (const item of v.transactions) {
+    const tx = object(item);
+    check(typeof tx.action === 'string' && Object.hasOwn(eventForAction, tx.action)
       && bytes32(tx.txHash) && ['UNKNOWN','SUBMITTED','CONFIRMED','REVERTED'].includes(tx.status) && timestamp(tx.submittedAt));
     if (tx.status === 'CONFIRMED') {
       const p = object(tx.proof);
-      check(p.chainId === 20261 && address(p.contractAddress) && p.requestId === v.requestId && p.txHash === tx.txHash
+      check(p.chainId === campusNetwork.chainId && p.eventName === eventForAction[tx.action as LibraryTransactionAction]
+        && address(p.contractAddress) && p.requestId === v.requestId && p.txHash === tx.txHash
         && address(p.borrower) && bytes32(p.blockHash) && timestamp(p.blockNumber) && timestamp(p.logIndex));
-    }
+    } else check(tx.proof === null);
   }
   return v as LibraryRequest;
 }
@@ -78,13 +94,16 @@ export class LibraryApi {
   }
   async books(q = '') { return list(await this.request(`/api/library/books?q=${encodeURIComponent(q)}`), parseLibraryBook); }
   async requests() { return list(await this.request('/api/library/requests'), parseLibraryRequest); }
+  async accountStatus() { return parseAccountStatus(await this.request('/api/library/account-status')); }
   async getRequest(id: string) { check(bytes32(id)); const r = parseLibraryRequest(await this.request(`/api/library/requests/${id}`)); check(r.requestId === id); return r; }
   async create(bookId: string, idempotencyKey: string) { return parseLibraryRequest(await this.request('/api/library/requests', { bookId, idempotencyKey })); }
   async loans() { return list(await this.request('/api/library/loans'), parseLibraryLoan); }
   async track(id: string, action: LibraryTransactionAction, txHash: string) {
     check(bytes32(id) && bytes32(txHash));
     const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash }));
-    return parseLibraryRequest(result.request);
+    const request = parseLibraryRequest(result.request);
+    check(request.requestId === id);
+    return request;
   }
   async returnBook(id: string) { check(bytes32(id)); await this.request(`/api/library/loans/${id}/return-requests`, {}); }
 }

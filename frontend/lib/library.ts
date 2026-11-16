@@ -1,4 +1,17 @@
 import { librarySessionMessage } from './library-session.ts';
+import type { LibraryRequest, LibraryTransaction } from '@intracampus/network';
+import type { LibraryJournal } from './library-transactions.ts';
+
+export function canClaimLibraryRefund(request: LibraryRequest, chainTime: number | null) {
+  return request.refundStatus === 'REFUND_DUE' && (request.status === 'EXPIRED_REFUND_DUE' || request.status === 'REJECTED_NO_COPY')
+    && chainTime !== null && request.approvalDeadline !== null && chainTime >= request.approvalDeadline;
+}
+
+export function libraryRecoveryDetails(record: LibraryJournal | null | undefined, tx: LibraryTransaction | undefined) {
+  const hash = record ? record.hash : tx?.txHash;
+  const matchedTx = tx && hash?.toLowerCase() === tx.txHash.toLowerCase() ? tx : undefined;
+  return { hash, matchedTx };
+}
 export const libraryLabels: Record<string, string> = {
   AWAITING_DEPOSIT: 'Chờ nộp cọc', PENDING_APPROVAL: 'Đã cọc · chờ thủ thư duyệt', REJECTED_NO_COPY: 'Hết bản · chờ hoàn cọc',
   REJECTED: 'Đã từ chối', EXPIRED_REFUND_DUE: 'Hết hạn duyệt · có thể nhận lại cọc', APPROVED: 'Đã duyệt mượn',

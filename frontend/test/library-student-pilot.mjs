@@ -153,6 +153,32 @@ try {
   const expired = await deposit(2); await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
   await refresh(); await page.getByRole('button', { name: 'Xem hoàn cọc hết hạn' }).click(); await sendReview();
   await page.getByText('Đã hoàn cọc', { exact: true }).waitFor(); assert.equal((await service.getRequest(student, expired.requestId)).refundStatus, 'REFUNDED'); record('expired refund returns original borrower funds');
+  const second = { wallet: accounts[6], role: 'STUDENT' };
+  const bookId = books[2].bookId;
+  const [reserved, noCopy] = await Promise.all([
+    service.createRequest({ account: second, bookId, idempotencyKey: 'pilot-last-copy-first' }),
+    service.createRequest({ account: student, bookId, idempotencyKey: 'pilot-last-copy-second' }),
+  ]);
+  assert.equal((await service.listBooks(student.wallet)).find(book => book.bookId === bookId).copiesAvailable, 1);
+  await (await escrow.connect(signers[6]).deposit(reserved.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+  await (await escrow.connect(signers[3]).deposit(noCopy.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+  await refresh();
+  const missed = await service.getRequest(student, noCopy.request.requestId);
+  assert.equal(missed.status, 'REJECTED_NO_COPY');
+  assert.equal(missed.loanId, null);
+  const noCopyCard = page.locator('li.library-record').filter({ hasText: missed.requestId });
+  const claim = noCopyCard.getByRole('button', { name: 'Xem hoàn cọc hết hạn' });
+  assert.equal(await claim.count(), 0);
+  await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
+  await refresh();
+  await claim.click();
+  await sendReview();
+  await noCopyCard.getByText('Hết bản · đã hoàn cọc', { exact: true }).waitFor();
+  assert.equal(await claim.count(), 0);
+  const refunded = await service.getRequest(student, missed.requestId);
+  assert.equal(refunded.refundStatus, 'REFUNDED');
+  assert.equal(refunded.transactions.find(tx => tx.action === 'refund')?.proof?.eventName, 'ExpiredRefundClaimed');
+  record('last-copy contention preserves one allocation and lets the other borrower claim after deadline');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); record('390px no horizontal overflow');
   await page.keyboard.press('Tab');
   assert.ok(await page.evaluate(() => document.activeElement && document.activeElement !== document.body)); record('keyboard focus and inline confirmation focus');
@@ -169,8 +195,20 @@ try {
   await page.evaluate(() => window.pilotWallet.switchAccount()); await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).waitFor();
   assert.equal(await page.getByText('Đã trả và quyết toán', { exact: true }).count(), 0); record('account switch clears prior private history and requires new login');
   assert.deepEqual(errors, []);
-  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, errors,
-    sourceHash: createHash('sha256').update(readFileSync(join(workspace,'frontend/app/student/library/LibrarySession.tsx'))).digest('hex') }, null, 2));
+  const receipts = await Promise.all(sends.map(async txHash => {
+    const receipt = await provider.getTransactionReceipt(txHash);
+    assert.equal(receipt?.status, 1);
+    const events = receipt.logs.filter(log => log.address.toLowerCase() === library.escrow.address.toLowerCase()).map(log => {
+      const event = escrow.interface.parseLog(log);
+      return { name: event.name, requestId: event.args.requestId, contractAddress: log.address, logIndex: log.index };
+    });
+    return { txHash, status: receipt.status, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, events };
+  }));
+  const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/student/library/LibraryRequests.tsx',
+    'frontend/lib/library-transactions.ts', 'frontend/lib/library-api.ts', 'frontend/test/library-student-pilot.mjs'];
+  const sourceHashes = Object.fromEntries(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(workspace, file))).digest('hex')]));
+  writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, receipts, errors,
+    sourceHashes, manualCore: 'NOT_RUN', avalancheL1: 'NOT_RUN' }, null, 2) + '\n');
 } catch (error) {
   const page = browser?.contexts()[0]?.pages()[0];
   if (page) { await page.screenshot({ path: join(evidenceDir, 'failure.png'), fullPage: true }); console.error(await page.locator('body').innerText()); }

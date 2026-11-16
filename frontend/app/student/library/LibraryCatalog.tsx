@@ -1,4 +1,3 @@
-'use client';
 import { useState } from 'react';
 import type { LibraryBook } from '@intracampus/network';
 import { formatWalletBalance } from '../../../lib/chains';

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getLibraryDeployment, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibraryAccountStatus } from '@intracampus/network';
+import { campusNetwork, getLibraryDeployment, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibraryAccountStatus } from '@intracampus/network';
 import { WalletSession, useCampusWallet } from '../WalletPanel';
 import { formatWalletBalance } from '../../../lib/chains';
 import { LibraryApi, LibraryUiError, check } from '../../../lib/library-api';
@@ -15,16 +15,17 @@ import LibraryRequests from './LibraryRequests';
 export default function LibrarySession() { return <WalletSession><LibraryWallet /></WalletSession>; }
 function LibraryWallet() {
   const { state: wallet, controller } = useCampusWallet();
+  const networkLabel = `IntraCampus · ${campusNetwork.chainId}`;
   return <div className="library-shell">
     <header className="library-heading"><div><span className="eyebrow">IntraCampus / Sinh viên</span><h1>Thư viện</h1>
       <p>Tìm sách, theo dõi lượt mượn và quản lý cọc CAMPUS.</p></div><Link href="/student" className="secondary-btn">Về ví sinh viên</Link></header>
     <section className="surface-panel library-wallet" aria-label="Ví và mạng">
       <div><span className="field-label">Ví đang chọn</span><p><code>{wallet.address ?? 'Chưa kết nối'}</code></p>
-        <span className="network-pill">{wallet.chainId === BigInt(20261) ? 'IntraCampus · 20261' : 'Cần mạng IntraCampus · 20261'}</span>
+        <span className="network-pill">{wallet.chainId === BigInt(campusNetwork.chainId) ? networkLabel : `Cần mạng ${networkLabel}`}</span>
         {wallet.balanceWei !== null ? <p>Số dư: {formatWalletBalance(wallet.balanceWei)}</p> : null}</div>
       <div className="library-actions">
         {!wallet.address ? <button type="button" className="primary-cta-btn" onClick={() => void controller.connect()}>Kết nối ví Core</button> : null}
-        {wallet.address && wallet.chainId !== BigInt(20261) ? <button type="button" className="secondary-btn" onClick={() => void controller.switchNetwork()}>Chuyển mạng IntraCampus</button> : null}
+        {wallet.address && wallet.chainId !== BigInt(campusNetwork.chainId) ? <button type="button" className="secondary-btn" onClick={() => void controller.switchNetwork()}>Chuyển mạng IntraCampus</button> : null}
         {wallet.address ? <button className="secondary-btn" type="button" onClick={() => controller.disconnect()}>Ngắt kết nối</button> : null}
       </div>
       {wallet.message ? <p role="status">{wallet.message}</p> : null}
@@ -56,15 +57,12 @@ function LibraryWorkspace() {
     await api.session(wallet.address);
     if (!active.current) return;
     setAuthenticated(true); setLoading(true); setCall(null);
-    const results = await Promise.allSettled([api.books(query.current), api.requests(), api.loans(), api.request('/api/library/account-status')]);
+    const results = await Promise.allSettled([api.books(query.current), api.requests(), api.loans(), api.accountStatus()]);
     if (!active.current) return;
     if (results[0].status === 'fulfilled') setBooks(results[0].value);
     if (results[1].status === 'fulfilled') setRequests(results[1].value);
     if (results[2].status === 'fulfilled') setLoans(results[2].value);
-    if (results[3].status === 'fulfilled') {
-      const v = results[3].value as LibraryAccountStatus;
-      check(typeof v.held === 'boolean' && Number.isSafeInteger(v.checkedAt) && Array.isArray(v.blockingLoanIds)); setStatus(v);
-    } else setStatus(null);
+    setStatus(results[3].status === 'fulfilled' ? results[3].value : null);
     setLoading(false);
     const failure = results.find(r => r.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
@@ -99,7 +97,7 @@ function LibraryWorkspace() {
     <section className="surface-panel library-section" aria-labelledby="library-session-title" aria-busy={busy}>
       <h2 id="library-session-title">Đăng nhập thư viện</h2>
       <p>Chữ ký đăng nhập xác nhận ví của bạn; không chuyển tiền và không tốn gas.</p>
-      {!authenticated ? <button className="primary-cta-btn" type="button" disabled={busy || !wallet.address || wallet.chainId !== BigInt(20261)} onClick={() => void run(async () => {
+      {!authenticated ? <button className="primary-cta-btn" type="button" disabled={busy || !wallet.address || wallet.chainId !== BigInt(campusNetwork.chainId)} onClick={() => void run(async () => {
         await signInLibraryStudent(wallet.address!, (account, message) => controller.signMessage(account, message)); await refresh();
       })}>Ký đăng nhập thư viện</button> : <div className="library-actions"><span className="network-pill">Đã đăng nhập bằng ví</span>
         <button type="button" className="secondary-btn" disabled={busy} onClick={() => void run(refresh)}>Làm mới trạng thái</button>
@@ -130,7 +128,7 @@ function LibraryWorkspace() {
       })} />
       {call ? <section ref={reviewRef} tabIndex={-1} className="surface-panel library-review" aria-labelledby="review-title">
         <h2 id="review-title">{libraryLabels[call.action]} · kiểm tra trước khi ký</h2>
-        <dl className="library-details"><dt>Ví ký</dt><dd><code>{wallet.address}</code></dd><dt>Mạng</dt><dd>IntraCampus · 20261</dd>
+        <dl className="library-details"><dt>Ví ký</dt><dd><code>{wallet.address}</code></dd><dt>Mạng</dt><dd>IntraCampus · {campusNetwork.chainId}</dd>
           <dt>Hợp đồng escrow</dt><dd><code>{call.transaction.to}</code></dd><dt>Số tiền gửi</dt><dd>{formatWalletBalance(BigInt(call.amountWei))} + gas</dd>
           <dt>Đích nhận tiền</dt><dd><code>{call.recipient}</code></dd><dt>Mã yêu cầu</dt><dd><code>{call.requestId}</code></dd></dl>
         {call.action === 'refund' ? <p>Tiền cọc hoàn về ví: <strong>{formatWalletBalance(BigInt(call.refundWei))}</strong>.</p> : null}
@@ -141,7 +139,8 @@ function LibraryWorkspace() {
           finally { setCall(null); await refresh(); }
         })}>Xác nhận và mở ví</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => setCall(null)}>Hủy</button></div>
       </section> : null}
-      <LibraryRequests requests={requests} books={books} transactions={transactions} busy={busy} blocked={blocked} onPrepare={prepare} onRecover={(id, action, hash) => void run(async () => {
+      <LibraryRequests requests={requests} books={books} transactions={transactions} chainTime={status?.checkedAt ?? null}
+        walletReady={wallet.canProceed} busy={busy} blocked={blocked} onPrepare={prepare} onRecover={(id, action, hash) => void run(async () => {
         if (!transactions) throw new LibraryUiError('CONFIGURATION_ERROR');
         await transactions.reconcile(id, action, hash); await refresh(); setNotice('Đã đối chiếu. Nếu vẫn chưa rõ kết quả, tiếp tục giữ hash và chưa gửi lại.');
       })} />
