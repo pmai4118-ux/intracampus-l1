@@ -11,7 +11,7 @@ Trang `/student/library` dùng ví và session thật, gọi `/api/auth/*` và `
 5. Tìm theo tên/tác giả/ISBN, tạo yêu cầu, đọc cọc/giá thay thế, ví, chain, escrow và quy chế trước khi **Xác nhận và mở ví**. Tạo yêu cầu chưa giữ bản. Cọc xác nhận chỉ chuyển sang chờ thủ thư duyệt; chỉ event approve mở khoản mượn.
 6. Bấm **Làm mới trạng thái** để đọc quyết định thủ thư, receipt mới và thời gian chain đã xác minh. Sinh viên gửi yêu cầu trả, đưa sách cho thủ thư, xem breakdown sau settlement. Khi chain đạt hạn duyệt, ví gốc có thể tự nhận lại cọc nếu còn `REFUND_DUE`, kể cả khi bản cuối đã được gán cho người khác. Sách mất có phần thiếu thì kiểm tra số tiền rồi ký bằng ví đã mượn.
 
-Luồng Thủ thư sẽ có UI trong N-696; pilot dưới đây dùng chính service và ví librarian trên Anvil để tạo các sự kiện upstream đó. Không có nút giả duyệt/thay đổi tiền ở UI Student.
+Luồng Thủ thư tại `/staff/library` dùng session và ví librarian để duyệt, nhận sách và quyết toán. Pilot dưới đây thao tác những bước đó qua UI; hướng dẫn thủ thư nằm trong `docs/n696-library-librarian.md`.
 
 ## Recovery
 
@@ -47,4 +47,4 @@ node frontend/test/library-student-pilot.mjs <disposable-copy> <contracts-out-di
 
 Artifact directory cần bytecode đã build của StudentSBTIdentity, CampusPaymentRegistry, PurposeBoundGrantVault và LibraryDepositEscrow. Playwright dùng Chrome đã cài, chạy headless bằng profile test riêng. Next dùng cổng 3129; cổng phải trống. Không chạy song song hai pilot. Pilot chỉ deploy ví demo/unlocked trên Anvil được chỉ định, seed DB mới, dùng Next + Express thật và provider fixture trong browser harness. Nó không ký bằng Core extension và không phải bằng chứng L1. Script tắt browser/Next/API; người vận hành tắt Anvil riêng sau lượt chạy. Không reset chain/DB của người dùng.
 
-Evidence JSON và screenshot mobile/desktop được ghi cạnh bản sao. Các ca: login cookie thật, search empty, cọc chưa ACTIVE, unknown-send/reload chỉ một broadcast, approve, return/settlement, shortfall30, refund hết hạn, hai yêu cầu tranh bản cuối và tự nhận cọc sau hạn, responsive và đổi ví. N-75 còn phụ trách toàn bộ matrix tích hợp; manual Core/L1 ghi `NOT_RUN` đến khi có bằng chứng riêng.
+Evidence JSON và screenshot mobile/desktop được ghi cạnh bản sao. Các ca gồm login cookie thật, search empty, cọc chưa ACTIVE, unknown-send/reload chỉ một broadcast, approve qua UI thủ thư, return/settlement, shortfall, refund hết hạn, hai yêu cầu tranh bản cuối và tự nhận cọc sau hạn, reject/recovery sau reload, responsive và đổi ví. N-75 còn phụ trách toàn bộ matrix tích hợp; manual Core/L1 ghi `NOT_RUN` đến khi có bằng chứng riêng.

@@ -1,5 +1,6 @@
 import { campusNetwork, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibrarySession,
-  type LibraryEventProof, type LibraryTransaction, type LibraryTransactionAction } from '@intracampus/network';
+  type LibraryEventProof, type LibraryTransaction, type LibraryTransactionAction, type LibraryRole,
+  type LibrarySettlementIntent, type LibrarySettlementIntentRequest } from '@intracampus/network';
 import { parseAccountStatus } from './library-session.ts';
 
 export class LibraryUiError extends Error {
@@ -13,6 +14,7 @@ export const bytes32 = (v: unknown): v is `0x${string}` => typeof v === 'string'
 export const wei = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v) && BigInt(v) < BigInt(2) ** BigInt(256);
 export const timestamp = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 export const address = (v: unknown): v is `0x${string}` => typeof v === 'string' && /^0x[0-9a-f]{40}$/i.test(v) && !/^0x0{40}$/i.test(v);
+export const libraryIntentId = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= 200 && v.trim() === v;
 const requestStates = ['AWAITING_DEPOSIT','PENDING_APPROVAL','REJECTED_NO_COPY','REJECTED','EXPIRED_REFUND_DUE','APPROVED','RETURN_REQUESTED','SETTLEMENT_PENDING','RETURNED','LOST_SHORTFALL_DUE','LOST_SETTLED'];
 const eventForAction = {
   deposit: 'DepositReceived', approve: 'LoanApproved', reject: 'RequestRejected', refund: 'ExpiredRefundClaimed',
@@ -70,6 +72,17 @@ export function parseLibraryLoan(value: unknown): LibraryLoan {
   return v as LibraryLoan;
 }
 function list<T>(value: unknown, parser: (v: unknown) => T): T[] { check(Array.isArray(value)); return value.map(parser); }
+export function parseSettlementIntent(value: unknown): LibrarySettlementIntent {
+  const v = object(value), call = object(v.walletCall), preview = object(v.preview);
+  check(libraryIntentId(v.intentId) && bytes32(v.loanId) && bytes32(v.requestId)
+    && address(v.borrower) && address(v.escrow) && address(v.treasury) && v.chainId === campusNetwork.chainId && timestamp(v.chainTime)
+    && address(call.to) && typeof call.data === 'string' && /^0x(?:[0-9a-f]{2})+$/i.test(call.data) && wei(call.valueWei)
+    && ['RETURNED','LOST'].includes(v.outcome) && preview.outcome === v.outcome);
+  const fields = v.outcome === 'RETURNED' ? ['lateFeeWei','repairFeeWei','overdueForfeitWei','totalRetainedWei','refundWei'] : ['replacementPriceWei','totalRetainedWei','refundWei','shortfallWei'];
+  check(fields.every(key => wei(preview[key])));
+  if (v.outcome === 'RETURNED') check(timestamp(preview.returnedAt) && typeof preview.maintenanceRequired === 'boolean');
+  return v as LibrarySettlementIntent;
+}
 export class LibraryApi {
   readonly fetcher: typeof fetch;
   constructor(fetcher: typeof fetch = fetch) { this.fetcher = (input, init) => fetcher(input, init); }
@@ -86,21 +99,22 @@ export class LibraryApi {
     }
     return data;
   }
-  async session(wallet: string): Promise<LibrarySession> {
+  async session(wallet: string, role: LibraryRole = 'STUDENT'): Promise<LibrarySession> {
     const s = object(await this.request('/api/auth/session'));
     check(address(s.account?.wallet) && ['STUDENT','LIBRARIAN'].includes(s.account.role) && timestamp(s.expiresAt));
-    if (s.account.wallet.toLowerCase() !== wallet.toLowerCase() || s.account.role !== 'STUDENT') throw new LibraryUiError('WALLET_SESSION_CHANGED');
+    if (s.account.wallet.toLowerCase() !== wallet.toLowerCase() || s.account.role !== role) throw new LibraryUiError('WALLET_SESSION_CHANGED');
     return s as LibrarySession;
   }
   async books(q = '') { return list(await this.request(`/api/library/books?q=${encodeURIComponent(q)}`), parseLibraryBook); }
-  async requests() { return list(await this.request('/api/library/requests'), parseLibraryRequest); }
+  async requests(queue = false) { return list(await this.request(`/api/library/requests${queue ? '?queue=true' : ''}`), parseLibraryRequest); }
   async accountStatus() { return parseAccountStatus(await this.request('/api/library/account-status')); }
   async getRequest(id: string) { check(bytes32(id)); const r = parseLibraryRequest(await this.request(`/api/library/requests/${id}`)); check(r.requestId === id); return r; }
   async create(bookId: string, idempotencyKey: string) { return parseLibraryRequest(await this.request('/api/library/requests', { bookId, idempotencyKey })); }
   async loans() { return list(await this.request('/api/library/loans'), parseLibraryLoan); }
-  async track(id: string, action: LibraryTransactionAction, txHash: string) {
+  async settlementIntent(id: string, input: LibrarySettlementIntentRequest) { check(bytes32(id)); const result = parseSettlementIntent(await this.request(`/api/library/loans/${id}/settlement-intents`, input)); check(result.loanId === id && result.outcome === input.outcome); return result; }
+  async track(id: string, action: LibraryTransactionAction, txHash: string, settlementIntentId?: string) {
     check(bytes32(id) && bytes32(txHash));
-    const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash }));
+    const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash, ...(settlementIntentId ? { settlementIntentId } : {}) }));
     const request = parseLibraryRequest(result.request);
     check(request.requestId === id);
     return request;

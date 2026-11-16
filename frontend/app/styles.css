@@ -55,6 +55,9 @@
 .library-details dd { margin: 0; min-width: 0; }
 .library-shell code { overflow-wrap: anywhere; word-break: break-word; font-size: .8rem; }
 .library-shell input { width: 100%; min-width: 0; min-height: 2.8rem; padding: .65rem .8rem; border: 1px solid var(--border-hairline); border-radius: .65rem; background: var(--bg-surface); color: inherit; font: inherit; }
+.library-shell input[type="checkbox"] { width: auto; min-height: auto; margin-right: .5rem; }
+.library-shell select, .library-shell textarea { width: 100%; min-width: 0; padding: .65rem .8rem; border: 1px solid var(--border-hairline); border-radius: .65rem; background: var(--bg-surface); color: inherit; font: inherit; }
+.library-shell textarea { min-height: 6rem; resize: vertical; }
 .library-search { display: flex; align-items: end; gap: .75rem; }
 .library-search > div { flex: 1; min-width: 0; }
 .library-shell label { display: block; margin-bottom: .45rem; }

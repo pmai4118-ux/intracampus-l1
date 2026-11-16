@@ -1,4 +1,4 @@
-import type { LibraryAccountStatus } from "@intracampus/network";
+import type { LibraryAccountStatus, LibraryRole } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
 
 export type LibraryStudentSession = { account: { wallet: string; role: "STUDENT" | "LIBRARIAN" }; expiresAt: number };
@@ -69,13 +69,13 @@ export async function readLibraryStudentAccess(wallet: string, fetcher: typeof f
   }
 }
 
-export async function signInLibraryStudent(wallet: string, signMessage: (account: string, message: string) => Promise<string>,
-  fetcher: typeof fetch = fetch): Promise<LibraryStudentAccess> {
+export async function signInLibraryWallet(wallet: string, role: LibraryRole,
+  signMessage: (account: string, message: string) => Promise<string>, fetcher: typeof fetch = fetch): Promise<void> {
   if (!isWalletAddress(wallet)) throw new LibrarySessionError("WALLET_REQUIRED");
   const existing = await currentSession(fetcher);
   if (existing?.account.wallet.toLowerCase() === wallet.toLowerCase()) {
-    if (existing.account.role !== "STUDENT") throw new LibrarySessionError("FORBIDDEN");
-    return readLibraryStudentAccess(wallet, fetcher);
+    if (existing.account.role !== role) throw new LibrarySessionError("FORBIDDEN");
+    return;
   }
   const challengeResponse = await request(fetcher, "/api/auth/challenge", { method: "POST",
     headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet }) });
@@ -94,9 +94,14 @@ export async function signInLibraryStudent(wallet: string, signMessage: (account
   let verified: LibraryStudentSession;
   try { verified = parseSession(await verifyResponse.json()); }
   catch { throw new LibrarySessionError("INVALID_RESPONSE"); }
-  if (verified.account.wallet.toLowerCase() !== wallet.toLowerCase() || verified.account.role !== "STUDENT") {
+  if (verified.account.wallet.toLowerCase() !== wallet.toLowerCase() || verified.account.role !== role) {
     throw new LibrarySessionError("WALLET_SESSION_CHANGED");
   }
+}
+
+export async function signInLibraryStudent(wallet: string, signMessage: (account: string, message: string) => Promise<string>,
+  fetcher: typeof fetch = fetch): Promise<LibraryStudentAccess> {
+  await signInLibraryWallet(wallet, "STUDENT", signMessage, fetcher);
   return readLibraryStudentAccess(wallet, fetcher);
 }
 

@@ -599,7 +599,9 @@ export class LibraryRepository {
           case "RequestRejected": {
             const hasHeldCopy = request.status === "PENDING_APPROVAL" && request.copy_id !== null;
             const isNoCopyRefund = request.status === "REJECTED_NO_COPY" && request.copy_id === null;
-            if ((!hasHeldCopy && !isNoCopyRefund) || String(request.deposit_wei) !== event.refundWei) {
+            const expiredRefundDue = request.status === "EXPIRED_REFUND_DUE" && request.refund_status === "REFUND_DUE"
+              && request.copy_id === null && request.approval_deadline !== null && event.blockTimestamp >= Number(request.approval_deadline);
+            if ((!hasHeldCopy && !isNoCopyRefund && !expiredRefundDue) || String(request.deposit_wei) !== event.refundWei) {
               throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
             }
             if (hasHeldCopy) releaseCopy(request.copy_id!, "PENDING_APPROVAL");
@@ -974,7 +976,7 @@ export class LibraryRepository {
     const rows = queue
       ? this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE (r.status = 'PENDING_APPROVAL' AND r.copy_id IS NOT NULL)
-          OR (r.status = 'REJECTED_NO_COPY' AND r.copy_id IS NULL) ORDER BY r.created_at, r.request_id`).all()
+          OR (r.status = 'REJECTED_NO_COPY' AND r.refund_status = 'REFUND_DUE' AND r.copy_id IS NULL) ORDER BY r.created_at, r.request_id`).all()
       : this.db.prepare(`SELECT r.*, a.wallet FROM borrow_requests r JOIN accounts a USING(account_id)
         WHERE a.wallet = ? COLLATE NOCASE ORDER BY r.created_at DESC, r.request_id`).all(wallet);
     return rows.map((row) => rowToRequest(row)!).filter(Boolean);
