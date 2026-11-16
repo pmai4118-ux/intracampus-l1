@@ -64,17 +64,20 @@ try {
   writeFileSync(join(workspace, 'deployments/intracampus.json'), JSON.stringify(manifest));
   const { LibraryRepository } = await importFrom('backend/src/modules/library/library.repository.ts');
   const { LibraryService } = await importFrom('backend/src/modules/library/library.service.ts');
+  const { LibraryReceiptVerifier } = await importFrom('backend/src/modules/library/library.verifier.ts');
   const { AuthService } = await importFrom('backend/src/modules/auth/auth.service.ts');
   const { AuthRepository } = await importFrom('backend/src/modules/auth/auth.repository.ts');
-  repository = new LibraryRepository(join(evidenceDir, `pilot-${Date.now()}.sqlite`));
+  const databasePath = join(evidenceDir, `pilot-${Date.now()}.sqlite`);
+  repository = new LibraryRepository(databasePath);
   repository.seedDemo({ version: 1, books: books.map((b, i) => ({ ...b, title: titles[i], author: 'Tác giả demo', isbn: null,
     copies: [{ copyId: `copy-${i}`, barcode: `demo-${i}` }] })), accounts: [{ wallet: accounts[3], role: 'STUDENT' }, { wallet: accounts[6], role: 'STUDENT' }, { wallet: accounts[1], role: 'LIBRARIAN' }] });
   let clockOffset = block.timestamp - Math.floor(Date.now() / 1000); const now = () => Math.floor(Date.now() / 1000) + clockOffset;
   const authConfig = { origin, domain: new URL(origin).host, chainId: 20261, challengeTtlSeconds: 300, sessionTtlSeconds: 864000,
     challengeRateLimit: { maxRequests: 30, windowSeconds: 60 }, verifyRateLimit: { maxRequests: 30, windowSeconds: 60 },
     trustedProxyAddresses: ['127.0.0.1','::1'], cookieName: 'library_session', secureCookie: false };
-  service = new LibraryService(repository, { deployment: manifest, allowLocal: true, rpcUrl,
-    chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, now });
+  const serviceOptions = { deployment: manifest, allowLocal: true, rpcUrl,
+    chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, now };
+  service = new LibraryService(repository, serviceOptions);
   const auth = new AuthService(new AuthRepository(repository), authConfig, now);
   apiServer = createServer(createApp(rpcUrl, undefined, undefined, undefined, auth, authConfig, service)).listen(0, '127.0.0.1'); await once(apiServer, 'listening');
   next = spawn(process.execPath, ['server.mjs','--dev','--hostname','127.0.0.1','--port','3129'], { cwd: join(workspace,'frontend'), windowsHide: true,
@@ -87,9 +90,18 @@ try {
   const { chromium } = await import(pathToFileURL(join(playwrightDir, 'index.mjs')).href);
   browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let beforeStudentBroadcast;
   await context.exposeBinding('pilotRpc', async (_source, { method, params }) => {
     if (method === 'personal_sign') return provider.send('eth_sign', [params[1], params[0]]);
+    let waitForReceipt = false;
+    if (method === 'eth_sendTransaction' && beforeStudentBroadcast) {
+      const run = beforeStudentBroadcast;
+      beforeStudentBroadcast = undefined;
+      params = await run(params);
+      waitForReceipt = true;
+    }
     const result = await provider.send(method, params);
+    if (waitForReceipt) await provider.waitForTransaction(result, 1, 30000);
     if (method === 'eth_sendTransaction') sends.push(result);
     return result;
   });
@@ -113,12 +125,21 @@ try {
   await page.getByText('Chưa có sách phù hợp.', { exact: false }).waitFor(); record('search empty state');
   await page.getByLabel('Tên sách, tác giả hoặc ISBN').fill(''); await page.getByRole('button', { name: 'Tìm sách', exact: true }).click();
   const student = { wallet: accounts[3], role: 'STUDENT' };
+  const librarian = { wallet: accounts[1], role: 'LIBRARIAN' };
+  const staffEscrow = escrow.connect(signers[1]);
   // Separate browser contexts preserve separate Student and LIBRARIAN cookies.
   // Both wallets use unlocked accounts on the dedicated Anvil, never a real key.
   const staffContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  let beforeStaffBroadcast;
   await staffContext.exposeBinding('pilotRpc', async (_source, { method, params }) => {
     if (method === 'personal_sign') return provider.send('eth_sign', [params[1], params[0]]);
+    const prepare = method === 'eth_sendTransaction' && beforeStaffBroadcast;
+    if (prepare) {
+      beforeStaffBroadcast = undefined;
+      params = await prepare(params);
+    }
     const result = await provider.send(method, params);
+    if (prepare) await provider.waitForTransaction(result, 1, 30000);
     if (method === 'eth_sendTransaction') sends.push(result);
     return result;
   });
@@ -293,7 +314,7 @@ try {
     if (unknown) await page.evaluate(() => { window.pilotWallet.unknown = true; });
     await sendReview();
     await page.getByText('Đã cọc · chờ thủ thư duyệt', { exact: true }).first().waitFor();
-    const request = (await service.listRequests(student)).find(r => r.bookId === books[index].bookId); assert.ok(request); return request;
+    const request = (await service.listRequests(student)).find(r => r.bookId === books[index].bookId && r.status === 'PENDING_APPROVAL'); assert.ok(request); return request;
   }
   const request = await deposit(0, true); assert.equal((await service.listLoans(student)).length, 0); record('real deposit is pending approval, never ACTIVE');
   await page.reload(); await page.getByText('Đã cọc · chờ thủ thư duyệt', { exact: true }).waitFor();
@@ -351,38 +372,193 @@ try {
   assert.equal(await staffPage.getByRole('article', { name: `Yêu cầu ${rejected.requestId}` }).count(), 0);
   record('unknown reject remains recoverable after queue removal and reload');
   record('a corrupt staff journal does not hide healthy entries or the dashboard');
-  const second = { wallet: accounts[6], role: 'STUDENT' };
-  const bookId = books[2].bookId;
-  const [reserved, noCopy] = await Promise.all([
-    service.createRequest({ account: second, bookId, idempotencyKey: 'pilot-last-copy-first' }),
-    service.createRequest({ account: student, bookId, idempotencyKey: 'pilot-last-copy-second' }),
-  ]);
-  assert.equal((await service.listBooks(student.wallet)).find(book => book.bookId === bookId).copiesAvailable, 1);
-  await (await escrow.connect(signers[6]).deposit(reserved.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
-  await (await escrow.connect(signers[3]).deposit(noCopy.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
-  await refresh();
-  const missed = await service.getRequest(student, noCopy.request.requestId);
-  assert.equal(missed.status, 'REJECTED_NO_COPY');
-  assert.equal(missed.loanId, null);
-  const noCopyCard = page.locator('li.library-record').filter({ hasText: missed.requestId });
-  const claim = noCopyCard.getByRole('button', { name: 'Xem hoàn cọc hết hạn' });
-  assert.equal(await claim.count(), 0);
-  await refreshStaff();
-  const staffNoCopy = staffPage.getByRole('article', { name: `Yêu cầu ${missed.requestId}` });
-  await staffNoCopy.getByRole('button', { name: 'Từ chối' }).waitFor();
-  await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
-  await refresh();
+  async function prepareNoCopyRefund(index) {
+    const second = { wallet: accounts[6], role: 'STUDENT' };
+    const bookId = books[index].bookId;
+    const [reserved, noCopy] = await Promise.all([
+      service.createRequest({ account: second, bookId, idempotencyKey: `pilot-last-copy-first-${index}` }),
+      service.createRequest({ account: student, bookId, idempotencyKey: `pilot-last-copy-second-${index}` }),
+    ]);
+    assert.equal((await service.listBooks(student.wallet)).find(book => book.bookId === bookId).copiesAvailable, 1);
+    await (await escrow.connect(signers[6]).deposit(reserved.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+    await (await escrow.connect(signers[3]).deposit(noCopy.request.requestId, bookId, { value: fixture.policy.depositWei })).wait();
+    await refresh();
+    const { requestId } = noCopy.request;
+    const missed = await service.getRequest(student, requestId);
+    assert.equal(missed.status, 'REJECTED_NO_COPY');
+    assert.equal(missed.loanId, null);
+    const card = page.locator('li.library-record').filter({ hasText: requestId });
+    const claim = card.getByRole('button', { name: 'Xem hoàn cọc hết hạn' });
+    assert.equal(await claim.count(), 0);
+    await refreshStaff();
+    const staffCard = staffPage.getByRole('article', { name: 'Yêu cầu ' + requestId });
+    await staffCard.getByRole('button', { name: 'Từ chối' }).waitFor();
+    await provider.send('evm_increaseTime', [86401]); await provider.send('evm_mine', []); clockOffset += 86401;
+    await refresh();
+    return { requestId, card, claim, staffCard };
+  }
+  const { requestId: missedId, card: noCopyCard, claim, staffCard: staffNoCopy } = await prepareNoCopyRefund(2);
   await claim.click();
   await sendReview();
   await noCopyCard.getByText('Hết bản · đã hoàn cọc', { exact: true }).waitFor();
   assert.equal(await claim.count(), 0);
-  const refunded = await service.getRequest(student, missed.requestId);
+  const refunded = await service.getRequest(student, missedId);
   assert.equal(refunded.refundStatus, 'REFUNDED');
   assert.equal(refunded.transactions.find(tx => tx.action === 'refund')?.proof?.eventName, 'ExpiredRefundClaimed');
   record('last-copy contention preserves one allocation and lets the other borrower claim after deadline');
   await refreshStaff();
   assert.equal(await staffNoCopy.count(), 0);
   record('a no-copy request leaves the staff queue once the borrower refund is verified');
+  const race = await prepareNoCopyRefund(0);
+  await race.claim.click();
+  await page.getByRole('heading', { name: 'Nhận lại cọc hết hạn · kiểm tra trước khi ký' }).waitFor();
+  let librarianRefundHash;
+  beforeStudentBroadcast = async ([tx]) => {
+    assert.equal(tx.data, escrow.interface.encodeFunctionData('claimExpiredRefund', [race.requestId]));
+    const balance = await provider.getBalance(student.wallet);
+    const librarianRefund = await (await staffEscrow.reject(race.requestId)).wait();
+    assert.equal(librarianRefund.status, 1);
+    assert.equal((await provider.getBalance(student.wallet)) - balance, BigInt(fixture.policy.depositWei));
+    librarianRefundHash = librarianRefund.hash;
+    // The approved demo transaction lands after the librarian's refund.
+    return [{ ...tx, gas: '0x30d40' }];
+  };
+  const sendsBeforeRace = sends.length;
+  await sendReview();
+  const borrowerClaimHash = sends.at(-1);
+  const claimHistory = race.card.locator('.library-recovery').filter({ hasText: 'Nhận lại cọc hết hạn' });
+  await race.card.getByText('Đã hoàn cọc', { exact: true }).waitFor();
+  await claimHistory.getByText('Giao dịch thất bại', { exact: false }).waitFor();
+  await claimHistory.getByText(borrowerClaimHash, { exact: true }).waitFor();
+  await race.card.getByText(librarianRefundHash, { exact: true }).waitFor();
+  await page.reload();
+  await race.card.getByText('Đã hoàn cọc', { exact: true }).waitFor();
+  await claimHistory.getByText('Giao dịch thất bại', { exact: false }).waitFor();
+  await claimHistory.getByRole('button', { name: 'Đối chiếu nhận lại cọc hết hạn' }).click();
+  await page.getByText('Đã đối chiếu. Nếu vẫn chưa rõ kết quả', { exact: false }).waitFor();
+  await claimHistory.getByText('Giao dịch thất bại', { exact: false }).waitFor();
+  assert.equal(sends.length, sendsBeforeRace + 1);
+  await assert.rejects(service.submitTransaction(student, race.requestId, { action: 'refund', txHash: id('unrelated-refund') }), /CONFLICT/);
+  const settledRace = await service.getRequest(student, race.requestId);
+  assert.equal(settledRace.refundStatus, 'REFUNDED');
+  assert.equal(settledRace.transactions.find(tx => tx.action === 'refund')?.status, 'REVERTED');
+  const refundRace = { requestId: race.requestId, librarianRefundHash, borrowerClaimHash };
+  await race.card.screenshot({ path: join(evidenceDir, 'student-refund-race.png') });
+  record('librarian refund and borrower revert stay distinct after reload and repeat tracking without a resend');
+
+  async function submitAfterDeadline(request, action, button, afterExpiry) {
+    await refreshStaff();
+    await staffPage.getByRole('article', { name: `Yêu cầu ${request.requestId}` })
+      .getByRole('button', { name: button, exact: true }).click();
+    beforeStaffBroadcast = async ([tx]) => {
+      assert.equal(tx.data, escrow.interface.encodeFunctionData(action, [request.requestId]));
+      await provider.send('evm_increaseTime', [86401]);
+      await provider.send('evm_mine', []);
+      clockOffset += 86401;
+      const expired = await service.getRequest(student, request.requestId);
+      assert.equal(expired.status, 'EXPIRED_REFUND_DUE');
+      assert.equal(expired.refundStatus, 'REFUND_DUE');
+      return [await afterExpiry(tx)];
+    };
+    const before = sends.length;
+    await staffPage.getByRole('button', { name: 'Xác nhận và mở ví', exact: true }).click();
+    for (let attempt = 0; sends.length === before && attempt < 100; attempt++) await delay(100);
+    assert.equal(sends.length, before + 1, 'staff must broadcast the queued transaction exactly once');
+    return sends.at(-1);
+  }
+  async function copiesAvailable(bookId) {
+    return (await service.listBooks(student.wallet)).find(book => book.bookId === bookId).copiesAvailable;
+  }
+  const rejectAfterExpiry = await deposit(3);
+  const replacementBorrower = { wallet: accounts[6], role: 'STUDENT' };
+  let replacementRequestId, replacementCopyId, refundBalanceBefore, rejectionCursorBefore;
+  const lateRejectHash = await submitAfterDeadline(rejectAfterExpiry, 'reject', 'Từ chối', async tx => {
+    assert.equal(await copiesAvailable(rejectAfterExpiry.bookId), 1);
+    const replacement = await service.createRequest({ account: replacementBorrower, bookId: rejectAfterExpiry.bookId,
+      idempotencyKey: 'pilot-reassigned-after-expiry' });
+    replacementRequestId = replacement.request.requestId;
+    await (await escrow.connect(signers[6]).deposit(replacementRequestId, rejectAfterExpiry.bookId, { value: fixture.policy.depositWei })).wait();
+    assert.equal((await service.getRequest(replacementBorrower, replacementRequestId)).status, 'PENDING_APPROVAL');
+    replacementCopyId = repository.getRequest(replacementRequestId).copyId;
+    assert.ok(replacementCopyId);
+    assert.equal(await copiesAvailable(rejectAfterExpiry.bookId), 0);
+    refundBalanceBefore = await provider.getBalance(student.wallet);
+    rejectionCursorBefore = repository.reconcileState().cursorBlock;
+    return tx;
+  });
+  const lateRejectJournal = recoveryRegion.getByRole('article').filter({ hasText: lateRejectHash });
+  await lateRejectJournal.getByText('Đã xác minh RequestRejected', { exact: false }).waitFor();
+  const lateRejectReceipt = await provider.getTransactionReceipt(lateRejectHash);
+  const lateRejectBlock = await provider.getBlock(lateRejectReceipt.blockNumber);
+  const refundWei = (await provider.getBalance(student.wallet)) - refundBalanceBefore;
+  assert.equal(refundWei.toString(), fixture.policy.depositWei);
+  assert.equal(lateRejectReceipt.status, 1);
+  assert.ok(lateRejectBlock.timestamp >= rejectAfterExpiry.approvalDeadline);
+  const lateRejected = await service.getRequest(student, rejectAfterExpiry.requestId);
+  assert.equal(lateRejected.status, 'REJECTED');
+  assert.equal(lateRejected.refundStatus, 'REFUNDED');
+  assert.equal(repository.getRequest(replacementRequestId).copyId, replacementCopyId);
+  assert.equal(await copiesAvailable(rejectAfterExpiry.bookId), 0);
+  const rejectionCursorAfter = repository.reconcileState().cursorBlock;
+  assert.ok(rejectionCursorBefore < lateRejectReceipt.blockNumber);
+  assert.ok(rejectionCursorAfter >= lateRejectReceipt.blockNumber);
+  await lateRejectJournal.screenshot({ path: join(evidenceDir, 'staff-late-rejection.png') });
+  record('late staff rejection refunds 50 CAMPUS and advances the cursor without releasing the reassigned copy');
+
+  const apiPort = apiServer.address().port;
+  apiServer.closeAllConnections();
+  await new Promise(done => apiServer.close(done));
+  apiServer = null;
+  service.close();
+  repository.close();
+  repository = new LibraryRepository(databasePath);
+  service = new LibraryService(repository, serviceOptions);
+  const restartedAuth = new AuthService(new AuthRepository(repository), authConfig, now);
+  apiServer = createServer(createApp(rpcUrl, undefined, undefined, undefined, restartedAuth, authConfig, service)).listen(apiPort, '127.0.0.1');
+  await once(apiServer, 'listening');
+  const rejectionLog = lateRejectReceipt.logs.find(log => log.topics[0] === escrow.interface.getEvent('RequestRejected').topicHash);
+  const verifier = new LibraryReceiptVerifier(provider, library);
+  const rejectionEvent = await verifier.verify(rejectionLog, rejectionCursorAfter, now());
+  assert.equal(rejectionEvent.refundWei, fixture.policy.depositWei);
+  const restartCursor = repository.reconcileState().cursorBlock;
+  assert.ok(restartCursor >= rejectionCursorAfter);
+  const replay = repository.recordVerifiedChainEvents([rejectionEvent], restartCursor, now(), JSON.stringify(fixture.policy));
+  assert.equal(replay.duplicates, 1);
+  assert.equal(replay.applied, 0);
+  assert.equal(repository.reconcileState().cursorBlock, restartCursor);
+  assert.equal((await service.getRequest(student, rejectAfterExpiry.requestId)).refundStatus, 'REFUNDED');
+  assert.equal(repository.getRequest(replacementRequestId).copyId, replacementCopyId);
+  const restartedCatalog = await context.request.get(origin + '/api/library/books');
+  assert.equal(restartedCatalog.status(), 200);
+  const catalogAfterRestart = (await restartedCatalog.json()).find(book => book.bookId === rejectAfterExpiry.bookId).copiesAvailable;
+  assert.equal(catalogAfterRestart, 0);
+  record('reopened backend and replayed the canonical late rejection with no inventory or cursor regression');
+
+  const approveAfterExpiry = await deposit(2);
+  const sendsBeforeApproval = sends.length;
+  const lateApproveHash = await submitAfterDeadline(approveAfterExpiry, 'approve', 'Duyệt', async tx => ({ ...tx, gas: '0x30d40' }));
+  const approvalJournal = recoveryRegion.getByRole('article').filter({ hasText: lateApproveHash });
+  await approvalJournal.getByText(/· reverted/).waitFor();
+  const lateApproveReceipt = await provider.getTransactionReceipt(lateApproveHash);
+  const lateApproveBlock = await provider.getBlock(lateApproveReceipt.blockNumber);
+  assert.equal(lateApproveReceipt.status, 0);
+  assert.ok(lateApproveBlock.timestamp >= approveAfterExpiry.approvalDeadline);
+  await assert.rejects(service.submitTransaction(librarian, approveAfterExpiry.requestId, { action: 'approve', txHash: id('unrelated-approval') }), /CONFLICT/);
+  await staffPage.reload();
+  await approvalJournal.getByText(/· reverted/).waitFor();
+  const trackedAgain = staffPage.waitForResponse(response => response.request().method() === 'POST'
+    && new URL(response.url()).pathname === `/api/library/requests/${approveAfterExpiry.requestId}/transactions`);
+  await approvalJournal.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
+  assert.equal((await trackedAgain).status(), 200);
+  await approvalJournal.getByText(/· reverted/).waitFor();
+  assert.equal(sends.length, sendsBeforeApproval + 1);
+  const lateApproval = await service.getRequest(student, approveAfterExpiry.requestId);
+  assert.equal(lateApproval.status, 'EXPIRED_REFUND_DUE');
+  assert.equal(lateApproval.loanId, null);
+  assert.equal(lateApproval.transactions.find(tx => tx.txHash === lateApproveHash)?.status, 'REVERTED');
+  await approvalJournal.screenshot({ path: join(evidenceDir, 'staff-approval-revert.png') });
+  record('late approval revert survives staff reload and same-hash reconciliation without a new send or loan');
+
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); record('390px no horizontal overflow');
   await page.keyboard.press('Tab');
   assert.ok(await page.evaluate(() => document.activeElement && document.activeElement !== document.body)); record('keyboard focus and inline confirmation focus');
@@ -418,25 +594,33 @@ try {
   await page.evaluate(() => window.pilotWallet.switchAccount()); await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).waitFor();
   assert.equal(await page.getByText('Đã trả và quyết toán', { exact: true }).count(), 0); record('account switch clears prior private history and requires new login');
   assert.deepEqual(errors, []);
-  const receipts = await Promise.all(sends.map(async txHash => {
+  const receipts = await Promise.all([...sends, librarianRefundHash].map(async txHash => {
     const receipt = await provider.getTransactionReceipt(txHash);
-    assert.equal(receipt?.status, 1);
+    assert.equal(receipt?.status, [borrowerClaimHash, lateApproveHash].includes(txHash) ? 0 : 1);
     const events = receipt.logs.filter(log => log.address.toLowerCase() === library.escrow.address.toLowerCase()).map(log => {
       try { const event = escrow.interface.parseLog(log); return { name: event.name, requestId: event.args.requestId, contractAddress: log.address, logIndex: log.index }; }
       catch { return null; }
     }).filter(Boolean);
     return { txHash, status: receipt.status, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, events };
   }));
+  assert.equal(receipts.find(receipt => receipt.txHash === librarianRefundHash)?.events[0]?.name, 'RequestRejected');
   for (const event of ['LoanApproved', 'PhysicalReturnConfirmed', 'ReturnSettled', 'LostSettled']) {
     assert.ok(receipts.some(receipt => receipt.events.some(item => item.name === event)), `missing ${event} escrow event`);
   }
   record('staff librarian flows complete on isolated stack with no errors');
   const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/student/library/LibraryRequests.tsx', 'frontend/app/staff/library/LibraryStaffSession.tsx',
     'frontend/lib/library-transactions.ts', 'frontend/lib/library-api.ts', 'frontend/lib/library-session.ts',
-    'backend/src/modules/library/library.repository.ts', 'frontend/test/library-student-pilot.mjs'];
+    'backend/src/modules/library/library.repository.ts', 'backend/src/modules/library/library.service.ts', 'frontend/test/library-student-pilot.mjs'];
   const sourceHashes = Object.fromEntries(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(workspace, file))).digest('hex')]));
   writeFileSync(join(evidenceDir, 'evidence.json'), JSON.stringify({ environment: 'local-anvil', chainId: 20261, cases, sends, receipts, errors,
-    sourceHashes, manualCore: 'NOT_RUN', avalancheL1: 'NOT_RUN' }, null, 2) + '\n');
+    refundRace, librarianDeadlines: {
+      rejection: { requestId: rejectAfterExpiry.requestId, txHash: lateRejectHash, deadline: rejectAfterExpiry.approvalDeadline,
+        blockTimestamp: lateRejectBlock.timestamp, refundWei: refundWei.toString(), status: lateRejected.status,
+        refundStatus: lateRejected.refundStatus, replacementRequestId, replacementCopyId, copiesAvailable: catalogAfterRestart,
+        cursorBefore: rejectionCursorBefore, cursorAfter: rejectionCursorAfter, restartCursor, replay },
+      approval: { requestId: approveAfterExpiry.requestId, txHash: lateApproveHash, deadline: approveAfterExpiry.approvalDeadline,
+        blockTimestamp: lateApproveBlock.timestamp, status: lateApproval.status, transactionStatus: 'REVERTED', loanId: lateApproval.loanId },
+    }, sourceHashes, manualCore: 'NOT_RUN', avalancheL1: 'NOT_RUN' }, null, 2) + '\n');
 } catch (error) {
   for (const [index, context] of (browser?.contexts() ?? []).entries()) {
     const page = context.pages()[0];

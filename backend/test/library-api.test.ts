@@ -78,9 +78,11 @@ const seed: LibraryDemoSeed = {
 class FakeLibraryRpc implements LibraryRpcClient {
   chainId = 20261n;
   chainTime = now;
+  headNumber = 500;
   available = true;
   transactions = new Map<string, TransactionResponse>();
   receipts = new Map<string, TransactionReceipt>();
+  logs: Log[] = [];
   liveReplacementPriceWei = replacementPriceWei;
   termsReads = 0;
   failingBlockNumber: number | null = null;
@@ -91,13 +93,13 @@ class FakeLibraryRpc implements LibraryRpcClient {
   }
   async getBlock(tag: "latest" | number) {
     if (!this.available) throw new Error("rpc down");
-    const number = tag === "latest" ? 500 : tag;
+    const number = tag === "latest" ? this.headNumber : tag;
     if (number === this.failingBlockNumber) throw new Error("block lookup failed");
     return { number, timestamp: this.chainTime, hash: hash(number) } as unknown as Block;
   }
-  async getLogs(_filter: Filter): Promise<Log[]> {
+  async getLogs(filter: Filter): Promise<Log[]> {
     if (!this.available) throw new Error("rpc down");
-    return [];
+    return this.logs.filter(log => log.blockNumber >= Number(filter.fromBlock) && log.blockNumber <= Number(filter.toBlock));
   }
   async getTransaction(txHash: string) { return this.transactions.get(txHash.toLowerCase()) ?? null; }
   async getTransactionReceipt(txHash: string) { return this.receipts.get(txHash.toLowerCase()) ?? null; }
@@ -105,7 +107,7 @@ class FakeLibraryRpc implements LibraryRpcClient {
   async call() { this.termsReads++; return iface.encodeFunctionResult("bookTerms", [depositWei, this.liveReplacementPriceWei, true]); }
 }
 
-function setup(t: TestContext) {
+function setup(t: TestContext, minConfirmations = 1) {
   const repository = new LibraryRepository(":memory:");
   repository.seedDemo(seed);
   t.after(() => repository.close());
@@ -114,7 +116,7 @@ function setup(t: TestContext) {
   const authService = new AuthService(new AuthRepository(repository), authConfig, () => rpc.chainTime);
   const libraryService = new LibraryService(repository, { deployment: { schemaVersion: 1, status: "deployed",
     chainId: 20261, abiVersion: 1, environment: "local-anvil", library }, allowLocal: true,
-  chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 }, rpc, now: () => now });
+  chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations }, rpc, now: () => now });
   const grants = { lookup: async () => ({ status: "verified", chainId: 20261, balanceWei: "1" }) } as unknown as GrantsService;
   const app = createApp(undefined, undefined, undefined, grants, authService, authConfig, libraryService);
   return { app, repository, rpc, library, authService, libraryService };
@@ -315,6 +317,168 @@ test("transaction submission is idempotent when reconciliation sees the mined ev
   assert.equal(submitted.request.status, "PENDING_APPROVAL");
   assert.equal(submitted.transaction?.txHash, txHash);
   assert.equal(submitted.transaction?.status, "CONFIRMED");
+});
+
+function seedLibrarianRefundAfterNoCopy(repository: LibraryRepository) {
+  const reservedId = hash(201), requestId = hash(202);
+  const depositedAt = now - policy.approvalWindowSeconds - 2;
+  const common = { chainId: 20261 as const, contractAddress: escrow, logIndex: 0, observedAt: now };
+  const deposits = [
+    { id: reservedId, borrower: secondStudent.address, block: 490 },
+    { id: requestId, borrower: student.address, block: 491 },
+  ];
+  for (const entry of deposits) {
+    repository.createDepositRequest({ requestId: entry.id, wallet: entry.borrower, bookId, idempotencyKey: entry.id,
+      createdAt: depositedAt - 1, chainTime: depositedAt - 1, holdAfterSeconds: policy.fullDepositRetentionAfterSeconds });
+  }
+  repository.recordVerifiedChainEvents(deposits.map(entry => ({
+    ...common, txHash: hash(entry.block + 100), blockNumber: entry.block, blockHash: hash(entry.block),
+    blockTimestamp: depositedAt, transactionFrom: entry.borrower, eventName: "DepositReceived" as const,
+    requestId: entry.id, borrower: entry.borrower, bookId, amountWei: depositWei, depositedAt,
+    approvalDeadline: depositedAt + policy.approvalWindowSeconds,
+  })), 491, now, JSON.stringify(policy));
+  assert.equal(repository.getRequest(requestId)?.status, "REJECTED_NO_COPY");
+  const rejectHash = hash(592);
+  repository.recordVerifiedChainEvents([{
+    ...common, txHash: rejectHash, blockNumber: 492, blockHash: hash(492), blockTimestamp: now - 1,
+    transactionFrom: librarian.address, eventName: "RequestRejected", requestId, borrower: student.address, refundWei: depositWei,
+  }], 492, now, JSON.stringify(policy));
+  return { requestId, rejectHash };
+}
+
+test("first tracking records the borrower's canonical revert after the librarian already refunded the deposit", async (t) => {
+  const state = setup(t);
+  const { requestId, rejectHash } = seedLibrarianRefundAfterNoCopy(state.repository);
+  const api = await serve(t, state.app);
+  const cookie = await studentCookie(state);
+  const txHash = hash(601);
+  state.rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: student.address,
+    data: iface.encodeFunctionData("claimExpiredRefund", [requestId]), value: 0n } as unknown as TransactionResponse);
+  state.rpc.receipts.set(txHash, { hash: txHash, status: 0, blockNumber: 499, blockHash: hash(499), logs: [] } as unknown as TransactionReceipt);
+  const track = () => fetch(`${api}/api/library/requests/${requestId}/transactions`, { method: "POST",
+    headers: { cookie, origin: authConfig.origin, "content-type": "application/json" }, body: JSON.stringify({ action: "refund", txHash }) });
+
+  const first = await track();
+  assert.equal(first.status, 200, await first.clone().text());
+  const result = await first.json();
+  assert.equal(result.request.status, "REJECTED");
+  assert.equal(result.request.refundStatus, "REFUNDED");
+  assert.equal(result.transaction.status, "REVERTED");
+  assert.equal(result.transaction.txHash, txHash);
+  assert.equal(result.transaction.proof, null);
+  assert.equal(result.request.transactions.find((tx: { action: string }) => tx.action === "reject")?.txHash, rejectHash);
+  const again = await track();
+  assert.equal(again.status, 200);
+  assert.deepEqual(await again.json(), result);
+  assert.equal(state.repository.getTransaction(requestId, "refund")?.blockHash, hash(499));
+});
+
+test("closed refunds reject unrelated or unconfirmed attempts until the exact revert reaches the safe head", async (t) => {
+  const state = setup(t, 2);
+  const { requestId } = seedLibrarianRefundAfterNoCopy(state.repository);
+  const account = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const txHash = hash(602);
+  const transaction = { hash: txHash, to: escrow, from: student.address,
+    data: iface.encodeFunctionData("claimExpiredRefund", [requestId]), value: 0n };
+  const receipt = { hash: txHash, status: 0, blockNumber: 500, blockHash: hash(500), logs: [] };
+  const track = () => state.libraryService.submitTransaction(account, requestId, { action: "refund", txHash });
+
+  await assert.rejects(track, /CONFLICT/);
+  state.rpc.transactions.set(txHash, transaction as unknown as TransactionResponse);
+  await assert.rejects(track, /CONFLICT/);
+  state.rpc.receipts.set(txHash, receipt as unknown as TransactionReceipt);
+  await assert.rejects(track, /CONFLICT/);
+  assert.equal(state.repository.getTransaction(requestId, "refund"), undefined);
+  state.rpc.headNumber = 501;
+  state.rpc.transactions.set(txHash, { ...transaction, from: secondStudent.address } as unknown as TransactionResponse);
+  await assert.rejects(track, /FORBIDDEN/);
+  state.rpc.transactions.set(txHash, { ...transaction, hash: hash(603) } as unknown as TransactionResponse);
+  await assert.rejects(track, /CONFLICT/);
+  state.rpc.transactions.set(txHash, transaction as unknown as TransactionResponse);
+  for (const invalidReceipt of [{ ...receipt, hash: hash(603) }, { ...receipt, blockHash: hash(504) }, { ...receipt, status: 1 }]) {
+    state.rpc.receipts.set(txHash, invalidReceipt as unknown as TransactionReceipt);
+    await assert.rejects(track, /CONFLICT/);
+  }
+  assert.equal(state.repository.getTransaction(requestId, "refund"), undefined);
+  state.rpc.receipts.set(txHash, receipt as unknown as TransactionReceipt);
+  assert.equal((await track()).transaction?.status, "REVERTED");
+});
+
+function confirmLibraryTestDeposit(repository: LibraryRepository, requestId: string, borrower: string, blockNumber: number, depositedAt: number) {
+  repository.recordVerifiedChainEvents([{
+    chainId: 20261, contractAddress: escrow, txHash: hash(blockNumber + 20_000), logIndex: 0, blockNumber, blockHash: hash(blockNumber),
+    blockTimestamp: depositedAt, transactionFrom: borrower, observedAt: now, eventName: "DepositReceived", requestId, borrower, bookId,
+    amountWei: depositWei, depositedAt, approvalDeadline: depositedAt + policy.approvalWindowSeconds,
+  }], blockNumber, now, JSON.stringify(policy));
+}
+
+test("a verified late staff refund advances the catalog cursor without releasing a reassigned copy", async t => {
+  const state = setup(t);
+  const { app, repository, rpc, libraryService } = state;
+  const account = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await libraryService.createRequest({ account, bookId, idempotencyKey: "before-late-reject" });
+  const depositedAt = now - policy.approvalWindowSeconds;
+  confirmLibraryTestDeposit(repository, request.requestId, student.address, 500, depositedAt);
+  assert.equal((await libraryService.getRequest(account, request.requestId)).status, "EXPIRED_REFUND_DUE");
+  assert.equal(repository.getRequest(request.requestId)?.copyId, null);
+
+  const second = { wallet: secondStudent.address as `0x${string}`, role: "STUDENT" as const };
+  const replacement = await libraryService.createRequest({ account: second, bookId, idempotencyKey: "after-release" });
+  rpc.headNumber = 501;
+  confirmLibraryTestDeposit(repository, replacement.request.requestId, secondStudent.address, 501, now);
+  assert.equal(repository.getRequest(replacement.request.requestId)?.copyId, "copy-001");
+  const api = await serve(t, app);
+  const cookie = await studentCookie(state);
+  const txHash = hash(604);
+  const reject = iface.getEvent("RequestRejected")!;
+  const { topics, data } = iface.encodeEventLog(reject, [request.requestId, student.address, depositWei]);
+  const log = { address: escrow, topics, data, index: 0, transactionHash: txHash, blockNumber: 502, blockHash: hash(502) } as unknown as Log;
+  rpc.headNumber = 502;
+  rpc.logs.push(log);
+  rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: librarian.address,
+    data: iface.encodeFunctionData("reject", [request.requestId]), value: 0n } as unknown as TransactionResponse);
+  rpc.receipts.set(txHash, { hash: txHash, to: escrow, status: 1, blockNumber: 502, blockHash: hash(502), logs: [log] } as unknown as TransactionReceipt);
+
+  const readCatalog = () => fetch(`${api}/api/library/books`, { headers: { cookie } });
+  const catalog = await readCatalog();
+  assert.equal(catalog.status, 200, await catalog.clone().text());
+  assert.equal((await catalog.json())[0].copiesAvailable, 0);
+  assert.equal(repository.reconcileState().cursorBlock, 502);
+  const rejected = await libraryService.getRequest(account, request.requestId);
+  assert.equal(rejected.status, "REJECTED");
+  assert.equal(rejected.refundStatus, "REFUNDED");
+  assert.equal(rejected.transactions.find(tx => tx.action === "reject")?.proof?.txHash, txHash);
+  assert.equal(repository.getRequest(replacement.request.requestId)?.copyId, "copy-001");
+  assert.equal((await readCatalog()).status, 200);
+});
+
+test("late approval tracking records only a verified revert after the deadline", async t => {
+  const { rpc, repository, libraryService } = setup(t, 2);
+  const borrower = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const staff = { wallet: librarian.address as `0x${string}`, role: "LIBRARIAN" as const };
+  const { request } = await libraryService.createRequest({ account: borrower, bookId, idempotencyKey: "late-approve" });
+  confirmLibraryTestDeposit(repository, request.requestId, student.address, 499, now - policy.approvalWindowSeconds);
+  assert.equal((await libraryService.getRequest(borrower, request.requestId)).status, "EXPIRED_REFUND_DUE");
+  const txHash = hash(605);
+  const tx = { hash: txHash, to: escrow, from: librarian.address, data: iface.encodeFunctionData("approve", [request.requestId]), value: 0n };
+  const receipt = { hash: txHash, status: 0, blockNumber: 500, blockHash: hash(500), logs: [] };
+  const track = () => libraryService.submitTransaction(staff, request.requestId, { action: "approve", txHash });
+  await assert.rejects(track, /CONFLICT/);
+  rpc.transactions.set(txHash, tx as unknown as TransactionResponse);
+  await assert.rejects(track, /CONFLICT/);
+  rpc.receipts.set(txHash, receipt as unknown as TransactionReceipt);
+  await assert.rejects(track, /CONFLICT/);
+  assert.equal(repository.getTransaction(request.requestId, "approve"), undefined);
+  rpc.headNumber = 501;
+  rpc.receipts.set(txHash, { ...receipt, hash: hash(606) } as unknown as TransactionReceipt);
+  await assert.rejects(track, /CONFLICT/);
+  rpc.receipts.set(txHash, receipt as unknown as TransactionReceipt);
+  const tracked = await track();
+  assert.equal(tracked.transaction?.status, "REVERTED");
+  assert.equal(tracked.transaction?.txHash, txHash);
+  assert.equal(tracked.request.status, "EXPIRED_REFUND_DUE");
+  assert.equal(tracked.request.loanId, null);
+  assert.deepEqual(await track(), tracked);
 });
 
 test("librarian queue and reject action include deposited requests that had no copy to assign", async (t) => {

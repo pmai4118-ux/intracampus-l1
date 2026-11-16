@@ -599,7 +599,9 @@ export class LibraryRepository {
           case "RequestRejected": {
             const hasHeldCopy = request.status === "PENDING_APPROVAL" && request.copy_id !== null;
             const isNoCopyRefund = request.status === "REJECTED_NO_COPY" && request.copy_id === null;
-            if ((!hasHeldCopy && !isNoCopyRefund) || String(request.deposit_wei) !== event.refundWei) {
+            const expiredRefundDue = request.status === "EXPIRED_REFUND_DUE" && request.refund_status === "REFUND_DUE"
+              && request.copy_id === null && request.approval_deadline !== null && event.blockTimestamp >= Number(request.approval_deadline);
+            if ((!hasHeldCopy && !isNoCopyRefund && !expiredRefundDue) || String(request.deposit_wei) !== event.refundWei) {
               throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
             }
             if (hasHeldCopy) releaseCopy(request.copy_id!, "PENDING_APPROVAL");

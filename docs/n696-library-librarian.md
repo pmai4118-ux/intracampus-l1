@@ -21,6 +21,8 @@ Khi ví hoặc RPC không trả kết quả rõ ràng, giữ nguyên journal và
 
 Yêu cầu hết bản còn nằm trong hàng chờ khi cọc đang `REFUND_DUE`. Khi sinh viên đã tự nhận lại cọc và receipt được xác minh, yêu cầu rời hàng chờ.
 
+Nếu ví đã mở trước hạn và giao dịch đến sau hạn, đối chiếu chính hash đã gửi. `RequestRejected` được xác minh vẫn ghi nhận hoàn cọc, kể cả khi bản sách đã được gán lại. Nếu giao dịch duyệt đã revert, vùng đối chiếu hiển thị `reverted` cho hash đó và yêu cầu không có khoản mượn.
+
 ## Pilot cô lập
 
 Theo `docs/n471-library-student.md`, tạo bản sao source mới dưới đường dẫn chứa `.cross-review`, không copy `.env`, database, `node_modules` hoặc build cũ. Cài dependencies; chuẩn bị artifacts Foundry và thư mục package Playwright. Dùng một Anvil riêng chain 20261 trên cổng loopback trống và đảm bảo cổng Next 3129 đang trống.
@@ -32,3 +34,5 @@ node frontend/test/library-student-pilot.mjs <pilot-copy> <contracts-out-dir> <p
 ```
 
 Pilot dùng browser provider fixture, Next, Express, SQLite mới và Anvil riêng. Script đóng browser, Next và API; người chạy dừng Anvil riêng sau lượt chạy. Xem evidence JSON và ảnh 390px/1280px cạnh bản sao; không lưu bí mật vào evidence. Kết quả này là kiểm thử local, không chứng minh ví Core extension hoặc Avalanche L1. N-75 vẫn cần nghiệm thu tích hợp riêng.
+
+[Bằng chứng Anvil của Thủ thư](validation/n696-librarian-local.json) ghi lại hai receipt qua hạn, số tiền hoàn, tồn kho, cursor trước và sau khi mở lại backend, cùng checksum của source đã chạy.
