@@ -31,6 +31,7 @@ export default async function Home() {
   const status = await getNetworkStatus();
   const services: { href: string; title: string; description: string; icon: IconName; color: string; label: string }[] = [
     { href: "/student", title: "Ví sinh viên", description: "Thanh toán QR, xem thẻ số và sử dụng voucher học bổng FOOD.", icon: "wallet", color: "green", label: "DÀNH CHO SINH VIÊN" },
+    { href: "/student/canteen", title: "Nhà ăn campus", description: "Chọn món yêu thích, đặt bữa trưa và thanh toán bằng CAMPUS hoặc FOOD.", icon: "utensils", color: "peach", label: "NẠP NĂNG LƯỢNG" },
     { href: "/student/library", title: "Thư viện campus", description: "Tìm cuốn sách tiếp theo. Theo dõi lượt mượn và quản lý tiền cọc.", icon: "book", color: "gold", label: "HỌC TẬP MỖI NGÀY" },
     { href: "/pos", title: "Điểm thu & dịch vụ", description: "Tạo hóa đơn, hiển thị mã QR và theo dõi biên lai thanh toán.", icon: "store", color: "blue", label: "DÀNH CHO ĐIỂM THU" },
   ];

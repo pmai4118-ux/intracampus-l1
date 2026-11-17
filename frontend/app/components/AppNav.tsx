@@ -7,6 +7,7 @@ import Icon, { type IconName } from "./Icon";
 const links: { href: string; label: string; icon: IconName }[] = [
   { href: "/", label: "Tổng quan", icon: "grid" },
   { href: "/student", label: "Sinh viên", icon: "wallet" },
+  { href: "/student/canteen", label: "Nhà ăn", icon: "utensils" },
   { href: "/student/library", label: "Thư viện", icon: "book" },
   { href: "/pos", label: "Điểm thu", icon: "store" },
   { href: "/staff/library", label: "Thủ thư", icon: "shield" },
