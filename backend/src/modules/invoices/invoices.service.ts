@@ -4,6 +4,7 @@ import { campusNetwork, type SignedInvoiceEnvelope } from "@intracampus/network"
 import { parkingService, type InvoiceCreationConfig } from "./invoice.config.ts";
 import type { InvoiceRepository } from "./invoices.repository.ts";
 import type { InvoiceRpc } from "./invoices.rpc.ts";
+import { defaultInvoiceChainFreshness, isFreshInvoiceChainTimestamp, type InvoiceChainFreshness } from "./chain-freshness.ts";
 import { isAddress, object, quantity, safeQuantity, same } from "./invoices.schema.ts";
 import type { InvoiceDeployment } from "./receipt.service.ts";
 
@@ -15,13 +16,14 @@ export const invoiceTypes = { Invoice: [
 const signerAbi = new Interface(["function posSigner() view returns (address)",
   "function studentSbt() view returns (address)", "function allowedMerchantCategories(address,bytes32) view returns (bool)"]);
 type CreationErrorCode = "INVALID_REQUEST" | "UNKNOWN_SERVICE_OR_MERCHANT" | "INVALID_SIGNATURE"
-  | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "INTERNAL_ERROR";
+  | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE" | "INTERNAL_ERROR";
 const errors: Record<CreationErrorCode, [number, string, string]> = {
   INVALID_REQUEST: [400, "Dữ liệu yêu cầu không hợp lệ hoặc bị thiếu.", "Kiểm tra lại thông tin dịch vụ và thử lại."],
   UNKNOWN_SERVICE_OR_MERCHANT: [400, "Điểm thu hoặc dịch vụ không nằm trong danh sách được phép.", "Chọn dịch vụ hợp lệ từ menu demo trên POS."],
   INVALID_SIGNATURE: [400, "Chữ ký hóa đơn không hợp lệ hoặc dữ liệu đã bị thay đổi.", "Không ký giao dịch; yêu cầu POS kiểm tra cấu hình signer và tạo hóa đơn mới."],
   RPC_UNAVAILABLE: [503, "Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu.", "Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại."],
   WRONG_CHAIN: [503, "Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261).", "Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại."],
+  STALE_CHAIN_STATE: [503, "Block mới nhất của IntraCampus L1 đã quá cũ để tạo hóa đơn an toàn.", "Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tạo hóa đơn mới."],
   INTERNAL_ERROR: [500, "Không thể lưu hoặc đọc dữ liệu hóa đơn.", "Liên hệ người vận hành để kiểm tra kho hóa đơn."],
 };
 export class InvoiceCreationError extends Error {
@@ -31,7 +33,7 @@ export class InvoiceCreationError extends Error {
   get body() {
     const [, message, nextStep] = errors[this.code];
     return { error: { code: this.code, message, nextStep,
-      retryable: this.code === "RPC_UNAVAILABLE" || this.code === "WRONG_CHAIN" } };
+      retryable: this.code === "RPC_UNAVAILABLE" || this.code === "WRONG_CHAIN" || this.code === "STALE_CHAIN_STATE" } };
   }
 }
 export function validateInvoiceRequest(value: unknown): void {
@@ -51,9 +53,13 @@ export class InvoiceCreationService {
   private rpc: InvoiceRpc;
   private deployment?: InvoiceDeployment;
   private config: InvoiceCreationConfig;
-  constructor(options: { repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment; config: InvoiceCreationConfig }) {
+  private now: () => number;
+  private chainFreshness: InvoiceChainFreshness;
+  constructor(options: { repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment; config: InvoiceCreationConfig;
+    now?: () => number; chainFreshness?: InvoiceChainFreshness }) {
     this.repository = options.repository; this.rpc = options.rpc;
     this.deployment = options.deployment; this.config = options.config;
+    this.now = options.now ?? Date.now; this.chainFreshness = options.chainFreshness ?? defaultInvoiceChainFreshness;
   }
 
   async create(request: unknown) {
@@ -79,6 +85,9 @@ export class InvoiceCreationService {
       issuedAt = safeQuantity(block.timestamp);
       if (!Number.isSafeInteger(issuedAt + parkingService.ttlSeconds)
         || !Number.isFinite(new Date(issuedAt * 1000).getTime())) throw new Error();
+      if (!isFreshInvoiceChainTimestamp(issuedAt, this.now(), this.chainFreshness)) {
+        throw new InvoiceCreationError("STALE_CHAIN_STATE");
+      }
       const rawSigner = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
         data: signerAbi.encodeFunctionData("posSigner") }, block.number]);
       if (typeof rawSigner !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(rawSigner)) throw new Error();

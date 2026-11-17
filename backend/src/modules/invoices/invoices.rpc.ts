@@ -1,6 +1,6 @@
 export class InvoiceRpcError extends Error {
-  readonly code: "RPC_UNAVAILABLE" | "WRONG_CHAIN";
-  constructor(code: "RPC_UNAVAILABLE" | "WRONG_CHAIN" = "RPC_UNAVAILABLE") {
+  readonly code: "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE";
+  constructor(code: "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE" = "RPC_UNAVAILABLE") {
     super(code);
     this.code = code;
   }

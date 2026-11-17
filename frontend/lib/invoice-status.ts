@@ -23,7 +23,7 @@ export function parseInvoiceLookup(value: unknown, invoiceId: string, expected?:
   check(integer(data.updatedAt) || (data.status === "rpc-error" && data.updatedAt === null));
   if (data.error !== undefined) {
     const error = object(data.error);
-    check(["INVALID_REQUEST", "INVOICE_NOT_FOUND", "RPC_UNAVAILABLE", "WRONG_CHAIN", "TX_REVERTED", "RECEIPT_EVENT_MISMATCH", "INTERNAL_ERROR"].includes(String(error.code))
+    check(["INVALID_REQUEST", "INVOICE_NOT_FOUND", "RPC_UNAVAILABLE", "WRONG_CHAIN", "STALE_CHAIN_STATE", "TX_REVERTED", "RECEIPT_EVENT_MISMATCH", "INTERNAL_ERROR"].includes(String(error.code))
       && typeof error.retryable === "boolean" && typeof error.message === "string" && typeof error.nextStep === "string");
   }
   if (data.transaction !== null) {

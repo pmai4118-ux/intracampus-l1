@@ -7,6 +7,7 @@ import { ReceiptService } from "./modules/invoices/receipt.service.ts";
 import { GrantsService } from "./modules/grants/grants.service.ts";
 import { InvoiceCreationService } from "./modules/invoices/invoices.service.ts";
 import { readInvoiceCreationConfig } from "./modules/invoices/invoice.config.ts";
+import { readInvoiceChainFreshness } from "./modules/invoices/chain-freshness.ts";
 import { LibraryRepository } from "./modules/library/library.repository.ts";
 import { AuthRepository } from "./modules/auth/auth.repository.ts";
 import { AuthService } from "./modules/auth/auth.service.ts";
@@ -23,9 +24,11 @@ const deployment = readInvoiceDeployment(process.env);
 const repository = new SqliteInvoiceRepository(process.env.INVOICES_DB_PATH?.trim()
   || fileURLToPath(new URL("../data/invoices.sqlite", import.meta.url)));
 const rpc = new HttpInvoiceRpc(process.env.INTRACAMPUS_RPC_URL);
+const invoiceChainFreshness = readInvoiceChainFreshness(process.env);
 const receiptService = new ReceiptService({ repository, deployment,
-  rpc, log: (entry) => console.log(JSON.stringify(entry)) });
-const creationService = new InvoiceCreationService({ repository, deployment, rpc, config: readInvoiceCreationConfig(process.env) });
+  rpc, chainFreshness: invoiceChainFreshness, log: (entry) => console.log(JSON.stringify(entry)) });
+const creationService = new InvoiceCreationService({ repository, deployment, rpc, chainFreshness: invoiceChainFreshness,
+  config: readInvoiceCreationConfig(process.env) });
 const grantsService = new GrantsService({ rpcUrl: process.env.INTRACAMPUS_RPC_URL });
 const libraryRepository = new LibraryRepository(process.env.LIBRARY_DB_PATH?.trim()
   || fileURLToPath(new URL("../data/library.sqlite", import.meta.url)));

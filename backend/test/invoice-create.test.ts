@@ -11,7 +11,6 @@ import { Interface, Wallet, TypedDataEncoder, id, verifyTypedData } from "ethers
 import { SqliteInvoiceRepository } from "../src/modules/invoices/invoices.repository.ts";
 import { HttpInvoiceRpc } from "../src/modules/invoices/invoices.rpc.ts";
 import { InvoiceCreationService, invoiceTypes } from "../src/modules/invoices/invoices.service.ts";
-import { readInvoiceCreationConfig } from "../src/modules/invoices/invoice.config.ts";
 import { ReceiptService } from "../src/modules/invoices/receipt.service.ts";
 
 const fixture = JSON.parse(readFileSync(new URL("../../docs/fixtures/invoice-v1.json", import.meta.url), "utf8"));
@@ -35,7 +34,7 @@ async function setup(t: TestContext, options: { config?: Record<string, string |
   const repository = new SqliteInvoiceRepository(path);
   t.after(() => { repository.close(); rmSync(dir, { recursive: true, force: true }); });
   const state = { chain: "0x4f25", signer: wallet.address, fail: false, badSigner: false,
-    timestamp: fixture.envelope.meta.issuedAt, malformed: false, badProtocol: false };
+    timestamp: fixture.envelope.meta.issuedAt, now: fixture.envelope.meta.issuedAt * 1000, malformed: false, badProtocol: false };
   const rpcUrl = await serve(t, async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -58,9 +57,13 @@ async function setup(t: TestContext, options: { config?: Record<string, string |
   });
   const deployment = options.noDeployment ? undefined : { contractAddress: fixture.envelope.domain.verifyingContract, deploymentBlock: 1 };
   const rpc = new HttpInvoiceRpc(rpcUrl);
-  const env = { POS_SIGNER_PRIVATE_KEY: wallet.privateKey, PARKING_MERCHANT_ADDRESS: fixture.envelope.invoice.merchant, ...options.config };
-  const creation = new InvoiceCreationService({ repository, rpc, deployment, config: readInvoiceCreationConfig(env) });
-  const receipts = new ReceiptService({ repository, rpc, deployment });
+  const env = { POS_SIGNER_PRIVATE_KEY: wallet.privateKey, ...options.config };
+  const merchant = options.config && Object.hasOwn(options.config, "PARKING_MERCHANT_ADDRESS")
+    ? options.config.PARKING_MERCHANT_ADDRESS : fixture.envelope.invoice.merchant;
+  const creation = new InvoiceCreationService({ repository, rpc, deployment, config: {
+    merchant, privateKey: env.POS_SIGNER_PRIVATE_KEY, expectedSigner: wallet.address,
+  }, now: () => state.now });
+  const receipts = new ReceiptService({ repository, rpc, deployment, now: () => state.now });
   const api = await serve(t, createApp(rpcUrl, receipts, creation));
   async function post(body: unknown = request) {
     const response = await fetch(`${api}/api/invoices`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -189,6 +192,20 @@ test("malformed chain time fails closed with a retryable RPC error", async (t) =
   assert.equal(result.status, 503);
   assert.equal(result.body.error.code, "RPC_UNAVAILABLE");
   assert.equal(result.body.error.retryable, true);
+});
+
+test("stale chain time blocks QR creation until a fresh block is available", async (t) => {
+  const { post, state } = await setup(t);
+  state.now = (state.timestamp + 301) * 1000;
+  const stale = await post();
+  assert.equal(stale.status, 503);
+  assert.equal(stale.body.error.code, "STALE_CHAIN_STATE");
+  assert.equal(stale.body.error.retryable, true);
+  assert.equal(stale.body.envelope, undefined);
+
+  state.timestamp = Math.floor(state.now / 1000);
+  const recovered = await post();
+  assert.equal(recovered.status, 201);
 });
 
 test("storage failure never returns 201 or signed invoice", async (t) => {

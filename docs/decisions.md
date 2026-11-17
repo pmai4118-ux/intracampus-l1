@@ -203,3 +203,7 @@ Student Library dùng lại WalletSession, signed login và API same-origin đã
 Mỗi lần gửi có attempt ID riêng trong journal, scope theo chain/escrow/deployment/account/request/action. Send và reconcile dùng cùng Web Lock; receipt cũ và cache ở tab khác không được ghi đè attempt mới chưa rõ kết quả. Hash ví đã trả được giữ trong bộ nhớ nếu storage hết quota, nhưng lỗi đọc journal vẫn chặn ghi recovery và ký thêm.
 
 Demo Anvil qua manifest chuẩn cần `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=true` và RPC HTTP loopback tường minh; mặc định loader ví tiếp tục từ chối manifest local. Đây là cấu hình demo cùng chain ID, không phải bằng chứng Avalanche L1. Xem [runbook N-471](n471-library-student.md).
+
+## Network head metadata · 2026-11-17
+
+NetworkProbe bổ sung latestBlock.number/timestamp và headAgeSeconds khi đọc được chain/latest block. status ready tiếp tục nghĩa chain ID đúng; service nghiệp vụ tự áp freshness configuration. Tuổi block tính bằng server clock, không clamp block tương lai. Probe đọc hai RPC song song trong timeout 2.5 giây; malformed/missing block báo unreachable. Quyết định này giúp phát hiện node local không tạo block khi idle mà vẫn giữ guard invoice/Library.

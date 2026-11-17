@@ -129,3 +129,20 @@ Có thể chạy `pnpm dev` để mở giao diện. Backend cũng có health che
 | POS báo chưa tạo được hóa đơn | Kiểm tra RPC/deployment backend và signer trong `backend/.env`; signer phải trùng POS signer của contract. |
 | Student không xác minh được hóa đơn | Kiểm tra ví Core đã kết nối đúng chain, các địa chỉ frontend khớp cùng manifest L06, RPC truy cập được và cặp merchant/category đã bật. |
 | Cổng 3000 hoặc 4000 đã được dùng | Dừng tiến trình đang chiếm cổng rồi chạy lại `pnpm dev`. |
+
+## Chẩn đoán local Library, FOOD và gửi xe (17/11/2026)
+
+Mở đúng http://127.0.0.1:3000 khi LIBRARY_AUTH_ORIGIN dùng host này. Cookie đăng nhập không được chia sẻ với localhost. Library, FOOD và Student payment dùng cùng phiên ví đã ký đăng nhập; chữ ký login không chuyển tiền và không tốn gas.
+
+Sau khi pnpm rpc:check trả ready, xem latestBlock/headAgeSeconds trong /api/network hoặc trang gốc. ready xác nhận chain ID đúng, không xác nhận freshness nghiệp vụ. Node local có thể không tạo block khi không có giao dịch: nếu head cũ hơn cấu hình, giữ nguyên giới hạn, xác minh node/đồng hồ rồi dùng giao dịch demo thực sự từ ví funding riêng. Không dùng mining RPC giả, không reset/deploy lại. Nếu vừa nạp tiền mà head vẫn cũ, dừng để kiểm tra endpoint ví và backend cùng blockchain.
+
+Trước demo, kiểm tra balance/hold/SBT hiện tại. Parking 3.000 CAMPUS, tier 1 giảm 300 còn 2.700; Library cọc 50. Student phải có đủ native cho cả hai khoản và gas; FOOD 1.000 lấy từ vault, Student chỉ trả gas. Librarian cần native cho gas approve. Nạp từ ví riêng, không dùng khóa role POS/grant issuer. Core hiển thị phí trước khi ký; số dư thay đổi không thay thế receipt.
+
+1. Student kết nối chain 20261 tại /student/library, bấm Ký đăng nhập thư viện và tự chấp thuận trong Core; sau đó đọc sách/account status. 401 khi chưa có session là đúng; 503 STALE_CHAIN_STATE cần xử lý head.
+2. Mượn sách: tạo một request, xem cọc 50 rồi ký deposit. Sau receipt deposit, Librarian đăng nhập tại /staff/library và ký approve. Chỉ ACTIVE sau event đã xác minh. Dùng profile trình duyệt riêng hoặc đăng nhập lại khi đổi ví Student/Librarian vì session cookie dùng chung origin.
+3. FOOD: trở lại Student đúng ví/session, xem balance grant thật rồi chi một lần 1.000 FOOD. Kiểm GrantSpent và balance sau chi; không chạy seed:grants --apply lại. Baseline 5.000 sẽ còn 4.000 sau thành công.
+4. Parking: POS tạo invoice mới khi head đủ mới; Student xem quote, ký payInvoice một lần trong Core; POS/Student đối chiếu cùng invoice/hash và InvoicePaid. Không sử dụng invoice cũ đã hết hạn.
+
+Nếu transaction pending/unknown, giữ journal/request/invoice/hash và tra receipt; không xóa storage hoặc gửi lại. Trước mọi bước gửi tiếp, kiểm tra state hiện có để tránh lặp. Các chữ ký và xác nhận Core do người dùng thao tác. Ghi evidence công khai gồm chain, contract, request/invoice, hash, receipt/event; không ghi key, cookie hay chữ ký login.
+
+Test CLI grants dùng fixture manifest riêng; Next proxy test dùng output/tsconfig riêng trong frontend/.next-tests và cổng động, nên không cần dừng dev server hoặc thay deployment manifest để chạy pnpm test.

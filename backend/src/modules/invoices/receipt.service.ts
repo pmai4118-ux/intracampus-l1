@@ -1,13 +1,14 @@
 import { campusNetwork, type InvoiceApiError, type InvoiceLookupResponse, type VerifiedInvoiceReceipt } from "@intracampus/network";
 import type { InvoiceRecord, InvoiceRepository } from "./invoices.repository.ts";
 import { InvoiceRpcError, type InvoiceRpc } from "./invoices.rpc.ts";
+import { defaultInvoiceChainFreshness, isFreshInvoiceChainTimestamp, type InvoiceChainFreshness } from "./chain-freshness.ts";
 import { hex, isAddress, isHash, object, quantity, safeInteger, safeQuantity, same } from "./invoices.schema.ts";
 import { invoicePaidTopic, paymentAbi, readReceipt, verifyReceiptLog } from "./receipt.verifier.ts";
 
 export type InvoiceDeployment = { contractAddress: string; deploymentBlock: number };
 export type LookupResult = { httpStatus: 200 | 422 | 503; body: InvoiceLookupResponse; retryAfterSeconds?: number };
 type Block = { number: number; timestamp: number; hash: string };
-type Backoff = { failures: number; until: number; code: "RPC_UNAVAILABLE" | "WRONG_CHAIN" };
+type Backoff = { failures: number; until: number; code: "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE" };
 
 export function invoiceError(code: InvoiceApiError["code"]): InvoiceApiError {
   const messages: Record<InvoiceApiError["code"], [string, string]> = {
@@ -15,12 +16,13 @@ export function invoiceError(code: InvoiceApiError["code"]): InvoiceApiError {
     INVOICE_NOT_FOUND: ["Không tìm thấy hóa đơn cần tra cứu.", "Kiểm tra lại mã hóa đơn hoặc tạo hóa đơn mới trên POS."],
     RPC_UNAVAILABLE: ["Chưa đủ dữ liệu RPC để xác minh thanh toán.", "Giữ hash giao dịch cũ và thử tra cứu lại; không gửi lại thanh toán."],
     WRONG_CHAIN: ["Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261).", "Cấu hình RPC về IntraCampus L1 (20261) rồi thử lại."],
+    STALE_CHAIN_STATE: ["Block mới nhất của IntraCampus L1 đã quá cũ để xác định trạng thái hóa đơn.", "Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tra cứu lại."],
     TX_REVERTED: ["Giao dịch trên chuỗi bị từ chối (revert), chưa thanh toán.", "Đối chiếu mã giao dịch và hóa đơn; không tự gửi lại."],
     RECEIPT_EVENT_MISMATCH: ["Giao dịch đã thực thi nhưng không chứa biên nhận thanh toán hợp lệ cho hóa đơn này.", "Giữ trạng thái hiện tại và kiểm tra đúng mã giao dịch thanh toán."],
     INTERNAL_ERROR: ["Không thể lưu hoặc đọc dữ liệu hóa đơn.", "Giữ hash giao dịch và liên hệ người vận hành; không tự gửi lại thanh toán."],
   };
   const [message, nextStep] = messages[code];
-  return { code, message, nextStep, retryable: code === "RPC_UNAVAILABLE" || code === "WRONG_CHAIN" };
+  return { code, message, nextStep, retryable: code === "RPC_UNAVAILABLE" || code === "WRONG_CHAIN" || code === "STALE_CHAIN_STATE" };
 }
 
 export class InvoiceRequestError extends Error {
@@ -39,17 +41,19 @@ export class ReceiptService {
   private log: (entry: Record<string, unknown>) => void;
   private blockRange: number;
   private maxScanRanges: number;
+  private chainFreshness: InvoiceChainFreshness;
   private backoffs = new Map<string, Backoff>();
   private pending = new Map<string, Promise<LookupResult>>();
 
   constructor(options: {
     repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment;
     now?: () => number; log?: (entry: Record<string, unknown>) => void;
-    blockRange?: number; maxScanRanges?: number;
+    blockRange?: number; maxScanRanges?: number; chainFreshness?: InvoiceChainFreshness;
   }) {
     this.repository = options.repository; this.rpc = options.rpc; this.deployment = options.deployment;
     this.now = options.now ?? Date.now; this.log = options.log ?? (() => {});
     this.blockRange = options.blockRange ?? 1000; this.maxScanRanges = options.maxScanRanges ?? 10;
+    this.chainFreshness = options.chainFreshness ?? defaultInvoiceChainFreshness;
     if (!Number.isSafeInteger(this.blockRange) || this.blockRange < 2 || !Number.isSafeInteger(this.maxScanRanges) || this.maxScanRanges < 1) {
       throw new Error("Invalid scan limits");
     }
@@ -154,6 +158,11 @@ export class ReceiptService {
       // A lagging/incomplete log response must not strand an older payment behind the cursor.
       this.repository.save(id, { ...record, nextScanBlock: deployment.deploymentBlock });
       throw new InvoiceRpcError();
+    }
+    // A stale head can still prove a historical payment, but cannot safely decide that
+    // an unpaid invoice is pending or expired. Keep the last verified snapshot intact.
+    if (!isFreshInvoiceChainTimestamp(head.timestamp, this.now(), this.chainFreshness)) {
+      throw new InvoiceRpcError("STALE_CHAIN_STATE");
     }
     record = this.repository.save(id, { ...record,
       lastKnownStatus: head.timestamp <= record.envelope.invoice.expiresAt ? "pending" : "expired", updatedAt: this.seconds() });

@@ -6,6 +6,8 @@ Tài liệu đi cùng: [giao kèo hóa đơn EIP-712 và QR](invoice-contract.md
 
 ## 1. Phạm vi và nguyên tắc thiết kế API
 
+`GET /api/network` và `pnpm rpc:check` xác minh RPC đọc được chain và latest block. Với `ready`/`wrong-chain`, phản hồi bổ sung `latestBlock: { number, timestamp }` (số block và Unix giây), `headAgeSeconds` (Unix giây backend trừ timestamp; âm nếu block ở tương lai). `ready` chỉ xác nhận chain ID đúng, không bảo đảm dữ liệu đủ mới cho mọi nghiệp vụ. Thiếu/sai định dạng block trả `unreachable`. B01 và Library tự kiểm tra freshness theo cấu hình trước quyết định được bảo vệ.
+
 Module `invoices` trong `backend/src/modules/invoices/` chịu trách nhiệm cho cả vòng đời hóa đơn tại điểm thu (`/pos`):
 
 1. Tạo hóa đơn động từ danh mục dịch vụ demo, ấn định giá gốc phía server và ký EIP-712 (`B01`).
@@ -15,7 +17,7 @@ Nguyên tắc bắt buộc:
 
 - **Client không được quyết định giá:** Request tạo hóa đơn chỉ truyền mã merchant và mã dịch vụ (`merchantId`, `serviceId`). Nếu client gửi kèm `amount`, backend bỏ qua hoặc từ chối request.
 - **Khóa ký chỉ nằm ở backend:** Private key của POS signer đọc từ biến môi trường (`POS_SIGNER_PRIVATE_KEY` trong `backend/.env`), tuyệt đối không xuất hiện trong phản hồi API, mã QR hay log.
-- **Signer phải khớp verifier:** Trước khi phát hành hóa đơn, `B01` kiểm tra RPC đúng chain `20261` và địa chỉ suy ra từ `POS_SIGNER_PRIVATE_KEY` khớp `CampusPaymentRegistry.posSigner()` tại verifier cấu hình từ `L06` (xem [ABI P02](invoice-contract.md#32-giao-kèo-abi-của-campuspaymentregistry-l04)). Nếu signer bằng địa chỉ zero hoặc không khớp, từ chối tạo hóa đơn với `INVALID_SIGNATURE`; lỗi đọc RPC/sai chain trả `RPC_UNAVAILABLE` / `WRONG_CHAIN`. Chỉ địa chỉ signer công khai được đưa vào `envelope.signer`.
+- **Signer và thời gian chain phải hợp lệ:** Trước khi phát hành hóa đơn, `B01` kiểm tra RPC đúng chain `20261`, địa chỉ suy ra từ `POS_SIGNER_PRIVATE_KEY` khớp `CampusPaymentRegistry.posSigner()` tại verifier cấu hình từ `L06`, và timestamp block mới nhất không quá cũ/tương lai so với đồng hồ backend. Mặc định cho phép block cũ tối đa 300 giây và lệch tương lai tối đa 30 giây (`INVOICE_CHAIN_MAX_STALE_SECONDS`, `INVOICE_CHAIN_MAX_FUTURE_DRIFT_SECONDS`). Signer sai trả `INVALID_SIGNATURE`; chain cũ trả `STALE_CHAIN_STATE`; lỗi RPC/sai chain trả `RPC_UNAVAILABLE` / `WRONG_CHAIN`. Chỉ địa chỉ signer công khai được đưa vào `envelope.signer`.
 - **Chuỗi số nguyên cho tiền tệ:** Mọi trường số tiền (`amount`, `originalAmount`, `discountAmount`, `paidAmount`) trong JSON đều là chuỗi số nguyên ở đơn vị `wei`.
 - **Chỉ báo đã thanh toán khi có receipt và event hợp lệ:** Một `txHash` đang chờ hoặc giao dịch bị revert không bao giờ được trả trạng thái `"paid"`.
 
@@ -294,7 +296,7 @@ Trong các body rút gọn ở mục này, `envelope` bắt buộc có trong HTT
 }
 ```
 
-`lastKnownStatus` có kiểu `"pending" | "expired" | null`: là kết quả lookup thành công gần nhất, không phải trạng thái transaction; `null` nếu chưa đọc được chain lần nào. `updatedAt` trong lỗi giữ thời điểm snapshot thành công gần nhất, hoặc `null` nếu chưa có; không giả mạo thời điểm cập nhật mới. `envelope` lấy từ store; `receipt` vẫn null vì receipt đã xác minh sẽ trả 200/paid ở bước 2. Sai chain cũng dùng cùng body 503, đổi code thành `WRONG_CHAIN` và hướng dẫn người vận hành sửa RPC.
+`lastKnownStatus` có kiểu `"pending" | "expired" | null`: là kết quả lookup thành công gần nhất, không phải trạng thái transaction; `null` nếu chưa đọc được chain lần nào. `updatedAt` trong lỗi giữ thời điểm snapshot thành công gần nhất, hoặc `null` nếu chưa có; không giả mạo thời điểm cập nhật mới. `envelope` lấy từ store; `receipt` vẫn null vì receipt đã xác minh sẽ trả 200/paid ở bước 2. Sai chain cũng dùng cùng body 503, đổi code thành `WRONG_CHAIN`; block mới nhất quá cũ/tương lai dùng `STALE_CHAIN_STATE`. Cả hai mã đều yêu cầu người vận hành sửa nguồn chain trước khi thử lại. Biên nhận thanh toán lịch sử vẫn có thể được xác minh từ block/receipt chuẩn ngay cả khi head hiện tại quá cũ; B02 không ghi trạng thái pending/expired mới từ head cũ.
 
 Với lỗi giao dịch 422, trả đầy đủ body lookup gồm status `pending`/`expired`, `receipt: null`, transaction `reverted`/`event-mismatch`, `updatedAt` vừa đọc và thêm `error` theo mục 5. Không đổi trạng thái toàn bộ invoice thành "failed" chỉ vì một txHash. Những lỗi request/404 không có snapshot dùng body `{ "error": ... }` thông thường. `POST /api/invoices` có lỗi dùng body `{ "error": ... }`, không dùng lookup union.
 
@@ -334,7 +336,7 @@ Mọi lỗi có đối tượng `error` gồm `code`, `message`, `retryable` và
 }
 ```
 
-`retryable` chỉ cho biết có nên tự tra cứu lại **cùng request** với backoff hay không: `RPC_UNAVAILABLE` và `WRONG_CHAIN` là true (sau khi sửa kết nối/cấu hình); các mã còn lại là false, cần thao tác của người dùng hoặc sửa dữ liệu. Giá trị này tuyệt đối không cho phép tự ký/gửi lại giao dịch. Dấu — trong cột HTTP nghĩa là lỗi phía UI/EVM, chưa có endpoint HTTP phát mã đó; GET đã trả và hết hạn dùng 200 như mục 3.3.
+`retryable` chỉ cho biết có nên tự tra cứu lại **cùng request** với backoff hay không: `RPC_UNAVAILABLE`, `WRONG_CHAIN` và `STALE_CHAIN_STATE` là true (sau khi sửa kết nối/cấu hình); các mã còn lại là false, cần thao tác của người dùng hoặc sửa dữ liệu. Giá trị này tuyệt đối không cho phép tự ký/gửi lại giao dịch. Dấu — trong cột HTTP nghĩa là lỗi phía UI/EVM, chưa có endpoint HTTP phát mã đó; GET đã trả và hết hạn dùng 200 như mục 3.3.
 
 ### Bảng mã lỗi chuẩn toàn hệ thống
 
@@ -351,6 +353,7 @@ Mọi lỗi có đối tượng `error` gồm `code`, `message`, `retryable` và
 | `TX_REVERTED` | `422` | `receipt.status === "0x0"` (giao dịch bị revert trên chuỗi) | Giao dịch trên chuỗi bị từ chối (revert), chưa thanh toán. | Kiểm tra số dư CAMPUS, hạn hóa đơn và thử lại nếu hóa đơn còn hạn. |
 | `RECEIPT_EVENT_MISMATCH` | `422` | `receipt.status === "0x1"` nhưng không có sự kiện `InvoicePaid` từ `verifyingContract` khớp `invoiceId`, `merchant` và số tiền | Giao dịch đã thực thi nhưng không chứa biên nhận thanh toán hợp lệ cho hóa đơn này. | Giữ trạng thái pending/expired theo chain và tiếp tục đối chiếu; kiểm tra lại đúng mã giao dịch (`txHash`) của lần thanh toán hóa đơn này. |
 | `WRONG_CHAIN` | `503` (backend), — (UI) | Ví sinh viên hoặc RPC backend không ở trên chain `20261` | Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261). | Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại. |
+| `STALE_CHAIN_STATE` | `503` (backend) | Timestamp block mới nhất quá hạn cho phép hoặc lệch tương lai; B01 từ chối phát hóa đơn, B02 không kết luận pending/expired mới từ head cũ | Block mới nhất của IntraCampus L1 đã quá cũ để xác minh an toàn. | Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tạo hóa đơn hoặc tra cứu lại. |
 | `RPC_UNAVAILABLE` | `503` | Không kết nối được RPC hoặc quá thời gian chờ (`timeout`) | Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu. | Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại. |
 | `INTERNAL_ERROR` | `500` | Không đọc/commit được kho hóa đơn (`B02`) | Không thể lưu hoặc đọc dữ liệu hóa đơn. | Giữ hash giao dịch và liên hệ người vận hành; không tự gửi lại thanh toán. |
 

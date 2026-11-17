@@ -39,6 +39,13 @@ test("paid lookup validates invoice/deployment/transaction and all monetary rela
   const changed = structuredClone(envelope); changed.invoice.amount = "42";
   assert.throws(() => parseInvoiceLookup(paid(), envelope.invoice.invoiceId, changed));
 });
+test("accepts the retryable stale-chain lookup error", () => {
+  const value = { ...pending("rpc-error"), lastKnownStatus: null,
+    error: { code: "STALE_CHAIN_STATE", message: "Block cũ", nextStep: "Đợi block mới", retryable: true } };
+  const result = parseInvoiceLookup(value, envelope.invoice.invoiceId);
+  assert.equal(result.status, "rpc-error");
+  if (result.status === "rpc-error") assert.equal(result.error.code, "STALE_CHAIN_STATE");
+});
 test("polls sequentially, obeys Retry-After, retains hash during RPC loss and accepts late paid", async () => {
   let calls = 0;
   const tx = { txHash: hash, status: "unverified" };

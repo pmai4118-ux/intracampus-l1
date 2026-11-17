@@ -39,6 +39,7 @@ test("B04 canonical invoice rejects wrong signer, SBT or disabled merchant befor
       return `0x${(bad === "merchant" ? "0" : "1").padStart(64, "0")}`;
     } };
     const service = new InvoiceCreationService({ repository, rpc, config,
+      now: () => Number.parseInt("6a000000", 16) * 1000,
       deployment: { contractAddress: manifest.contracts.CampusPaymentRegistry.address, deploymentBlock: 2 } });
     try {
       if (bad) await assert.rejects(() => service.create({ merchantId: "parking-demo", serviceId: "parking-single" }));
