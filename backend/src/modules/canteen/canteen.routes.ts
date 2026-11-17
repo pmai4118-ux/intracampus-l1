@@ -40,8 +40,12 @@ export function createCanteenRouter(service?: CanteenService, auth?: AuthService
     const order = service!.repository.get(String(req.params.id),actor.wallet);
     if (req.params.action === 'prepare') {
       if (!req.body || Object.keys(req.body).length) throw new CanteenError('INVALID_REQUEST');
-      if ((await library!.accountStatus({ ...actor, wallet: actor.wallet as `0x${string}` })).held) throw new CanteenError('ACCOUNT_HELD',403);
-      res.json(await service!.prepare(order));
+      const reconciled = await service!.reconcileWallet(order);
+      if (reconciled.status !== 'PAID' && reconciled.status !== 'EXPIRED'
+        && (await library!.accountStatus({ ...actor, wallet: actor.wallet as `0x${string}` })).held) {
+        throw new CanteenError('ACCOUNT_HELD',403);
+      }
+      res.json(await service!.prepare(reconciled));
     } else if (req.params.action === 'transactions') {
       if (!req.body || Object.keys(req.body).join(',') !== 'txHash' || typeof req.body.txHash !== 'string') throw new CanteenError('INVALID_REQUEST');
       res.json(await service!.track(order,req.body.txHash));
