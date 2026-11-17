@@ -97,10 +97,10 @@ wsl.exe --list --quiet
 wsl.exe -d $Distro -- /root/.foundry/bin/cast --version
 ```
 
-Đặt RPC URL đúng theo lần `avalanche blockchain deploy` hiện tại. Ví dụ đã ghi nhận cho chain local này dùng cổng `9654` và blockchain ID dưới đây; nếu bạn tạo lại chain, lấy blockchain ID mới từ Avalanche CLI thay vì dùng lại ví dụ:
+Đặt RPC URL đúng theo lần `avalanche blockchain deploy` hiện tại. Đây là endpoint CLI báo cho chain local đang dùng ngày 18/11/2026; nếu CLI `network status` báo blockchain ID khác, thay URL bằng kết quả mới. Không tái sử dụng ID cũ sau khi tạo chain khác:
 
 ```powershell
-$RpcUrl = 'http://127.0.0.1:9654/ext/bc/ei1KeTdVU9HTCEPGRgYUBAqpd7CyHxGJUDzoseXQFQHubTXfW/rpc'
+$RpcUrl = 'http://127.0.0.1:9654/ext/bc/2fruduRhAJ8vHD3btM6o59hyhJaLW8xaVJsxhbZga5kJkUABkL/rpc'
 $Body = @{ jsonrpc = '2.0'; id = 1; method = 'eth_chainId'; params = @() } | ConvertTo-Json -Compress
 $Probe = Invoke-RestMethod -Uri $RpcUrl -Method Post -ContentType 'application/json' -Body $Body
 if ($Probe.result -ne '0x4f25') { throw "Sai chain ID: $($Probe.result); cần 0x4f25 (20261)." }
@@ -175,7 +175,7 @@ Sau khi bật máy lại, mở PowerShell, gán lại `$Distro` và `$RpcUrl` nh
 
 ```powershell
 $Distro = 'IntraCampus-L01-Ubuntu'
-$RpcUrl = 'http://127.0.0.1:9654/ext/bc/ei1KeTdVU9HTCEPGRgYUBAqpd7CyHxGJUDzoseXQFQHubTXfW/rpc'
+$RpcUrl = 'http://127.0.0.1:9654/ext/bc/2fruduRhAJ8vHD3btM6o59hyhJaLW8xaVJsxhbZga5kJkUABkL/rpc'
 $Body = @{ jsonrpc = '2.0'; id = 1; method = 'eth_chainId'; params = @() } | ConvertTo-Json -Compress
 wsl.exe -d $Distro -- /root/bin/avalanche --skip-update-check network start
 wsl.exe -d $Distro -- /root/bin/avalanche --skip-update-check network status
