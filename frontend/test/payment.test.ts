@@ -160,6 +160,12 @@ test("browser lock denial never opens the wallet", async () => {
     exclusive: async () => { throw Error("locked"); } });
   await c.pay(); assert.equal(sends, 0);
 });
+test("a passive invoice lookup denied by another tab does not claim a prior payment exists", async () => {
+  const c = new PaymentController({ preview: preview(), account: A, storage: storage(), wallet: { getSnapshot: () => ready(),
+    sendTransaction: async () => hash }, preflight: async () => preview(), exclusive: async () => { throw Error("locked"); } });
+  await c.refresh();
+  assert.equal(c.getSnapshot().status, "ready"); assert.equal(c.getSnapshot().canPay, true); assert.equal(c.getSnapshot().message, null);
+});
 test("an HTTP422 body cannot masquerade as a verified paid response", async () => {
   const h = harness(); h.setFetch(async () => response(paid(), 422)); await h.c.pay();
   assert.equal(h.c.getSnapshot().receipt, null); assert.equal(h.c.getSnapshot().canPay, false);
