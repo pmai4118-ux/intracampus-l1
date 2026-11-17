@@ -6,6 +6,7 @@ import { formatWalletBalance } from "../../lib/chains";
 import { parseInvoicePayload, sameInvoiceEnvelope } from "../../lib/invoice";
 import { InvoiceStatusController } from "../../lib/invoice-status";
 import { InvoiceStatus } from "./InvoiceStatus";
+import Icon from "../components/Icon";
 
 const service = { merchantId: "parking-demo", serviceId: "parking-single" } as const;
 function apiMessage(value: unknown) {
@@ -77,11 +78,11 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
   const countdown = `${Math.floor(remaining / 60000).toString().padStart(2, "0")}:${Math.floor((remaining % 60000) / 1000).toString().padStart(2, "0")}`;
   return <>
     <section className="surface-panel invoice-form-panel" aria-labelledby="invoice-form-title" aria-busy={busy}>
-      <div className="panel-top-row"><div><h1 id="invoice-form-title" className="screen-title">Tạo hóa đơn POS</h1>
+      <div className="panel-top-row"><div><span className="panel-eyebrow">01 · PHÁT HÀNH HÓA ĐƠN</span><h2 id="invoice-form-title" className="screen-title">Tạo hóa đơn POS</h2>
         <p className="screen-subtitle">Bãi xe demo · Một lượt gửi xe · giá gốc 3.000 CAMPUS</p></div>
         <span className="network-pill">IntraCampus L1 · Chain 20261</span></div>
       <div className="invoice-form-actions"><p>Backend ấn định giá và ký hóa đơn. Sinh viên xác nhận thanh toán bằng ví Core.</p>
-        <button type="button" className="primary-cta-btn" disabled={busy || unresolved} onClick={() => void createInvoice()}>
+        <button type="button" className="primary-cta-btn" disabled={busy || unresolved} onClick={() => void createInvoice()}><Icon name="qr" />
           {busy ? "Đang tạo hóa đơn…" : state.invoiceId ? "Tạo hóa đơn mới" : "Tạo hóa đơn"}</button></div>
       {unresolved ? <p>Đang đối chiếu giao dịch cũ; giữ hóa đơn hiện tại tới khi xác minh được kết quả.</p> : null}
       {error ? <p className="invoice-feedback error-panel" role="alert">{error}</p> : null}
@@ -97,11 +98,11 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
           <button type="button" className="secondary-btn" onClick={() => void copyPayload()}>{copied ? "Đã sao chép payload" : "Sao chép payload QR"}</button>
           <label className="invoice-payload-label" htmlFor="invoice-payload">Payload để dán khi camera không dùng được</label>
           <textarea id="invoice-payload" className="invoice-payload" readOnly value={qrPayload} rows={5} />
-        </div></div> : <p>Tạo hóa đơn hoặc nhập invoiceId bên dưới để mở lại hóa đơn cũ.</p>}
+        </div></div> : <div className="pos-empty-state"><span className="empty-qr-icon"><Icon name="qr" /></span><h3>Sẵn sàng cho lượt thanh toán tiếp theo</h3><p>Tạo hóa đơn để hiển thị mã QR tại đây.<br />Sinh viên quét mã và xác nhận bằng ví của mình.</p><span className="empty-state-hint"><Icon name="shield" />Chỉ ghi nhận đã thu khi biên lai được xác minh</span></div>}
     </section>
     <InvoiceStatus state={state} />
     <form className="surface-panel invoice-recovery" onSubmit={(event) => void recover(event)} aria-labelledby="invoice-recovery-title">
-      <h2 id="invoice-recovery-title">Mở lại / đối chiếu hóa đơn</h2>
+      <span className="panel-eyebrow">TRA CỨU & KHÔI PHỤC</span><h2 id="invoice-recovery-title">Mở lại / đối chiếu hóa đơn</h2>
       <label htmlFor="pos-invoice-id">invoiceId</label><input id="pos-invoice-id" required value={lookupId} onChange={(e) => { setLookupId(e.target.value); setLookupError(null); }}
         aria-invalid={Boolean(lookupError)} aria-describedby="pos-lookup-help pos-lookup-error" autoComplete="off" spellCheck={false} />
       <label htmlFor="pos-tx-hash">Tx hash (nếu đã có)</label><input id="pos-tx-hash" value={txHash} onChange={(e) => { setTxHash(e.target.value); setLookupError(null); }}

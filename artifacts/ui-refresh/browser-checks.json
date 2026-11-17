@@ -1,0 +1,247 @@
+{
+  "date": "2026-11-17",
+  "browser": "Codex Browser / Chromium",
+  "context": "Local UI and fixture QA; no live L1 transactions",
+  "checks": [
+    {
+      "label": "student-live-390",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "student-demo-390",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "student-rejected-390",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "student-receipt-390",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "student-receipt-320",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "home-320",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "home-390",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "pos-live-after-reset",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "pos-live-1440",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "label": "pos-demo-1440",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "label": "pos-pending-1440",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "label": "pos-receipt-1440",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "label": "library-1440",
+      "activeNav": "Thư viện",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "label": "/-320",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "/student-320",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "/pos-320",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "/student/library-320",
+      "activeNav": "Thư viện",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "/staff/library-320",
+      "activeNav": "Thủ thư",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "width": 320
+    },
+    {
+      "label": "/-768",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "width": 768
+    },
+    {
+      "label": "/student-768",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "width": 768
+    },
+    {
+      "label": "/pos-768",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "width": 768
+    },
+    {
+      "label": "/student/library-768",
+      "activeNav": "Thư viện",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "width": 768
+    },
+    {
+      "label": "/staff/library-768",
+      "activeNav": "Thủ thư",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 768,
+      "width": 768
+    },
+    {
+      "label": "production-home-default",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    {
+      "label": "production/student",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    {
+      "label": "production/pos",
+      "activeNav": "Điểm thu",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    {
+      "label": "production/student/library",
+      "activeNav": "Thư viện",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    {
+      "label": "production/staff/library",
+      "activeNav": "Thủ thư",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    {
+      "label": "production-home-390",
+      "activeNav": "Tổng quan",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    },
+    {
+      "label": "production-student-390",
+      "activeNav": "Sinh viên",
+      "headings": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "width": 390
+    }
+  ]
+}

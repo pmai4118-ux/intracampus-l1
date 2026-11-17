@@ -139,7 +139,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     <h3 id="invoice-preview-title">Quét hoặc dán hóa đơn POS</h3>
     <p>Đối chiếu hóa đơn với backend và chain 20261, sau đó kiểm tra số tiền trước khi mở Core xác nhận.</p>
     <label htmlFor="student-invoice-payload">Payload QR</label>
-    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={5}
+    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={5} placeholder="Dán nội dung mã QR từ điểm thu vào đây…"
       aria-describedby={error ? "student-invoice-help student-invoice-error" : "student-invoice-help"} aria-invalid={Boolean(error)}
       onChange={(event) => { setPayload(event.target.value); clearPreview(); }} />
     <p id="student-invoice-help" className="metric-note">Bạn có thể dùng camera hoặc dán payload đã sao chép từ POS.</p>
