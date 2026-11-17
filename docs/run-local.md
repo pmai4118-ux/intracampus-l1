@@ -88,6 +88,7 @@ L1 cần có cặp merchant/category bãi xe được bật trong registry. Khô
 Phần này dùng L1 local đã được tạo và đang chạy trong WSL2. Không chạy lại lệnh `avalanche blockchain create` hoặc `deploy` chỉ để mở ứng dụng: tạo lại chain sẽ đổi lịch sử và có thể làm manifest/địa chỉ contract cũ không còn hợp lệ.
 
 Mở PowerShell và kiểm tra distro/công cụ. Nếu tên distro hoặc đường dẫn `cast` trên máy khác, thay cho đúng môi trường của bạn:
+
 Chạy các khối PowerShell trong cùng một cửa sổ để giữ `$Distro` và `$RpcUrl`.
 
 ```powershell
@@ -157,6 +158,32 @@ wsl.exe -d $Distro -- /root/.foundry/bin/cast balance --rpc-url $RpcUrl $Student
 ```
 
 Sau đó chạy `pnpm rpc:check`, rồi mở [http://127.0.0.1:4000/api/network](http://127.0.0.1:4000/api/network). `rpc:check` kiểm tra chain ID; trước giao dịch demo cũng xem `latestBlock`/`headAgeSeconds`. Nếu head cũ hơn 300 giây, app sẽ chặn thao tác để tránh ký invoice đã hết hạn. Xem [mục chẩn đoán Library, FOOD và gửi xe](#chẩn-đoán-local-library-food-và-gửi-xe-17112026). Không reset chain hoặc bỏ qua giới hạn freshness.
+
+### Giữ nguyên setup khi tắt và mở lại máy
+
+Core giữ network/account trong profile Chrome; WSL giữ distro, keystore Foundry và dữ liệu node dưới Linux home. Không xóa profile Chrome, unregister distro, hoặc xóa `~/.avalanche-cli`, `~/.avalanchego`, `~/.foundry/keystores`, `.env` hay manifest deployment.
+
+Trước khi tắt Windows, lưu snapshot hiện tại bằng lệnh `network stop` của Avalanche CLI. CLI bản `1.9.4` đang ở `/root/bin/avalanche` trong distro này, nên gọi đường dẫn đầy đủ:
+
+```powershell
+wsl.exe -d $Distro -- /root/bin/avalanche --skip-update-check network stop
+```
+
+Kết quả phải xác nhận local network đã dừng. `network stop` lưu trạng thái đang chạy để lần sau `network start` khôi phục; **không** dùng `network clean`, vì lệnh đó xóa state của local network. Đây là cách snapshot được mô tả trong [tài liệu chính thức của Avalanche CLI](https://github.com/ava-labs/avalanche-cli#snapshots-usage-for-local-networks).
+
+Sau khi bật máy lại, mở PowerShell, gán lại `$Distro` và `$RpcUrl` như các bước trên, rồi khôi phục đúng snapshot:
+
+```powershell
+$Distro = 'IntraCampus-L01-Ubuntu'
+$RpcUrl = 'http://127.0.0.1:9654/ext/bc/ei1KeTdVU9HTCEPGRgYUBAqpd7CyHxGJUDzoseXQFQHubTXfW/rpc'
+$Body = @{ jsonrpc = '2.0'; id = 1; method = 'eth_chainId'; params = @() } | ConvertTo-Json -Compress
+wsl.exe -d $Distro -- /root/bin/avalanche --skip-update-check network start
+wsl.exe -d $Distro -- /root/bin/avalanche --skip-update-check network status
+$Probe = Invoke-RestMethod -Uri $RpcUrl -Method Post -ContentType 'application/json' -Body $Body
+if ($Probe.result -ne '0x4f25') { throw "Sai chain ID: $($Probe.result); cần 0x4f25 (20261)." }
+```
+
+Khi RPC trả `0x4f25`, vào thư mục repo, chạy `pnpm rpc:check` rồi `pnpm dev`. Không cần tạo/deploy chain, cài lại dependencies hay import lại ví mỗi lần khởi động Windows. Chỉ chạy `pnpm install --frozen-lockfile` khi dependencies của branch thay đổi. Nếu PowerShell báo không kết nối được RPC, kiểm tra `wsl.exe --list --quiet`, `network status` và đúng blockchain ID trước; đừng chạy `blockchain deploy` để “sửa” trạng thái.
 
 ## 3. Kiểm tra RPC và khởi động
 
