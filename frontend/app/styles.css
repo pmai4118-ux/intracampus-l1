@@ -1626,3 +1626,4 @@ p {
     flex-direction: column;
   }
 }
+.canteen-menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:1rem}.canteen-dish{border:1px solid var(--border-color,#d9e1e8);border-radius:1rem;padding:1.25rem}.canteen-dish label{display:grid;gap:.5rem;margin-top:1rem}.canteen-dish input{min-height:44px;width:100%;padding:.5rem}.canteen-menu h3{margin-top:0}

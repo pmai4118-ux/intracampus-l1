@@ -47,7 +47,7 @@ export type GrantEvent = { event: "GrantSpent"; transactionHash: string; blockNu
   beneficiary: string; merchant: string; category: string; amountWei: string; balanceWei: string };
 export type GrantLookup = { balanceWei: string; block: { number: number; hash: string }; allowed: boolean;
   transaction: null | { hash: string; status: "pending" | "verified"; event: GrantEvent | null } };
-export type GrantIntent = { schemaVersion: 1; id: string; chainId: 20261; beneficiary: string; vault: string; deploymentHash: string;
+export type GrantIntent = { orderId?: string; schemaVersion: 1; id: string; chainId: 20261; beneficiary: string; vault: string; deploymentHash: string;
   merchant: string; category: string; amountWei: string; afterBlock: number; recoveredHash: boolean;
   phase: "prepared" | "unknown" | "pending" | "confirmed" | "reverted"; hash: string | null };
 
@@ -190,7 +190,7 @@ export class GrantController {
   private listeners = new Set<() => void>(); private generation = 0; private disposed = false; private operation = false;
   private timer: ReturnType<typeof setTimeout> | undefined; private abort?: AbortController;
   private options: { config: GrantConfig; rpc: WalletRpc; wallet: GrantSender; storage: Store; fetcher?: typeof fetch;
-    lock?: Lock; pollMs?: number; accountGuard?: (account: string) => Promise<void> };
+    orderId?: string; lock?: Lock; pollMs?: number; accountGuard?: (account: string) => Promise<void> };
   constructor(options: GrantController["options"]) { this.options = options; }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -294,7 +294,7 @@ export class GrantController {
         const { transaction, afterBlock } = await preflightGrant(this.options.rpc, this.options.config, account, amount);
         check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
         const c = this.options.config;
-        let intent: GrantIntent = { schemaVersion: 1, id: crypto.randomUUID(), chainId: 20261, beneficiary: account, vault: c.vault, deploymentHash: c.deploymentHash,
+        let intent: GrantIntent = { orderId: this.options.orderId, schemaVersion: 1, id: crypto.randomUUID(), chainId: 20261, beneficiary: account, vault: c.vault, deploymentHash: c.deploymentHash,
           merchant: c.merchant, category: c.category, amountWei: amount.toString(), afterBlock, recoveredHash: false, phase: "prepared", hash: null };
         this.write(account, intent); this.set({ intent, lookup, stale: false });
         let guardError: unknown;

@@ -58,3 +58,5 @@ export type {
   LibraryRateLimitConfig,
   LibraryRuntimeConfig,
 } from "./library.ts";
+
+export type { CanteenDish, CanteenItem, CanteenOrder } from './canteen.ts';

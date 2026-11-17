@@ -1,3 +1,5 @@
+import { createCanteenRouter } from './modules/canteen/canteen.routes.ts';
+import type { CanteenService } from './modules/canteen/canteen.service.ts';
 import express from "express";
 import { createNetworkRouter } from "./modules/network/network.routes.ts";
 import { createInvoicesRouter } from "./modules/invoices/invoices.routes.ts";
@@ -19,6 +21,7 @@ export function createApp(
   authService?: AuthService,
   authConfig?: LibraryAuthConfig,
   libraryService?: LibraryService,
+  canteenService?: CanteenService,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -31,6 +34,7 @@ export function createApp(
   app.use(createInvoicesRouter(receiptService, creationService));
   app.use(createGrantsRouter(grantsService, authService, authConfig, libraryService));
   app.use(createLibraryRouter(libraryService, authService, authConfig));
+  app.use(createCanteenRouter(canteenService, authService, authConfig, libraryService));
   app.use(createAuthRouter(authService, authConfig));
 
   return app;

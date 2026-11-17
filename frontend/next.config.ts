@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const backend = backendUrl.origin;
     return [
+      { source: "/api/canteen/:path*", destination: `${backend}/api/canteen/:path*` },
       { source: "/api/invoices", destination: `${backend}/api/invoices` },
       { source: "/api/invoices/:path*", destination: `${backend}/api/invoices/:path*` },
       { source: "/api/grants/:path*", destination: `${backend}/api/grants/:path*` },
