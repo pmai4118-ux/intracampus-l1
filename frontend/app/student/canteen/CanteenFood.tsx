@@ -51,4 +51,3 @@ function FoodView({ controller, order, onHash }: { controller: GrantController; 
     {error ? <p role="alert">{error}</p> : null}
   </div>;
 }
-

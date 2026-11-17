@@ -99,4 +99,3 @@ export class CanteenRepository {
     return this.get(id,wallet);
   }
 }
-
