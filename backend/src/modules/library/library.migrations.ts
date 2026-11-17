@@ -289,4 +289,25 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
       SELECT tx_hash, request_id, action, submitted_at, status, block_number, block_hash, log_index, event_name, settlement_intent_id
       FROM library_transactions;
   `,
+}, {
+  version: 6,
+  sql: `
+    CREATE TABLE library_unmatched_deposits (
+      request_id TEXT PRIMARY KEY REFERENCES borrow_requests(request_id),
+      borrower TEXT NOT NULL,
+      book_id TEXT NOT NULL,
+      amount_wei TEXT NOT NULL,
+      approval_deadline INTEGER NOT NULL,
+      deposit_event_id INTEGER NOT NULL REFERENCES chain_events(event_id),
+      latest_event_name TEXT NOT NULL,
+      refund_event_id INTEGER REFERENCES chain_events(event_id)
+    ) STRICT;
+    CREATE TABLE library_unmatched_refund_attempts (
+      tx_hash TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL REFERENCES library_unmatched_deposits(request_id),
+      status TEXT NOT NULL CHECK(status IN ('SUBMITTED','CONFIRMED','REVERTED')),
+      block_number INTEGER,
+      block_hash TEXT
+    ) STRICT;
+  `,
 }];

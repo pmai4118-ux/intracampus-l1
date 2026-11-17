@@ -165,6 +165,114 @@ test("an HTTP422 body cannot masquerade as a verified paid response", async () =
   assert.equal(h.c.getSnapshot().receipt, null); assert.equal(h.c.getSnapshot().canPay, false);
 });
 
+test("a wrong recovery candidate can be corrected after reload without another payment send", async () => {
+  const db = storage(), first = harness({ db }), wrong = `0x${"cd".repeat(32)}`;
+  first.setSend(async () => { throw new WalletTransactionError("DISCONNECTED", "unknown"); });
+  await first.c.pay();
+  await first.c.refresh(wrong);
+  const restored = harness({ db });
+  restored.setFetch(async url => response(String(url).includes(hash) ? paid() : pending()));
+  await restored.c.refresh(hash);
+  assert.equal(restored.c.getSnapshot().status, "paid");
+  assert.equal(restored.c.getSnapshot().receipt?.txHash, hash);
+  assert.equal(first.sends(), 1);
+  assert.equal(restored.sends(), 0);
+  assert.equal(restored.c.getSnapshot().canRecoverHash, false);
+});
+
+test("legacy ambiguous journals accept a corrected candidate while keeping the original hash until verification", async () => {
+  const db = storage(), wrong = `0x${"cd".repeat(32)}`;
+  db.setItem(paymentStorageKey(envelope), JSON.stringify({ version: 1, account: A, envelope, amountWei: preview().quote.paidAmount.toString(), txHash: wrong }));
+  const h = harness({ db });
+  await h.c.refresh(hash);
+  assert.equal(h.c.getSnapshot().canPay, false);
+  assert.equal(h.c.getSnapshot().canRecoverHash, true);
+  assert.equal(JSON.parse(db.getItem(paymentStorageKey(envelope))!).txHash, wrong);
+  h.setFetch(async () => response(paid()));
+  await h.c.refresh();
+  assert.equal(h.c.getSnapshot().status, "paid");
+  assert.equal(h.sends(), 0);
+});
+
+test("a provider returned hash cannot be replaced by a recovery candidate", async () => {
+  const h = harness(), wrong = `0x${"cd".repeat(32)}`;
+  await h.c.pay();
+  await h.c.refresh(wrong);
+  assert.equal(h.c.getSnapshot().txHash, hash);
+  assert.equal(h.c.getSnapshot().canRecoverHash, false);
+  assert.equal(JSON.parse(h.db.getItem(paymentStorageKey(envelope))!).txHash, hash);
+  assert.equal(h.sends(), 1);
+});
+
+test("a returned wallet hash can be verified from memory if storage fills after sending", async () => {
+  const db = storage(), h = harness({ db });
+  h.setSend(async () => {
+    db.setItem = () => { throw Error("full after send"); };
+    return hash;
+  });
+  h.setFetch(async url => {
+    assert.match(String(url), new RegExp(`txHash=${hash}`));
+    return response(paid());
+  });
+  await h.c.pay();
+  assert.equal(h.c.getSnapshot().status, "paid");
+  assert.equal(h.c.getSnapshot().canPay, false);
+  assert.equal(JSON.parse(db.getItem(paymentStorageKey(envelope))!).txHash, null);
+  await h.c.pay(); assert.equal(h.sends(), 1);
+});
+
+test("a candidate revert remains correctable and never enables a second send", async () => {
+  const h = harness(), wrong = `0x${"cd".repeat(32)}`;
+  h.setSend(async () => { throw new WalletTransactionError("DISCONNECTED", "unknown"); });
+  await h.c.pay();
+  h.setFetch(async () => response({ ...pending("pending", { txHash: wrong, status: "reverted" }),
+    error: { code: "TX_REVERTED", message: "Thất bại", nextStep: "Đối chiếu", retryable: false } }, 422));
+  await h.c.refresh(wrong);
+  assert.equal(h.c.getSnapshot().status, "unknown");
+  assert.equal(h.c.getSnapshot().canRecoverHash, true);
+  await h.c.pay(); assert.equal(h.sends(), 1);
+  h.setFetch(async () => response(paid()));
+  await h.c.refresh(hash);
+  assert.equal(h.c.getSnapshot().status, "paid");
+});
+
+test("recovery shares the exclusive payment lock and preserves a newer journal", async () => {
+  const db = storage(), first = harness({ db });
+  first.setSend(async () => { throw new WalletTransactionError("DISCONNECTED", "unknown"); });
+  await first.c.pay();
+  let locked = false, lockCount = 0;
+  const wait = deferred<Response>();
+  const c = new PaymentController({ preview: preview(), account: A, storage: db,
+    wallet: { getSnapshot: () => ready(), sendTransaction: async () => { throw Error("must not send"); } },
+    preflight: async () => preview(), fetcher: async () => wait.promise,
+    exclusive: async (key, run) => {
+      assert.equal(key, paymentStorageKey(envelope)); assert.equal(locked, false);
+      locked = true; lockCount++; try { await run(); } finally { locked = false; }
+    } });
+  const run = c.refresh(hash);
+  const newer = { ...JSON.parse(db.getItem(paymentStorageKey(envelope))!), recoveryHash: `0x${"de".repeat(32)}` };
+  db.setItem(paymentStorageKey(envelope), JSON.stringify(newer));
+  wait.resolve(response(paid())); await run;
+  assert.equal(lockCount, 1); assert.equal(locked, false);
+  assert.notEqual(c.getSnapshot().status, "paid");
+  assert.deepEqual(JSON.parse(db.getItem(paymentStorageKey(envelope))!), newer);
+});
+
+test("a late recovery response after account or chain change cannot confirm or mutate the journal", async () => {
+  for (const changed of [ready(B), { ...ready(), chainId: BigInt(43113) }]) {
+    const h = harness();
+    h.setSend(async () => { throw new WalletTransactionError("DISCONNECTED", "unknown"); });
+    await h.c.pay();
+    const wait = deferred<Response>(); h.setFetch(() => wait.promise);
+    const run = h.c.refresh(hash);
+    const before = h.db.getItem(paymentStorageKey(envelope));
+    h.setWallet(changed); wait.resolve(response(paid())); await run;
+    assert.notEqual(h.c.getSnapshot().status, "paid");
+    assert.equal(h.db.getItem(paymentStorageKey(envelope)), before);
+    assert.equal(h.sends(), 1);
+  }
+});
+
 class Provider implements WalletProvider {
   address = A; chain = "0x4f25"; calls: { method: string; params?: unknown[] }[] = [];
   accountsWait?: Promise<unknown>;

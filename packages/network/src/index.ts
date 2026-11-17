@@ -44,6 +44,7 @@ export type {
   LibraryEventProof,
   CreateLibraryRequest,
   LibraryRequest,
+  LibraryUnmatchedDeposit,
   LibrarySettlement,
   LibrarySettlementPreview,
   LibrarySettlementCondition,

@@ -210,7 +210,7 @@ export class LibraryTransactions {
     // Do not persist an unverified recovery hint: a typo must not poison durable recovery.
     const hash = record?.hash ?? recoveredHash;
     let request = hash ? await this.options.api.track(id, action, hash, record?.settlementIntentId) : await this.options.api.getRequest(id);
-    let tx = request.transactions.find(t => t.action === action);
+    let tx = request.transactions.find(t => t.action === action && (!hash || same(t.txHash, hash)));
     if (!hash && tx && ['return','settle'].includes(action) && !(record?.previousHash && same(tx.txHash, record.previousHash))) {
       if (!record?.settlementIntentId) throw new LibraryUiError('RECOVERY_REQUIRED');
       const discoveredHash = tx.txHash;

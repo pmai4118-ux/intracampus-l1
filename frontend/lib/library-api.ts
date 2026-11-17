@@ -1,6 +1,6 @@
 import { campusNetwork, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibrarySession,
   type LibraryEventProof, type LibraryTransaction, type LibraryTransactionAction, type LibraryRole,
-  type LibrarySettlementIntent, type LibrarySettlementIntentRequest } from '@intracampus/network';
+  type LibrarySettlementIntent, type LibrarySettlementIntentRequest, type LibraryUnmatchedDeposit } from '@intracampus/network';
 import { parseAccountStatus } from './library-session.ts';
 
 export class LibraryUiError extends Error {
@@ -55,7 +55,30 @@ export function parseLibraryRequest(value: unknown): LibraryRequest {
         && address(p.borrower) && bytes32(p.blockHash) && timestamp(p.blockNumber) && timestamp(p.logIndex));
     } else check(tx.proof === null);
   }
+  if (v.depositConflict !== undefined) {
+    const conflict = parseLibraryUnmatchedDeposit(v.depositConflict);
+    check(conflict.requestId === v.requestId && v.depositIntent === null);
+  }
   return v as LibraryRequest;
+}
+export function parseLibraryUnmatchedDeposit(value: unknown): LibraryUnmatchedDeposit {
+  const v = object(value);
+  check(bytes32(v.requestId) && bytes32(v.bookId) && address(v.borrower) && wei(v.amountWei)
+    && timestamp(v.approvalDeadline) && typeof v.latestEvent === 'string');
+  for (const [proof, events] of [[v.depositProof, ['DepositReceived']], [v.refundProof, ['ExpiredRefundClaimed', 'RequestRejected']]] as const) {
+    if (proof === null && events.length > 1) continue;
+    const p = object(proof);
+    check(p.chainId === campusNetwork.chainId && events.some(name => name === p.eventName) && p.requestId === v.requestId
+      && p.borrower?.toLowerCase() === v.borrower.toLowerCase() && address(p.contractAddress) && bytes32(p.txHash)
+      && bytes32(p.blockHash) && timestamp(p.blockNumber) && timestamp(p.logIndex));
+  }
+  check(v.refundProof === null || v.refundProof.contractAddress.toLowerCase() === v.depositProof.contractAddress.toLowerCase());
+  if (v.refundIntent !== null) {
+    const i = object(v.refundIntent);
+    check(i.chainId === campusNetwork.chainId && i.to?.toLowerCase() === v.depositProof.contractAddress.toLowerCase()
+      && /^0x(?:[0-9a-f]{2})+$/i.test(i.data) && i.valueWei === '0' && i.requestId === v.requestId && i.bookId === v.bookId && v.refundProof === null);
+  }
+  return v as LibraryUnmatchedDeposit;
 }
 export function parseLibraryLoan(value: unknown): LibraryLoan {
   const v = object(value);
@@ -108,6 +131,15 @@ export class LibraryApi {
   async books(q = '') { return list(await this.request(`/api/library/books?q=${encodeURIComponent(q)}`), parseLibraryBook); }
   async requests(queue = false) { return list(await this.request(`/api/library/requests${queue ? '?queue=true' : ''}`), parseLibraryRequest); }
   async accountStatus() { return parseAccountStatus(await this.request('/api/library/account-status')); }
+  async unmatchedDeposits() { return list(await this.request('/api/library/unmatched-deposits'), parseLibraryUnmatchedDeposit); }
+  async trackUnmatched(id: string, txHash: string) {
+    check(bytes32(id) && bytes32(txHash));
+    const result = object(await this.request(`/api/library/unmatched-deposits/${id}/transactions`, { txHash }));
+    const deposit = parseLibraryUnmatchedDeposit(result.deposit);
+    const tx = object(result.transaction);
+    check(deposit.requestId === id && tx.txHash?.toLowerCase() === txHash.toLowerCase() && ['SUBMITTED', 'CONFIRMED', 'REVERTED'].includes(tx.status));
+    return { deposit, status: tx.status as 'SUBMITTED' | 'CONFIRMED' | 'REVERTED' };
+  }
   async getRequest(id: string) { check(bytes32(id)); const r = parseLibraryRequest(await this.request(`/api/library/requests/${id}`)); check(r.requestId === id); return r; }
   async create(bookId: string, idempotencyKey: string) { return parseLibraryRequest(await this.request('/api/library/requests', { bookId, idempotencyKey })); }
   async loans() { return list(await this.request('/api/library/loans'), parseLibraryLoan); }
@@ -117,6 +149,13 @@ export class LibraryApi {
     const result = object(await this.request(`/api/library/requests/${id}/transactions`, { action, txHash, ...(settlementIntentId ? { settlementIntentId } : {}) }));
     const request = parseLibraryRequest(result.request);
     check(request.requestId === id);
+    if (result.transaction !== undefined && result.transaction !== null) {
+      const exact = parseLibraryRequest({ ...request, transactions: [result.transaction] }).transactions[0];
+      check(exact.action === action && exact.txHash.toLowerCase() === txHash.toLowerCase());
+      const index = request.transactions.findIndex(t => t.action === action && t.txHash.toLowerCase() === txHash.toLowerCase());
+      if (index < 0) request.transactions.push(exact);
+      else request.transactions[index] = exact;
+    }
     return request;
   }
   async returnBook(id: string) { check(bytes32(id)); await this.request(`/api/library/loans/${id}/return-requests`, {}); }

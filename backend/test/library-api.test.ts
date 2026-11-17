@@ -218,6 +218,28 @@ test("Library HTTP requires a session, validates same-origin creation, and keeps
   assert.equal(transaction.request.status, "AWAITING_DEPOSIT", "a successful receipt without a verified lifecycle event is not a deposit");
 });
 
+test("an unseen recovery hash stays pending without inheriting an older reverted attempt", async (t) => {
+  const state = setup(t);
+  const api = await serve(t, state.app);
+  const cookie = await studentCookie(state);
+  const account = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await state.libraryService.createRequest({ account, bookId, idempotencyKey: "unseen-after-revert" });
+  const oldHash = hash(198), candidateHash = hash(199);
+  state.repository.recordTransactionSubmission({ requestId: request.requestId, action: "deposit", txHash: oldHash, submittedAt: now });
+  state.repository.markTransactionReverted({ requestId: request.requestId, action: "deposit", txHash: oldHash,
+    blockNumber: 499, blockHash: hash(499), checkedAt: now });
+
+  const response = await fetch(`${api}/api/library/requests/${request.requestId}/transactions`, { method: "POST", headers: {
+    cookie, origin: authConfig.origin, "content-type": "application/json" }, body: JSON.stringify({ action: "deposit", txHash: candidateHash }) });
+  assert.equal(response.status, 202, "an unobserved hash must not inherit another transaction's terminal status");
+  const result = await response.json();
+  assert.equal(result.transaction, null);
+  assert.equal(result.request.status, "AWAITING_DEPOSIT");
+  assert.equal(result.request.transactions.find((tx: { txHash: string }) => tx.txHash === oldHash)?.status, "REVERTED");
+  assert.equal(state.repository.getTransactionAttempt(request.requestId, "deposit", candidateHash), undefined);
+  assert.equal(state.repository.listBooks()[0].copiesAvailable, 1);
+});
+
 test("request creation fails closed when sealed live book terms differ from the manifest and SQLite seed", async (t) => {
   const state = setup(t);
   state.rpc.liveReplacementPriceWei = "99000000000000000000";
@@ -411,6 +433,78 @@ function confirmLibraryTestDeposit(repository: LibraryRepository, requestId: str
     amountWei: depositWei, depositedAt, approvalDeadline: depositedAt + policy.approvalWindowSeconds,
   }], blockNumber, now, JSON.stringify(policy));
 }
+
+test("competing canonical refund preserves the winner and independently reverts the submitted loser", async t => {
+  const { repository } = setup(t);
+  const requestId = hash(98001), loser = hash(98002), winner = hash(98003);
+  repository.createDepositRequest({ requestId, wallet: student.address, bookId, idempotencyKey: "competing-refund",
+    createdAt: now - 100000, chainTime: now - 100000, holdAfterSeconds: policy.fullDepositRetentionAfterSeconds });
+  confirmLibraryTestDeposit(repository, requestId, student.address, 499, now - policy.approvalWindowSeconds);
+  repository.expirePendingRequests(now);
+  repository.recordTransactionSubmission({ requestId, action: "refund", txHash: loser, submittedAt: now });
+  repository.recordVerifiedChainEvents([{ chainId: 20261, contractAddress: escrow, txHash: winner, logIndex: 0,
+    blockNumber: 500, blockHash: hash(500), blockTimestamp: now, transactionFrom: secondStudent.address,
+    observedAt: now, eventName: "ExpiredRefundClaimed", requestId, borrower: student.address, refundWei: depositWei,
+  }], 500, now, JSON.stringify(policy));
+  const failed = repository.markTransactionReverted({ requestId, action: "refund", txHash: loser,
+    blockNumber: 500, blockHash: hash(500), checkedAt: now });
+  assert.equal(failed.txHash, loser);
+  assert.equal(failed.status, "REVERTED");
+  assert.equal(repository.getTransaction(requestId, "refund")?.txHash, winner);
+  assert.equal(repository.getTransaction(requestId, "refund")?.status, "CONFIRMED");
+});
+
+test("a terminal refunded request permits only exact historical approval revert tracking", async t => {
+  const { repository, rpc, libraryService } = setup(t);
+  const borrower = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const staff = { wallet: librarian.address as `0x${string}`, role: "LIBRARIAN" as const };
+  const { request } = await libraryService.createRequest({ account: borrower, bookId, idempotencyKey: "terminal-approval" });
+  confirmLibraryTestDeposit(repository, request.requestId, student.address, 500, now - policy.approvalWindowSeconds);
+  repository.expirePendingRequests(now);
+  repository.recordVerifiedChainEvents([{ chainId: 20261, contractAddress: escrow, txHash: hash(98004), logIndex: 0,
+    blockNumber: 501, blockHash: hash(501), blockTimestamp: now, transactionFrom: librarian.address,
+    observedAt: now, eventName: "RequestRejected", requestId: request.requestId, borrower: student.address, refundWei: depositWei,
+  }], 501, now, JSON.stringify(policy));
+  rpc.headNumber = 502;
+  const txHash = hash(98005);
+  rpc.transactions.set(txHash, { hash: txHash, to: escrow, from: librarian.address,
+    data: iface.encodeFunctionData("approve", [request.requestId]), value: 0n } as unknown as TransactionResponse);
+  rpc.receipts.set(txHash, { hash: txHash, status: 0, blockNumber: 502, blockHash: hash(502), logs: [] } as unknown as TransactionReceipt);
+  const result = await libraryService.submitTransaction(staff, request.requestId, { action: "approve", txHash });
+  assert.equal(result.transaction?.status, "REVERTED");
+  assert.equal(result.request.refundStatus, "REFUNDED");
+  assert.equal(result.request.loanId, null);
+});
+
+test("pending sweep retains a submission when returned receipt has another hash", async t => {
+  const { repository, rpc, libraryService } = setup(t);
+  const borrower = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await libraryService.createRequest({ account: borrower, bookId, idempotencyKey: "wrong-receipt" });
+  const txHash = hash(98006);
+  repository.recordTransactionSubmission({ requestId: request.requestId, action: "deposit", txHash, submittedAt: now });
+  rpc.receipts.set(txHash, { hash: hash(98007), status: 0, blockNumber: 500, blockHash: hash(500), logs: [] } as unknown as TransactionReceipt);
+  await libraryService.getRequest(borrower, request.requestId);
+  assert.equal(repository.getTransaction(request.requestId, "deposit")?.status, "SUBMITTED");
+});
+
+test("a verified foreign deposit is audited without stopping catalog or exposing another payer recovery", async t => {
+  const { repository, libraryService } = setup(t);
+  const borrower = { wallet: student.address as `0x${string}`, role: "STUDENT" as const };
+  const actualPayer = { wallet: secondStudent.address as `0x${string}`, role: "STUDENT" as const };
+  const { request } = await libraryService.createRequest({ account: borrower, bookId, idempotencyKey: "poisoned-request" });
+  confirmLibraryTestDeposit(repository, request.requestId, secondStudent.address, 500, now - policy.approvalWindowSeconds);
+  assert.equal((await libraryService.listBooks(student.address))[0].copiesAvailable, 1);
+  const blocked = await libraryService.getRequest(borrower, request.requestId);
+  assert.equal(blocked.depositIntent, null);
+  assert.equal(blocked.depositConflict?.borrower, secondStudent.address.toLowerCase());
+  assert.equal((await libraryService.listUnmatchedDeposits(borrower)).length, 0);
+  const owned = await libraryService.listUnmatchedDeposits(actualPayer);
+  assert.equal(owned.length, 1);
+  assert.equal(owned[0].refundIntent?.valueWei, "0");
+  const replacement = await libraryService.createRequest({ account: borrower, bookId, idempotencyKey: "replacement-request" });
+  assert.notEqual(replacement.request.requestId, request.requestId);
+  assert.ok(replacement.depositIntent);
+});
 
 test("a verified late staff refund advances the catalog cursor without releasing a reassigned copy", async t => {
   const state = setup(t);

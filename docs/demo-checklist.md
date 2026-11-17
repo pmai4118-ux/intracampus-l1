@@ -100,8 +100,14 @@ Từ gốc repo, mở terminal A, đặt `ANVIL_BIN` nếu Anvil chưa ở PATH,
 pnpm install --frozen-lockfile
 forge build --root contracts --force
 $env:U05_BROWSER_FIXTURE_DIR = Join-Path (Get-Location) 'backend/data/q02-new/browser'
+$env:U05_BROWSER_ORIGIN = 'http://127.0.0.1:3117'
 node frontend/test/u04-u05-local-evidence.mjs backend/data/q02-new/controller.json
 ```
+
+Chạy QR và FOOD trên hai fixture độc lập. Ca QR hết hạn tăng giờ Anvil 301
+giây; nếu dùng lại chain đó, kiểm tra freshness Library có thể chặn FOOD.
+Tạo một thư mục mới cho FOOD, đặt `U05_BROWSER_ORIGIN` và cổng Next tương ứng
+trước khi mở harness. Không nới ngưỡng thời gian của ứng dụng để vượt kiểm tra.
 
 Khi terminal A báo fixture ready, từ gốc repo chạy ở terminal B:
 
@@ -113,12 +119,13 @@ pnpm --filter @intracampus/frontend build
 pnpm --filter @intracampus/frontend start --port 3117
 ```
 
-Terminal C từ gốc repo với Python Playwright và Edge đã cài. Không chạy hai
-script đồng thời vì cùng dùng automine của fixture. Chọn đường dẫn đầu ra mới.
+Terminal C chạy từ gốc repo với Python Playwright và Edge đã cài. Chạy lệnh QR
+với fixture `q02-new` ở cổng 3117. Lặp lại terminal A và B với thư mục
+`backend/data/q02-food-new` và cổng 3119 để chạy FOOD. Chọn output mới mỗi lượt.
 
 ```powershell
-python frontend/test/u05-b05-browser.py backend/data/q02-new/browser backend/data/q02-new/food --origin http://127.0.0.1:3117
 python frontend/test/q02-payment-browser.py backend/data/q02-new/browser backend/data/q02-new/payment --record-dir backend/data/q02-new/recordings
+python frontend/test/u05-b05-browser.py backend/data/q02-food-new/browser backend/data/q02-food-new/food --origin http://127.0.0.1:3119
 ```
 
 Sau khi xem kết quả, dừng Next bằng Ctrl+C. Dừng fixture bằng lệnh trong

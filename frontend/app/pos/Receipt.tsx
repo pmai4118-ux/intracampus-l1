@@ -15,10 +15,12 @@ export function Receipt({ receipt }: { receipt: VerifiedInvoiceReceipt }) {
       <div className="price-row"><dt>Gas (riêng)</dt><dd>{formatWalletBalance(BigInt(receipt.gasUsed) * BigInt(receipt.effectiveGasPrice))}</dd></div>
       <div className="price-row"><dt>Block / log</dt><dd>{receipt.blockNumber} / {receipt.logIndex}</dd></div>
     </dl>
+    <details><summary>Chi tiết giao dịch đã xác minh</summary>
     <p>Người trả</p><code className="tx-hash-code">{receipt.payer}</code>
     <p>Người nhận</p><code className="tx-hash-code">{receipt.merchant}</code>
     <p>Hợp đồng · chain {receipt.chainId}</p><code className="tx-hash-code">{receipt.contractAddress}</code>
     <p>Tx hash</p><code className="tx-hash-code">{receipt.txHash}</code>
     <CopyButton label="Sao chép tx hash" value={receipt.txHash} />
+    </details>
   </div>;
 }

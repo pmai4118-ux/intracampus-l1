@@ -10,8 +10,9 @@ export type WalletTransaction = { to: string; data: string; value: string };
 export class WalletTransactionError extends Error {
   readonly code: string;
   readonly outcome: "not-sent" | "rejected" | "unknown";
-  constructor(code: string, outcome: "not-sent" | "rejected" | "unknown") {
-    super(code); this.name = "WalletTransactionError"; this.code = code; this.outcome = outcome;
+  readonly operation?: "message" | "transaction";
+  constructor(code: string, outcome: "not-sent" | "rejected" | "unknown", operation?: "message" | "transaction") {
+    super(code); this.name = "WalletTransactionError"; this.code = code; this.outcome = outcome; this.operation = operation;
   }
 }
 export type WalletStatus = "initializing" | "no-wallet" | "disconnected" | "connecting" | "rejected"
@@ -205,7 +206,7 @@ export class WalletController {
       try {
         signature = await provider.request({ method: "personal_sign", params: [data, expectedAccount] });
       } catch (error) {
-        if (errorCode(error) === 4001) throw fail("SIGNATURE_REJECTED", "rejected");
+        if (errorCode(error) === 4001) throw new WalletTransactionError("SIGNATURE_REJECTED", "rejected", "message");
         throw fail("WALLET_UNAVAILABLE");
       }
       const [accountsAfter, chainAfter] = await Promise.all([
@@ -260,7 +261,7 @@ export class WalletController {
       return hash;
     } catch (error) {
       if (error instanceof WalletTransactionError) throw error;
-      if (requested && errorCode(error) === 4001) throw new WalletTransactionError("SIGNATURE_REJECTED", "rejected");
+      if (requested && errorCode(error) === 4001) throw new WalletTransactionError("SIGNATURE_REJECTED", "rejected", "transaction");
       throw new WalletTransactionError(requested ? "SEND_OUTCOME_UNKNOWN" : "WALLET_UNAVAILABLE", requested ? "unknown" : "not-sent");
     } finally { this.sending = false; }
   }

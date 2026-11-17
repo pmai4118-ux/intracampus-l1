@@ -58,15 +58,18 @@ export class ReceiptService {
     }
   }
 
-  async lookup(invoiceId: string, txHash?: string): Promise<LookupResult> {
-    if (!isHash(invoiceId) || (txHash !== undefined && !isHash(txHash))) throw new InvoiceRequestError("INVALID_REQUEST");
+  async lookup(invoiceId: string, txHash?: string, candidateTxHash?: string): Promise<LookupResult> {
+    if (!isHash(invoiceId) || (txHash !== undefined && !isHash(txHash))
+      || (candidateTxHash !== undefined && (!isHash(candidateTxHash) || txHash !== undefined))) {
+      throw new InvoiceRequestError("INVALID_REQUEST");
+    }
     const key = invoiceId.toLowerCase();
     // Serialize lookups of the same invoice; persist each hint before consulting RPC.
     const previous = this.pending.get(key);
     if (previous) await previous.catch(() => {});
     // A different waiter may have acquired the slot while this one awaited.
-    if (this.pending.has(key)) return this.lookup(invoiceId, txHash);
-    const promise = this.lookupOne(key, txHash);
+    if (this.pending.has(key)) return this.lookup(invoiceId, txHash, candidateTxHash);
+    const promise = this.lookupOne(key, txHash, candidateTxHash);
     this.pending.set(key, promise);
     try {
       const result = await promise;
@@ -76,7 +79,7 @@ export class ReceiptService {
     } finally { if (this.pending.get(key) === promise) this.pending.delete(key); }
   }
 
-  private async lookupOne(id: string, hint?: string): Promise<LookupResult> {
+  private async lookupOne(id: string, hint?: string, candidateTxHash?: string): Promise<LookupResult> {
     let record = this.repository.get(id);
     if (!record) throw new InvoiceRequestError("INVOICE_NOT_FOUND");
     if (record.receipt) return this.paid(record);
@@ -88,7 +91,7 @@ export class ReceiptService {
     const backoff = this.backoffs.get(id);
     if (backoff && backoff.until > this.now()) return this.unavailable(record, backoff);
     try {
-      const result = await this.lookupChain(id, record);
+      const result = await this.lookupChain(id, record, candidateTxHash);
       this.backoffs.delete(id);
       return result;
     } catch (error) {
@@ -102,7 +105,7 @@ export class ReceiptService {
     }
   }
 
-  private async lookupChain(id: string, initial: InvoiceRecord): Promise<LookupResult> {
+  private async lookupChain(id: string, initial: InvoiceRecord, candidateTxHash?: string): Promise<LookupResult> {
     let record = initial;
     const deployment = this.deployment;
     if (!deployment || !same(record.envelope.domain.verifyingContract, deployment.contractAddress)) throw new InvoiceRpcError();
@@ -110,6 +113,10 @@ export class ReceiptService {
     if (this.parse(() => quantity(rawChain)) !== BigInt(campusNetwork.chainId)) throw new InvoiceRpcError("WRONG_CHAIN");
     const head = await this.block("latest");
     if (head.number < deployment.deploymentBlock || (record.nextScanBlock !== null && record.nextScanBlock > head.number + 1)) throw new InvoiceRpcError();
+    if (candidateTxHash) {
+      const candidate = await this.transaction(record, candidateTxHash, head);
+      if (candidate.receipt) return this.confirm(id, record, candidate.receipt);
+    }
     // Revisit the previous head, and checkpoint only fully scanned ranges. No indexer is required.
     let from = Math.max(deployment.deploymentBlock, (record.nextScanBlock ?? deployment.deploymentBlock) - 1);
     for (let ranges = 0; from <= head.number; ranges++) {

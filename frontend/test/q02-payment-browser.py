@@ -8,6 +8,7 @@ import sys
 from urllib.request import Request, ProxyHandler, build_opener
 
 from playwright.sync_api import expect, sync_playwright
+from browser_auth import authenticate
 
 sys.stdout.reconfigure(encoding="utf-8")
 parser = argparse.ArgumentParser(description=__doc__)
@@ -58,7 +59,7 @@ def open_page(page, route):
 adapter = r"""({ payer, rpcUrl }) => {
   const listeners = new Map();
   let chainId = '0x4f25';
-  window.q02Wallet = { reject: false, chain(value) {
+  window.q02Wallet = { reject: false, unknown: false, chain(value) {
     chainId = value;
     for (const handler of listeners.get('chainChanged') || []) handler(value);
   }};
@@ -76,7 +77,10 @@ adapter = r"""({ payer, rpcUrl }) => {
         body:JSON.stringify({jsonrpc:'2.0', id:1, method, params})});
       const data = await response.json();
       if (data.error) throw data.error;
-      if (method === 'eth_sendTransaction') await window.q02Send(data.result);
+      if (method === 'eth_sendTransaction') {
+        await window.q02Send(data.result);
+        if (window.q02Wallet.unknown) throw new Error('Injected lost response after Anvil accepted the transaction');
+      }
       return data.result;
     },
   };
@@ -88,6 +92,7 @@ def configure_student(browser, payer):
     context.expose_binding("q02Send", lambda _source, value: sends.append(value))
     config = json.dumps({"payer": payer, "rpcUrl": cfg["rpcUrl"]})
     context.add_init_script(f"({adapter})({config})")
+    authenticate(context, cfg, payer, origin)
     return context
 
 
@@ -139,7 +144,10 @@ def check_paid(pos, student, invoice, tx, payer, tier):
 
 assert int(rpc("eth_chainId"), 16) == 20261 and "anvil" in rpc("web3_clientVersion").lower()
 with http.open(origin + "/api/deployment", timeout=5) as response:
-    assert json.load(response) == {**cfg["manifest"], "environment": "avalanche-l1"}
+    expected_manifest = {**cfg["manifest"], "environment": "avalanche-l1"}
+    if cfg["manifest"].get("library"):
+        expected_manifest["library"] = {**cfg["manifest"]["library"], "environment": "avalanche-l1"}
+    assert json.load(response) == expected_manifest
 assert all(rpc("eth_getCode", [contract["address"], "latest"]) != "0x" for contract in cfg["manifest"]["contracts"].values())
 args.output.mkdir(parents=True)
 
@@ -191,8 +199,8 @@ with sync_playwright() as playwright:
             rpc("evm_setAutomine", [False])
         try:
             pay.click()
-            # A quickly confirmed transaction adds a second hash label inside Receipt.
-            expect(quote.locator(".invoice-payment-panel > code.tx-hash-code")).to_be_visible()
+            # A fast receipt replaces the pending hash panel with the compact receipt.
+            expect(quote.locator(".invoice-payment-panel > code.tx-hash-code, .invoice-payment-panel .invoice-verified-preview").first).to_be_visible()
             tx = sends[-1]
             assert len(sends) == tier + 1
             if tier == 1:
@@ -253,12 +261,54 @@ with sync_playwright() as playwright:
         page.on("pageerror", lambda error: errors.append(str(error)))
     open_page(pos, "/pos")
     open_page(student, "/student")
+    invoice = issue(pos)
+    paste(student, invoice["qrPayload"])
+    quote = student.get_by_role("region", name="Hóa đơn đã xác minh")
+    expect(quote.locator(".total-amount")).to_have_text("3.000 CAMPUS")
+    student.evaluate("window.q02Wallet.unknown = true")
+    wrong_hash = "0x" + "cd" * 32
+    rpc("evm_setAutomine", [False])
+    try:
+        quote.get_by_role("button", name="Thanh toán bằng Core", exact=True).click()
+        candidate = student.get_by_label("Hash từ lịch sử Core để đối chiếu")
+        expect(candidate).to_be_visible()
+        tx = sends[-1]
+        assert len(sends) == 3 and rpc("eth_getTransactionReceipt", [tx]) is None
+        candidate.fill(wrong_hash)
+        lookup_button = student.get_by_role("button", name="Tra cứu hash cũ", exact=True)
+        with student.expect_response(lambda response: "candidateTxHash=" + wrong_hash in response.url) as wrong:
+            lookup_button.click()
+        assert wrong.value.status == 200 and wrong.value.json()["receipt"] is None
+        with http.open(origin + "/api/invoices/" + invoice["invoiceId"], timeout=5) as response:
+            assert json.load(response)["transaction"] is None, "an unverified candidate must not pin a POS transaction"
+        expect(candidate).to_be_visible()
+        capture(student, "student-payment-candidate-unverified")
+        student.reload(wait_until="domcontentloaded")
+        label(student)
+        recovery = student.get_by_role("region", name="Khôi phục thanh toán")
+        candidate = recovery.get_by_label("Hash từ lịch sử Core để đối chiếu")
+        expect(candidate).to_be_visible()
+        expect(student.get_by_role("button", name="Thanh toán bằng Core", exact=True)).to_have_count(0)
+        candidate.fill(tx)
+        with student.expect_response(lambda response: "candidateTxHash=" + tx in response.url) as corrected:
+            recovery.get_by_role("button", name="Tra cứu hash cũ", exact=True).click()
+        assert corrected.value.status == 200 and corrected.value.json()["receipt"] is None
+        assert len(sends) == 3
+        rpc("evm_mine")
+        recovery.get_by_role("button", name="Tra cứu kết quả cũ", exact=True).click()
+        proof = check_paid(pos, student, invoice, tx, cfg["normalAccount"], 0)
+        assert len(sends) == 3
+        capture(student, "student-payment-candidate-corrected")
+        record("unknown-payment-corrected-candidate-after-reload", broadcastCount=1, **proof)
+    finally:
+        rpc("evm_setAutomine", [True])
+
     expired = issue(pos)
     rpc("evm_increaseTime", [301])
     rpc("evm_mine")
     paste(student, expired["qrPayload"])
     expect(student.locator("#student-invoice-error")).to_contain_text("hết hạn")
-    assert len(sends) == 2
+    assert len(sends) == 3
     capture(student, "student-payment-expired")
     record("expired-qr", invoiceId=expired["invoiceId"], broadcasts=0)
     browser.close()

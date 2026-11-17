@@ -141,3 +141,23 @@ trên trình duyệt Core đã kiểm tra. [Runbook U05](u05-grants.md) mô tả
 điểm nối, phục hồi, hạn chế nhiều tab và checklist trước/sau. Manifest còn
 `unconfigured` thì bảng thông báo chưa đủ triển khai; không dùng fixture thay
 cho bằng chứng trên L1.
+
+## Đăng nhập, đối chiếu và phạm vi màn căn-tin
+
+Trước thanh toán QR hoặc FOOD, sinh viên kết nối đúng ví và ký đăng nhập.
+Chữ ký đăng nhập không chuyển tiền. Backend kiểm tra session cùng ví và trạng
+thái hạn chế tài khoản theo khoản mượn. Khi quá hạn, đường trả sách, hoàn cọc
+và thanh toán phần thiếu vẫn mở theo giao kèo Library.
+
+Mã giao dịch nhập từ lịch sử ví là gợi ý để tra cứu cho đến khi được xác minh.
+Nhập nhầm cần sửa gợi ý trong cùng lượt đang chờ, giữ dữ liệu và không gửi thêm.
+Trạng thái tiền hoàn của yêu cầu và kết quả từng lần ký được hiển thị riêng.
+Deadline duyệt dựa `depositedAt + 86400` theo block đã xác minh; thời điểm người
+dùng thấy receipt trên màn hình không mở lại cửa sổ 24 giờ.
+
+Animation FOOD có minh họa bên căn-tin nhận kết quả. App hiện có Student chi
+FOOD và proof `GrantSpent`; màn nhận FOOD riêng cho nhân viên căn-tin cần nhóm
+chốt task. Đề xuất tiêu chí gồm giới hạn đúng merchant và deployment, phân biệt
+đang chờ với receipt/event đã xác minh, hiển thị tiền nhận/hash để đối chiếu và
+khôi phục sau reload. Màn thu ngân không được yêu cầu sinh viên gửi lại chỉ vì
+chưa thấy kết quả. Nghiệm thu cần hai vai trò thao tác độc lập trên cùng lượt.

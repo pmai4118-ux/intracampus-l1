@@ -111,6 +111,16 @@ node frontend/test/u04-u05-local-evidence.mjs backend/data/u05-new-run/controlle
 
 Sau fixture ready, terminal B:
 
+Với source đã tích hợp Library, đặt `U05_BROWSER_ORIGIN` trước khi mở harness,
+đúng origin sẽ dùng cho Next (mặc định `http://127.0.0.1:3117`). Harness deploy
+escrow local, seed tài khoản demo và mở auth/hold Library thật cho browser.
+Đường đọc ngân sách trong kiểm tra browser cũng ký challenge và giữ session
+đúng beneficiary. Bộ controller 8 ca được ghi riêng trước bước browser.
+Chạy QR và FOOD bằng fixture/chain/database độc lập vì ca QR hết hạn tăng
+giờ Anvil 301 giây. Dùng thư mục output mới và origin/cổng riêng cho mỗi lượt.
+Nếu dùng cổng 3106 ở các lệnh dưới, terminal A cần đặt
+`$env:U05_BROWSER_ORIGIN='http://127.0.0.1:3106'` trước khi chạy harness.
+
 ```powershell
 node frontend/test/prepare-u05-browser.mjs backend/data/u05-new-run/browser
 cd backend/data/u05-new-run/browser/source
@@ -121,6 +131,7 @@ pnpm --filter @intracampus/frontend start --port 3106
 
 Offline cần dependency đã có trong pnpm store; máy mới cài dependencies ở repo
 gốc trước. Preparer không sao chép operator .env, .git, .next hoặc node_modules.
+Preparer có chép fixture ABI Library mà package network import trực tiếp.
 Chỉ copy sinh public loopback RPC/BACKEND_URL và test manifest; không dùng
 cấu hình production để vượt guard local-anvil.
 

@@ -24,22 +24,28 @@ const target = join(directory, "source");
 await mkdir(target); // Refuse to overwrite a previous run.
 const filter = (path) => !["node_modules", ".next", ".git", "dist"].includes(basename(path)) && !basename(path).startsWith(".env");
 for (const name of ["frontend", "packages", "deployments"]) await cp(join(root, name), join(target, name), { recursive: true, filter });
+await mkdir(join(target, "docs/fixtures"), { recursive: true });
+await cp(join(root, "docs/fixtures/library-v1.json"), join(target, "docs/fixtures/library-v1.json"));
 for (const name of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json", "tsconfig.json"]) {
   try { await cp(join(root, name), join(target, name)); } catch (error) { if (error.code !== "ENOENT") throw error; }
 }
 await mkdir(join(target, "backend")); await cp(join(root, "backend/package.json"), join(target, "backend/package.json"));
 // Production deliberately rejects local manifests. Only this disposable test copy
 // receives the deployed-shape fixture; the real API still verifies local-anvil data.
-await writeFile(join(target, "deployments/intracampus.json"), JSON.stringify({ ...local, environment: "avalanche-l1" }, null, 2) + "\n");
+await writeFile(join(target, "deployments/intracampus.json"), JSON.stringify({ ...local, environment: "avalanche-l1",
+  ...(local.library ? { library: { ...local.library, environment: "avalanche-l1" } } : {}) }, null, 2) + "\n");
 await writeFile(join(target, "frontend/.env.local"), `NEXT_PUBLIC_INTRACAMPUS_RPC_URL=${config.rpcUrl}\nBACKEND_URL=${config.api}\n`);
 const sha = (data) => createHash("sha256").update(data).digest("hex");
-const files = ["frontend/app/student/GrantPanel.tsx", "frontend/lib/grants.ts", "frontend/lib/wallet.ts", "frontend/next.config.ts", "packages/network/src/deployment.ts"];
+const files = ["frontend/app/student/GrantPanel.tsx", "frontend/app/student/PayInvoice.tsx", "frontend/lib/payment.ts",
+  "frontend/lib/grants.ts", "frontend/lib/wallet.ts", "frontend/next.config.ts", "packages/network/src/deployment.ts"];
 const sourceHashes = {};
 for (const name of files) {
   sourceHashes[name] = sha(await readFile(join(root, name)));
   assert.equal(sha(await readFile(join(target, name))), sourceHashes[name]);
 }
 const provenance = { environment: "local-anvil", sourceRevision: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", windowsHide: true }).trim(),
+  sourceDirty: !!execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8", windowsHide: true }).trim(),
+  backendSourceHashes: config.backendSourceHashes ?? null,
   sourceHashes, canonicalManifestSha256: sha(await readFile(join(root, "deployments/intracampus.json"))),
   overrides: ["Ignored source copy only: deployment manifest has local addresses with deployed environment shape for UI testing", "Public loopback RPC/BACKEND_URL in copied .env.local", "Injected EIP-1193 test wallet and visible local-test banner supplied by Python"],
   scope: "Actual current GrantPanel/controllers/proxy source. Not a production deployment or Core/physical-device/L1 acceptance." };

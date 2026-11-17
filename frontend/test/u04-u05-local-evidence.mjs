@@ -3,8 +3,9 @@
 // node frontend/test/u04-u05-local-evidence.mjs <new-evidence.json>
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { access, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
@@ -48,6 +49,13 @@ async function main() {
   catch (error) { if (error.code !== "ENOENT") throw error; }
   try { await access(join(root, "backend/src/modules/grants/grants.service.ts")); }
   catch { throw Error("B05_MISSING"); }
+  const backendSourceHashes = {};
+  if (browserDirectory) {
+    const paths = ["backend/src/app.ts", "backend/src/modules/auth/auth.service.ts", "backend/src/modules/invoices/invoices.routes.ts",
+      "backend/src/modules/invoices/receipt.service.ts", "backend/src/modules/library/library.service.ts",
+      "backend/src/modules/library/library.repository.ts", "backend/src/modules/library/library.reconcile.ts"];
+    for (const path of paths) backendSourceHashes[path] = createHash("sha256").update(await readFile(join(root, path))).digest("hex");
+  }
   const { loadVerifiedArtifact } = await importSource("contracts/script/load-verified-artifact.mjs");
   const { InvoiceCreationService } = await importSource("backend/src/modules/invoices/invoices.service.ts");
   const { SqliteInvoiceRepository } = await importSource("backend/src/modules/invoices/invoices.repository.ts");
@@ -70,7 +78,7 @@ async function main() {
   const killAnvil = () => { anvil.kill(); }; process.once("exit", killAnvil);
   const provider = new JsonRpcProvider(rpcUrl, undefined, { cacheTimeout: -1, batchMaxCount: 1 });
   provider.pollingInterval = 50;
-  let server, repository, grants, finishBrowser;
+  let server, repository, grants, libraryService, libraryRepository, finishBrowser;
   const sessions = [], fetchOriginal = globalThis.fetch;
   const evidence = { environment: "local-anvil", chainId: 20261,
     scope: "Ephemeral Anvil, actual source-verified contracts and HTTP services, injected EIP-1193 adapter. Not Core, physical-device or Avalanche L1 acceptance.",
@@ -116,7 +124,7 @@ async function main() {
     const app = createApp(rpcUrl, receipts, creation, grants);
     if (browserDirectory) app.post("/__u05-fixture/stop", (_req, res) => { res.sendStatus(204); finishBrowser?.(); });
     server = app.listen(0, "127.0.0.1"); await once(server, "listening");
-    const api = `http://127.0.0.1:${server.address().port}`;
+    let api = `http://127.0.0.1:${server.address().port}`;
     globalThis.fetch = (url, options) => fetchOriginal(typeof url === "string" && url.startsWith("/") ? api + url : url, options);
     const trusted = { paymentRegistryAddress: deployed.CampusPaymentRegistry.address, posSignerAddress: roles.posSigner };
     async function post() {
@@ -220,14 +228,60 @@ async function main() {
     process.stdout.write(`${evidence.cases.length} local EVM/controller scenarios passed; public evidence written to the requested file.\n`);
     if (browserDirectory) {
       stage = "prepare-isolated-browser-fixture";
+      const { LibraryRepository } = await importSource("backend/src/modules/library/library.repository.ts");
+      const { LibraryService } = await importSource("backend/src/modules/library/library.service.ts");
+      const { AuthService } = await importSource("backend/src/modules/auth/auth.service.ts");
+      const { AuthRepository } = await importSource("backend/src/modules/auth/auth.repository.ts");
+      const libraryFixture = JSON.parse(await readFile(join(root, "docs/fixtures/library-v1.json"), "utf8"));
+      const escrowArtifact = await loadVerifiedArtifact(contractsDir, "LibraryDepositEscrow");
+      const escrow = await new ContractFactory(escrowArtifact.abi, escrowArtifact.bytecode.object, signers[0])
+        .deploy(accounts[0], accounts[1], accounts[6]);
+      const escrowReceipt = await escrow.deploymentTransaction().wait();
+      const escrowAddress = await escrow.getAddress(), bookId = id("browser-library-demo");
+      const seedTransactions = [];
+      for (const [type, tx] of [["seedBookTerms", await escrow.seedBookTerms(bookId, libraryFixture.policy.depositWei, libraryFixture.policy.depositWei)],
+        ["sealBookTerms", null]]) {
+        const receipt = await (tx ?? await escrow.sealBookTerms(bookId)).wait();
+        seedTransactions.push({ type, bookId, transactionHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash });
+      }
+      const block = await provider.getBlock("latest");
+      manifest.library = { schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment: "local-anvil",
+        verifiedAt: { blockNumber: block.number, blockHash: block.hash },
+        escrow: { address: escrowAddress, abiVersion: 1, abi: escrowArtifact.abi, transactionHash: escrowReceipt.hash,
+          blockNumber: escrowReceipt.blockNumber, blockHash: escrowReceipt.blockHash, runtimeCodeHash: keccak256(await provider.getCode(escrowAddress)) },
+        roles: { deployer: accounts[0], administrator: accounts[0], librarian: accounts[1] }, treasury: accounts[6],
+        policy: libraryFixture.policy, books: [{ bookId, depositWei: libraryFixture.policy.depositWei,
+          replacementPriceWei: libraryFixture.policy.depositWei, sealed: true }], seedTransactions };
+      libraryRepository = new LibraryRepository(join(directory, "library.sqlite"));
+      libraryRepository.seedDemo({ version: 1, books: [{ bookId, title: "Sách demo", author: "Demo", isbn: null,
+        depositWei: libraryFixture.policy.depositWei, replacementPriceWei: libraryFixture.policy.depositWei,
+        copies: [{ copyId: "browser-copy", barcode: "BROWSER-01" }] }],
+        accounts: [2, 3, 7].map(index => ({ wallet: accounts[index], role: "STUDENT" }))
+          .concat([{ wallet: accounts[1], role: "LIBRARIAN" }]) });
+      const origin = process.env.U05_BROWSER_ORIGIN ?? "http://127.0.0.1:3117";
+      const originUrl = new URL(origin);
+      assert.equal(originUrl.hostname, "127.0.0.1"); assert.equal(originUrl.protocol, "http:");
+      assert.equal(originUrl.origin, origin);
+      const authConfig = { origin, domain: originUrl.host, chainId: 20261, challengeTtlSeconds: 300, sessionTtlSeconds: 86400,
+        challengeRateLimit: { maxRequests: 100, windowSeconds: 60 }, verifyRateLimit: { maxRequests: 100, windowSeconds: 60 },
+        trustedProxyAddresses: ["127.0.0.1", "::1"], cookieName: "library_session", secureCookie: false };
+      libraryService = new LibraryService(libraryRepository, { deployment: manifest, allowLocal: true, rpcUrl,
+        chainFreshness: { maxStaleSeconds: 300, maxFutureDriftSeconds: 30, minConfirmations: 1 } });
+      const auth = new AuthService(new AuthRepository(libraryRepository), authConfig);
+      const browserApp = createApp(rpcUrl, receipts, creation, grants, auth, authConfig, libraryService);
+      browserApp.post("/__u05-fixture/stop", (_req, res) => { res.sendStatus(204); finishBrowser?.(); });
+      await new Promise(done => server.close(done));
+      server = browserApp.listen(0, "127.0.0.1"); await once(server, "listening");
+      api = `http://127.0.0.1:${server.address().port}`;
       // A separate local account keeps the eight controller cases and their receipts intact.
       const beneficiary = accounts[7];
       await (await contracts.StudentSBTIdentity.mint(beneficiary, BigInt((await provider.getBlock("latest")).timestamp) + 7n * 86400n)).wait();
       await (await contracts.PurposeBoundGrantVault.grant(beneficiary, id("FOOD"), { value: 5000n * unit })).wait();
-      const publicConfig = { environment: "local-anvil", chainId: 20261, api, rpcUrl, beneficiary, preparedBeneficiary: accounts[3], normalAccount: accounts[2], admin: accounts[0],
+      const publicConfig = { environment: "local-anvil", chainId: 20261, origin, api, rpcUrl, beneficiary, preparedBeneficiary: accounts[3], normalAccount: accounts[2], admin: accounts[0],
         vault: deployed.PurposeBoundGrantVault.address, registry: deployed.CampusPaymentRegistry.address, canteen: merchants.canteen.address,
         disableCanteen: registryInterface.encodeFunctionData("setMerchantCategory", [merchants.canteen.address, merchants.canteen.category, false]),
         enableCanteen: registryInterface.encodeFunctionData("setMerchantCategory", [merchants.canteen.address, merchants.canteen.category, true]), manifest,
+        backendSourceHashes,
         scope: "Test fixture only. UI uses a synthetic deployment in an ignored source copy; canonical manifest and operator environment are untouched." };
       await mkdir(browserDirectory, { recursive: true });
       const waitForBrowser = new Promise((done) => { finishBrowser = done; });
@@ -239,6 +293,7 @@ async function main() {
     globalThis.fetch = fetchOriginal;
     for (const session of sessions) session.dispose();
     if (server) await new Promise((done) => server.close(done));
+    libraryService?.close(); libraryRepository?.close();
     repository?.close(); grants?.close(); provider.destroy(); anvil.kill(); process.removeListener("exit", killAnvil);
   }
 }

@@ -5,11 +5,12 @@ import { isInvoiceHash, parseInvoiceLookup } from "./invoice-status.ts";
 import { WalletTransactionError, type WalletSnapshot, type WalletTransaction } from "./wallet.ts";
 
 export type InvoicePreview = { envelope: SignedInvoiceEnvelope; quote: InvoicePreviewQuote };
-type PaymentRecord = { version: 1; account: string; envelope: SignedInvoiceEnvelope; amountWei: string; txHash: string | null };
+type PaymentRecord = { version: 1; account: string; envelope: SignedInvoiceEnvelope; amountWei: string; txHash: string | null;
+  hashSource?: "wallet" | "verified"; recoveryHash?: string };
 export type PaymentSnapshot = {
   status: "ready" | "preflight" | "quote-changed" | "signing" | "pending" | "unknown" | "paid" | "blocked" | "reverted" | "error";
   preview: InvoicePreview; txHash: string | null; receipt: VerifiedInvoiceReceipt | null;
-  message: string | null; busy: boolean; canPay: boolean;
+  message: string | null; busy: boolean; canPay: boolean; canRecoverHash: boolean;
 };
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Options = {
@@ -61,6 +62,7 @@ export class PaymentController {
   private state: PaymentSnapshot;
   private listeners = new Set<() => void>();
   private record: PaymentRecord | null = null;
+  private storedRecord: string | null = null;
   private stopped = false;
   private operation = false;
   private externalPendingHash: string | null = null;
@@ -70,16 +72,21 @@ export class PaymentController {
   constructor(options: Options) {
     this.options = options;
     this.key = paymentStorageKey(options.preview.envelope);
-    this.state = { status: "ready", preview: options.preview, txHash: null, receipt: null, message: null, busy: false, canPay: true };
+    this.state = { status: "ready", preview: options.preview, txHash: null, receipt: null, message: null, busy: false, canPay: true, canRecoverHash: false };
     try {
       const raw = options.storage.getItem(this.key);
       if (raw !== null) {
         const saved = JSON.parse(raw) as PaymentRecord;
         if (saved.version !== 1 || !isWalletAddress(saved.account) || !sameInvoiceEnvelope(parseInvoicePayload(JSON.stringify(saved.envelope)), options.preview.envelope)
           || typeof saved.amountWei !== "string" || !/^[1-9][0-9]{0,77}$/.test(saved.amountWei)
-          || (saved.txHash !== null && (!isInvoiceHash(saved.txHash) || /^0x0{64}$/i.test(saved.txHash)))) throw Error();
+          || (saved.txHash !== null && (!isInvoiceHash(saved.txHash) || /^0x0{64}$/i.test(saved.txHash)))
+          || (saved.hashSource !== undefined && !["wallet", "verified"].includes(saved.hashSource))
+          || (saved.hashSource !== undefined && (!saved.txHash || saved.recoveryHash !== undefined))
+          || (saved.recoveryHash !== undefined && (!isInvoiceHash(saved.recoveryHash) || /^0x0{64}$/i.test(saved.recoveryHash)))) throw Error();
         this.record = saved;
-        this.state = { ...this.state, status: saved.txHash ? "pending" : "unknown", txHash: saved.txHash, canPay: false,
+        this.storedRecord = raw;
+        this.state = { ...this.state, status: saved.hashSource ? "pending" : "unknown", txHash: saved.recoveryHash ?? saved.txHash, canPay: false,
+          canRecoverHash: saved.hashSource === undefined && same(saved.account, options.account),
           message: "Đã khôi phục lần yêu cầu thanh toán trước. Tra cứu kết quả, không gửi lại." };
         if (!same(saved.account, options.account)) this.state = { ...this.state, status: "blocked",
           message: `Hóa đơn đã có yêu cầu từ ví ${saved.account}. Chuyển về ví đó để đối chiếu; không trả thêm bằng ví hiện tại.` };
@@ -93,7 +100,10 @@ export class PaymentController {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private update(patch: Partial<PaymentSnapshot>) {
     if (this.stopped) return;
-    this.state = { ...this.state, ...patch }; for (const listener of this.listeners) listener();
+    this.state = { ...this.state, ...patch };
+    this.state.canRecoverHash = !!this.record && this.record.hashSource === undefined
+      && same(this.record.account, this.options.account) && this.state.status !== "paid";
+    for (const listener of this.listeners) listener();
   }
   private currentWallet() {
     const wallet = this.options.wallet.getSnapshot();
@@ -102,11 +112,13 @@ export class PaymentController {
     }
   }
   private persist(record: PaymentRecord) {
-    this.options.storage.setItem(this.key, JSON.stringify(record));
-    this.options.storage.setItem(activeKey(record.account), this.key);
+    const serialized = JSON.stringify(record);
+    this.options.storage.setItem(this.key, serialized);
     // Storage failures must be detected before opening the signing request.
-    if (this.options.storage.getItem(this.key) !== JSON.stringify(record)) throw Error();
+    if (this.options.storage.getItem(this.key) !== serialized) throw Error();
+    this.storedRecord = serialized;
     this.record = record;
+    this.options.storage.setItem(activeKey(record.account), this.key);
   }
   async pay() {
     if (this.options.exclusive) {
@@ -142,13 +154,13 @@ export class PaymentController {
       const txHash = await this.options.wallet.sendTransaction(this.options.account, {
         to: fresh.envelope.domain.verifyingContract, data: encodePayInvoiceSimulation(fresh.envelope), value: `0x${fresh.quote.paidAmount.toString(16)}`,
       });
-      record.txHash = txHash; this.record = record;
+      record.txHash = txHash; record.hashSource = "wallet"; this.record = record;
       try { this.persist(record); }
       catch { this.update({ message: "Đã có hash nhưng không lưu được. Sao chép hash trước khi đóng trang; chưa gửi lại." }); }
       this.update({ status: "pending", txHash, canPay: false });
     } catch (error) {
       if (openingWallet && error instanceof WalletTransactionError && error.outcome !== "unknown") {
-        try { this.options.storage.removeItem(this.key); this.record = null; }
+        try { this.options.storage.removeItem(this.key); this.record = null; this.storedRecord = null; }
         catch { this.update({ status: "blocked", canPay: false, message: "Không cập nhật được nhật ký. Giữ invoiceId và tra cứu trước khi thử tiếp." }); return; }
         this.update({ status: "error", canPay: true, message: error.outcome === "rejected" ? "Bạn đã từ chối ký. Chưa gửi thanh toán; có thể kiểm tra rồi thử lại." : messageFor(error.code) });
       } else if (openingWallet) {
@@ -163,27 +175,52 @@ export class PaymentController {
     } finally {
       this.operation = false; inFlight.delete(this.key); this.update({ busy: false });
     }
-    if (this.record?.txHash && !this.stopped) await this.refresh();
+    if (this.record?.txHash && !this.stopped) await this.refreshLocked();
   }
   async refresh(manualHash?: string) {
+    if (this.options.exclusive) {
+      try { await this.options.exclusive(this.key, () => this.refreshLocked(manualHash)); }
+      catch { this.update({ message: "Một cửa sổ khác đang đối chiếu hóa đơn. Giữ lượt gửi cũ và thử lại sau." }); }
+      return;
+    }
+    await this.refreshLocked(manualHash);
+  }
+  private async refreshLocked(manualHash?: string) {
     if (this.stopped || this.operation || this.state.busy || this.state.status === "paid") return;
     if (this.record && !same(this.record.account, this.options.account)) return;
+    try {
+      const stored = this.options.storage.getItem(this.key);
+      if (stored !== this.storedRecord) {
+        this.update({ message: "Nhật ký đã được cập nhật ở cửa sổ khác. Tải lại để đối chiếu lượt mới nhất." }); return;
+      }
+    } catch { this.update({ message: "Chưa đọc được nhật ký. Giữ lượt gửi cũ và thử lại khi bộ nhớ sẵn sàng." }); return; }
     if (manualHash !== undefined) {
       if (!isInvoiceHash(manualHash) || /^0x0{64}$/i.test(manualHash)) { this.update({ message: "Hash phải là mã hex 32 byte từ lịch sử Core." }); return; }
-      if (!this.record || (this.record.txHash && !same(this.record.txHash, manualHash))) {
+      if (!this.record || (this.record.hashSource !== undefined && this.record.txHash && !same(this.record.txHash, manualHash))) {
         this.update({ message: "Giữ hash đang theo dõi; không thay bằng giao dịch khác." }); return;
       }
-      this.record.txHash = manualHash;
+      // A manually copied hash remains a candidate until the exact invoice receipt is verified.
+      // Legacy journals did not record provenance, so retain their original hash separately.
+      this.record.recoveryHash = manualHash;
+      if (this.record.hashSource !== undefined) delete this.record.recoveryHash;
       try { this.persist(this.record); } catch { /* Keep the hash in memory and show it below. */ }
       this.update({ txHash: manualHash });
     }
     this.update({ busy: true });
     try {
-      const envelope = this.state.preview.envelope, hash = this.record?.txHash;
-      const response = await (this.options.fetcher ?? fetch)(`/api/invoices/${envelope.invoice.invoiceId}${hash ? `?txHash=${hash}` : ""}`,
+      const envelope = this.state.preview.envelope, hash = this.record?.recoveryHash ?? this.record?.txHash;
+      const expectedRecord = JSON.stringify(this.record);
+      const expectedStorage = this.storedRecord;
+      const hashParameter = this.record?.hashSource ? "txHash" : "candidateTxHash";
+      const response = await (this.options.fetcher ?? fetch)(`/api/invoices/${envelope.invoice.invoiceId}${hash ? `?${hashParameter}=${hash}` : ""}`,
         { cache: "no-store", signal: this.abort.signal });
       if (![200, 422, 503].includes(response.status)) throw Error();
       const lookup: InvoiceLookupResponse = parseInvoiceLookup(await response.json(), envelope.invoice.invoiceId, envelope);
+      const wallet = this.options.wallet.getSnapshot();
+      if (this.stopped || !wallet.address || !same(wallet.address, this.options.account) || wallet.chainId !== BigInt(20261)
+        || JSON.stringify(this.record) !== expectedRecord) return;
+      const stored = this.options.storage.getItem(this.key);
+      if (stored !== expectedStorage) return;
       if ((response.status === 503) !== (lookup.status === "rpc-error")) throw Error();
       if (response.status === 422 && (lookup.status === "paid" || !lookup.error
         || !["TX_REVERTED", "RECEIPT_EVENT_MISMATCH"].includes(lookup.error.code))) throw Error();
@@ -192,17 +229,19 @@ export class PaymentController {
         if (!this.record || !same(r.payer, this.record.account) || (hash && !same(r.txHash, hash)) || BigInt(r.paidAmount) !== BigInt(this.record.amountWei)) {
           this.update({ status: "blocked", canPay: false, message: "Hóa đơn đã có biên lai, nhưng không khớp lần ký đang theo dõi. Đối chiếu trên POS; không trả thêm." }); return;
         }
-        this.record.txHash = r.txHash;
+        this.record.txHash = r.txHash; this.record.hashSource = "verified"; delete this.record.recoveryHash;
         try { this.persist(this.record); } catch { /* The verified receipt remains visible for copying. */ }
         this.update({ status: "paid", txHash: r.txHash, receipt: r, canPay: false, message: "Thanh toán của ví này đã được xác minh. POS có thể đọc cùng biên lai." });
       } else if (lookup.transaction?.status === "reverted" && hash && same(lookup.transaction.txHash, hash)) {
-        this.update({ status: "reverted", canPay: false, message: "Giao dịch đã revert, chưa thanh toán. Gas có thể đã bị tính; yêu cầu POS tạo hóa đơn mới sau khi kiểm tra." });
+        this.update({ status: this.record?.hashSource ? "reverted" : "unknown", canPay: false,
+          message: this.record?.hashSource ? "Giao dịch đã thất bại, chưa thanh toán. Gas có thể đã bị tính; yêu cầu POS tạo hóa đơn mới sau khi kiểm tra."
+            : "Hash nhập để tra cứu đã thất bại. Lượt gửi ban đầu vẫn chưa rõ kết quả; kiểm tra lịch sử Core và sửa hash nếu cần, chưa gửi lại." });
       } else if (!this.record && (lookup.transaction?.status === "unverified" || this.externalPendingHash)) {
         this.externalPendingHash ??= lookup.transaction?.txHash ?? null;
         this.update({ status: "blocked", canPay: false, txHash: this.externalPendingHash,
           message: "Backend đang theo dõi giao dịch cũ của hóa đơn này. Chưa biết ví nào đã ký; đối chiếu hash trên POS và không thanh toán thêm." });
       } else {
-        this.update({ status: this.record ? hash ? "pending" : "unknown" : "ready", canPay: !this.record && !this.externalPendingHash,
+        this.update({ status: this.record ? this.record.hashSource ? "pending" : "unknown" : "ready", canPay: !this.record && !this.externalPendingHash,
           message: lookup.status === "rpc-error" ? "Mất kết nối xác minh. Giữ hash cũ và thử tra cứu lại; không gửi lại." :
             lookup.transaction?.status === "event-mismatch" ? "Event chưa khớp hóa đơn. Giữ hash để đối chiếu; chưa xác nhận thanh toán." :
               this.record ? "Chưa có biên lai đã xác minh. Tiếp tục tra cứu lần gửi cũ, kể cả khi hóa đơn hết hạn." : null });

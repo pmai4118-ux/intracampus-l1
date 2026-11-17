@@ -149,10 +149,10 @@ test("restart recovery rotates through pending transactions and marks only canon
     async getTransaction() { return null; },
     async getTransactionReceipt(txHash: string) {
       receiptReads.push(txHash);
-      if (txHash === requests[1].txHash) return { status: 1, blockNumber: 400, blockHash: hash(400) };
+      if (txHash === requests[1].txHash) return { hash: txHash, status: 1, blockNumber: 400, blockHash: hash(400) };
       if ((recoveryRound >= 2 && txHash === requests[100].txHash)
         || (recoveryRound >= 3 && txHash === requests[0].txHash)) {
-        return { status: 0, blockNumber: 400, blockHash: hash(400) };
+        return { hash: txHash, status: 0, blockNumber: 400, blockHash: hash(400) };
       }
       return null;
     },

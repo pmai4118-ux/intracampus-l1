@@ -18,6 +18,7 @@ parser.add_argument("output", type=Path, help="New public evidence directory")
 parser.add_argument("--origin", default="http://127.0.0.1:3105")
 args = parser.parse_args()
 from playwright.sync_api import sync_playwright, expect
+from browser_auth import authenticate, authenticated_lookup
 
 cfg = json.loads((args.fixture / "public-config.json").read_text(encoding="utf-8"))
 provenance = json.loads((args.fixture / "source-provenance.json").read_text(encoding="utf-8"))
@@ -35,7 +36,7 @@ def rpc(method, params=None):
     return data["result"]
 
 def lookup(account, tx=None):
-    return json.load(http.open(cfg["api"] + "/api/grants/" + account + ("?txHash=" + tx if tx else ""), timeout=10))
+    return authenticated_lookup(cfg, account, tx)
 
 def passed(name, **proof):
     cases.append({"name":name, **proof})
@@ -80,6 +81,7 @@ def context_for(browser, account, width=390):
     context.expose_binding("__recordU05Send", lambda _source, value: sends.append(value))
     config={"account":account,"rpcUrl":cfg["rpcUrl"]}
     context.add_init_script("("+provider_script+")("+json.dumps(config)+")")
+    authenticate(context, cfg, account, args.origin)
     return context
 
 def open_student(context):
@@ -127,9 +129,11 @@ with sync_playwright() as p:
     page.locator("#grant-amount").fill("1000")
     passed("Real Student reads 5000 through Next proxy/B05; overbalance and exponent inputs blocked")
 
+    authenticate(context, cfg, cfg["normalAccount"], args.origin)
     page.evaluate("a=>window.__u05Wallet.setAccount(a)",cfg["normalAccount"])
     balance(page,"0")
     expect(page.get_by_role("button",name="Chi FOOD bằng Core",exact=True)).to_be_disabled()
+    authenticate(context, cfg, cfg["beneficiary"], args.origin)
     page.evaluate("a=>{window.__u05Wallet.setAccount(a[0]);window.__u05Wallet.setAccount(a[1]);}",[cfg["normalAccount"],cfg["beneficiary"]])
     balance(page,"5.000")
     expect(page.locator(".wallet-address")).to_have_text(cfg["beneficiary"].lower())
@@ -252,8 +256,10 @@ with sync_playwright() as p:
     passed("Actual registry revocation disables spending and preserves remaining grant")
     page.evaluate("window.__u05Wallet.disconnect()")
     expect(page.locator(".wallet-address")).to_have_count(0)
-    expect(page.get_by_role("button",name="Chi FOOD bằng Core",exact=True)).to_be_disabled()
-    passed("Disconnect clears wallet identity and disables new spending")
+    expect(page.get_by_role("button",name="Kết nối ví",exact=True)).to_be_visible()
+    expect(page.get_by_role("button",name="Chi FOOD bằng Core",exact=True)).to_have_count(0)
+    assert len(sends)==count+1
+    passed("Disconnect clears wallet identity and removes the spend action without broadcasting")
     context.close();browser.close()
 
 assert errors==[],errors

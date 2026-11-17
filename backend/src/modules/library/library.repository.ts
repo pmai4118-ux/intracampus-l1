@@ -511,7 +511,10 @@ export class LibraryRepository {
           FROM borrow_requests r JOIN accounts a USING(account_id) JOIN books b USING(book_id)
           LEFT JOIN loans l ON l.request_id = r.request_id WHERE r.request_id = ?`).get(event.requestId);
         if (!request) { ignored++; continue; }
-        if (String(request.wallet).toLowerCase() !== event.borrower || String(request.book_id) !== (event.eventName === "DepositReceived" ? event.bookId : String(request.book_id))) {
+        const unmatched = this.db.prepare("SELECT * FROM library_unmatched_deposits WHERE request_id = ?").get(event.requestId);
+        const mismatch = String(request.wallet).toLowerCase() !== event.borrower
+          || (event.eventName === "DepositReceived" && String(request.book_id) !== event.bookId);
+        if (mismatch && event.eventName !== "DepositReceived" && !unmatched) {
           throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
         }
         const payload = serializedChainEvent(event);
@@ -522,6 +525,26 @@ export class LibraryRepository {
         const eventId = Number(inserted.lastInsertRowid);
         this.db.prepare(`INSERT INTO library_event_canonicality(event_id, status, checked_at, observed_block_hash)
           VALUES (?, 'CANONICAL', ?, ?)`).run(eventId, checkedAt, event.blockHash);
+
+        if (unmatched || mismatch) {
+          if (event.eventName === "DepositReceived" && !unmatched) {
+            this.db.prepare(`INSERT INTO library_unmatched_deposits(request_id, borrower, book_id, amount_wei,
+              approval_deadline, deposit_event_id, latest_event_name) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+              .run(event.requestId, event.borrower, event.bookId, event.amountWei, event.approvalDeadline, eventId, event.eventName);
+          } else if (unmatched) {
+            if (String(unmatched.borrower) !== event.borrower) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            const refunded = event.eventName === "RequestRejected" || event.eventName === "ExpiredRefundClaimed";
+            if (refunded && event.refundWei !== String(unmatched.amount_wei)) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
+            this.db.prepare(`UPDATE library_unmatched_deposits SET latest_event_name = ?,
+              refund_event_id = coalesce(?, refund_event_id) WHERE request_id = ?`)
+              .run(event.eventName, refunded ? eventId : null, event.requestId);
+            if (refunded) this.db.prepare(`UPDATE library_unmatched_refund_attempts SET status = 'CONFIRMED',
+              block_number = ?, block_hash = ? WHERE tx_hash = ? AND request_id = ?`)
+              .run(event.blockNumber, event.blockHash, event.txHash, event.requestId);
+          }
+          ignored++;
+          continue;
+        }
 
         const releaseCopy = (copyId: unknown, fromStatus: string) => {
           if (typeof copyId !== "string") throw new Error("LIBRARY_EVENT_COPY_MISSING");
@@ -543,7 +566,7 @@ export class LibraryRepository {
         if (previousAttempt && (String(previousAttempt.request_id) !== event.requestId || String(previousAttempt.action) !== action)) {
           throw new Error("LIBRARY_TRANSACTION_CONFLICT");
         }
-        if (previousTx && !samePreviousTx && String(previousTx.status) !== "REVERTED") {
+        if (previousTx && !samePreviousTx && String(previousTx.status) === "CONFIRMED") {
           throw new Error("LIBRARY_TRANSACTION_CONFLICT");
         }
         const eventSettlementIntentId = samePreviousTx ? previousTx.settlement_intent_id : previousAttempt?.settlement_intent_id;
@@ -614,7 +637,7 @@ export class LibraryRepository {
               || String(request.deposit_wei) !== event.refundWei || request.approval_deadline === null
               || event.blockTimestamp < Number(request.approval_deadline)) throw new Error("LIBRARY_EVENT_REQUEST_MISMATCH");
             if (request.status === "PENDING_APPROVAL") releaseCopy(request.copy_id, "PENDING_APPROVAL");
-            this.db.prepare(`UPDATE borrow_requests SET status = CASE WHEN status = 'PENDING_APPROVAL' THEN 'EXPIRED_REFUND_DUE' ELSE status END,
+            this.db.prepare(`UPDATE borrow_requests SET copy_id = NULL, status = CASE WHEN status = 'PENDING_APPROVAL' THEN 'EXPIRED_REFUND_DUE' ELSE status END,
               refund_status = 'REFUNDED', updated_at = ? WHERE request_id = ?`)
               .run(event.blockTimestamp, event.requestId);
             break;
@@ -888,7 +911,11 @@ export class LibraryRepository {
 
   listTransactions(requestIdInput: string): LibraryStoredTransaction[] {
     const requestId = canonicalBytes32(requestIdInput, "INVALID_LIBRARY_REQUEST_ID");
-    const rows = this.db.prepare("SELECT * FROM library_transactions WHERE request_id = ? ORDER BY submitted_at, action").all(requestId);
+    const rows = this.db.prepare(`SELECT t.*, 0 AS attempt_order FROM library_transactions t WHERE request_id = ?
+      UNION ALL SELECT a.request_id, a.action, a.tx_hash, a.submitted_at, a.status, a.block_number,
+      a.block_hash, a.log_index, a.event_name, a.settlement_intent_id, 1 AS attempt_order FROM library_transaction_attempts a WHERE request_id = ?
+      AND NOT EXISTS (SELECT 1 FROM library_transactions t WHERE t.tx_hash = a.tx_hash)
+      ORDER BY attempt_order, submitted_at, action, tx_hash` ).all(requestId, requestId);
     return rows.map((row) => ({ requestId, action: String(row.action) as LibraryStoredTransaction["action"], txHash: String(row.tx_hash),
       settlementIntentId: row.settlement_intent_id === null ? null : String(row.settlement_intent_id),
       status: String(row.status) as LibraryStoredTransaction["status"], submittedAt: Number(row.submitted_at),
@@ -913,10 +940,10 @@ export class LibraryRepository {
     try {
       const cursor = String(this.db.prepare("SELECT pending_transaction_cursor FROM library_reconcile_state WHERE singleton = 1").get()
         ?.pending_transaction_cursor ?? "");
-      let rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED' AND tx_hash > ?
+      let rows = this.db.prepare(`SELECT * FROM library_transaction_attempts WHERE status = 'SUBMITTED' AND tx_hash > ?
         ORDER BY tx_hash LIMIT ?`).all(cursor, limit);
       if (rows.length === 0 && cursor !== "") {
-        rows = this.db.prepare(`SELECT * FROM library_transactions WHERE status = 'SUBMITTED'
+        rows = this.db.prepare(`SELECT * FROM library_transaction_attempts WHERE status = 'SUBMITTED'
           ORDER BY tx_hash LIMIT ?`).all(limit);
       }
       if (rows.length > 0) {
@@ -949,7 +976,7 @@ export class LibraryRepository {
         .run(input.blockNumber, blockHash, requestId, input.action, txHash);
       if (changed.changes !== 1) {
         const existing = this.getTransaction(requestId, input.action);
-        if (!existing || existing.txHash !== txHash || existing.status !== "REVERTED") throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+        if (!existing || (existing.txHash === txHash && existing.status !== "REVERTED")) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
       }
       const attemptChanged = this.db.prepare(`UPDATE library_transaction_attempts SET status = 'REVERTED', block_number = ?,
         block_hash = ? WHERE tx_hash = ? AND request_id = ? AND action = ? AND status = 'SUBMITTED'`)
@@ -960,7 +987,7 @@ export class LibraryRepository {
         if (!attempt || attempt.status !== "REVERTED" || Number(attempt.block_number) !== input.blockNumber
           || String(attempt.block_hash).toLowerCase() !== blockHash) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
       }
-      const result = this.getTransaction(requestId, input.action);
+      const result = this.getTransactionAttempt(requestId, input.action, txHash);
       if (!result) throw new Error("LIBRARY_TRANSACTION_NOT_FOUND");
       this.db.exec("COMMIT");
       return result;
@@ -969,6 +996,70 @@ export class LibraryRepository {
       if (librarySqliteBusy(error)) throw new Error("LIBRARY_DATABASE_BUSY");
       throw error;
     }
+  }
+
+  getTransactionAttempt(requestId: string, action: LibraryStoredTransaction["action"], txHash: string): LibraryStoredTransaction | undefined {
+    return this.listTransactions(requestId).find(item => item.action === action && item.txHash.toLowerCase() === txHash.toLowerCase());
+  }
+
+  unmatchedDeposits(filter: { requestId?: string; borrower?: string } = {}) {
+    const requestId = filter.requestId === undefined ? null : canonicalBytes32(filter.requestId, "INVALID_LIBRARY_REQUEST_ID");
+    const borrower = filter.borrower === undefined ? null : canonicalWallet(filter.borrower);
+    return this.db.prepare(`SELECT u.*, d.payload_json AS deposit_payload, f.payload_json AS refund_payload
+      FROM library_unmatched_deposits u JOIN chain_events d ON d.event_id = u.deposit_event_id
+      LEFT JOIN chain_events f ON f.event_id = u.refund_event_id
+      WHERE (? IS NULL OR u.request_id = ?) AND (? IS NULL OR u.borrower = ?) ORDER BY u.request_id`)
+      .all(requestId, requestId, borrower, borrower).map(row => ({
+        requestId: String(row.request_id), borrower: String(row.borrower), latestEvent: String(row.latest_event_name),
+        deposit: JSON.parse(String(row.deposit_payload)) as Extract<LibraryVerifiedChainEvent, { eventName: "DepositReceived" }>,
+        refund: row.refund_payload === null ? null : JSON.parse(String(row.refund_payload)) as LibraryVerifiedChainEvent,
+      }));
+  }
+
+  trackUnmatchedRefund(requestId: string, txHash: string, status: "SUBMITTED" | "CONFIRMED" | "REVERTED",
+    blockNumber: number | null, blockHash: string | null) {
+    this.db.prepare(`INSERT INTO library_unmatched_refund_attempts(tx_hash, request_id, status, block_number, block_hash)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT(tx_hash) DO UPDATE SET status = excluded.status,
+      block_number = excluded.block_number, block_hash = excluded.block_hash
+      WHERE request_id = excluded.request_id AND library_unmatched_refund_attempts.status = 'SUBMITTED'`)
+      .run(canonicalBytes32(txHash, "INVALID_LIBRARY_TX_HASH"), canonicalBytes32(requestId, "INVALID_LIBRARY_REQUEST_ID"), status, blockNumber, blockHash);
+    const row = this.db.prepare("SELECT * FROM library_unmatched_refund_attempts WHERE tx_hash = ?").get(txHash.toLowerCase());
+    if (!row || row.request_id !== requestId.toLowerCase()) throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+    return { txHash: String(row.tx_hash), status: String(row.status) as "SUBMITTED" | "CONFIRMED" | "REVERTED" };
+  }
+
+  recordHistoricalRevert(input: { requestId: string; action: LibraryStoredTransaction["action"]; txHash: string;
+    submittedAt: number; blockNumber: number; blockHash: string; checkedAt: number }): LibraryStoredTransaction {
+    const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");
+    const txHash = canonicalBytes32(input.txHash, "INVALID_LIBRARY_TX_HASH");
+    const blockHash = canonicalBytes32(input.blockHash, "INVALID_LIBRARY_BLOCK_HASH");
+    safeInteger(input.blockNumber, "INVALID_LIBRARY_BLOCK_NUMBER");
+    safeInteger(input.submittedAt, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const existing = this.getTransaction(requestId, input.action);
+      const attempt = this.getTransactionAttempt(requestId, input.action, txHash);
+      if (attempt?.status === "CONFIRMED") throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      if (attempt?.status === "REVERTED" && (attempt.blockNumber !== input.blockNumber || attempt.blockHash !== blockHash)) {
+        throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      }
+      if (!existing) this.db.prepare(`INSERT INTO library_transactions
+        (request_id, action, tx_hash, submitted_at, status, block_number, block_hash)
+        VALUES (?, ?, ?, ?, 'REVERTED', ?, ?)`)
+        .run(requestId, input.action, txHash, input.submittedAt, input.blockNumber, blockHash);
+      else if (existing.txHash === txHash) this.db.prepare(`UPDATE library_transactions SET status = 'REVERTED', block_number = ?, block_hash = ?
+        WHERE request_id = ? AND action = ? AND tx_hash = ? AND status <> 'CONFIRMED'`)
+        .run(input.blockNumber, blockHash, requestId, input.action, txHash);
+      this.db.prepare(`INSERT INTO library_transaction_attempts(tx_hash, request_id, action, submitted_at, status, block_number, block_hash)
+        VALUES (?, ?, ?, ?, 'REVERTED', ?, ?) ON CONFLICT(tx_hash) DO UPDATE SET status = 'REVERTED',
+        block_number = excluded.block_number, block_hash = excluded.block_hash
+        WHERE request_id = excluded.request_id AND action = excluded.action AND status <> 'CONFIRMED'`)
+        .run(txHash, requestId, input.action, input.submittedAt, input.blockNumber, blockHash);
+      const result = this.getTransactionAttempt(requestId, input.action, txHash);
+      if (!result || result.status !== "REVERTED") throw new Error("LIBRARY_TRANSACTION_CONFLICT");
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) { rollback(this.db); throw error; }
   }
 
   listRequests(walletInput: string, queue = false): LibraryRequestRecord[] {

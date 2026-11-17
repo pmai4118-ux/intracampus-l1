@@ -11,27 +11,16 @@ import { libraryError, libraryLabels } from '../../../lib/library';
 import LibraryCatalog from './LibraryCatalog';
 import LibraryLoans from './LibraryLoans';
 import LibraryRequests from './LibraryRequests';
+import UnmatchedDeposits from './UnmatchedDeposits';
+import LibraryWalletSummary from './LibraryWalletSummary';
 
 export default function LibrarySession() { return <WalletSession><LibraryWallet /></WalletSession>; }
 function LibraryWallet() {
-  const { state: wallet, controller } = useCampusWallet();
-  const networkLabel = `IntraCampus · ${campusNetwork.chainId}`;
+  const { state: wallet } = useCampusWallet();
   return <div className="library-shell">
     <header className="library-heading"><div><span className="eyebrow">IntraCampus / Sinh viên</span><h1>Thư viện</h1>
       <p>Tìm sách, theo dõi lượt mượn và quản lý cọc CAMPUS.</p></div><Link href="/student" className="secondary-btn">Về ví sinh viên</Link></header>
-    <section className="surface-panel library-wallet" aria-label="Ví và mạng">
-      <div><span className="field-label">Ví đang chọn</span><p><code>{wallet.address ?? 'Chưa kết nối'}</code></p>
-        <span className="network-pill">{wallet.chainId === BigInt(campusNetwork.chainId) ? networkLabel : `Cần mạng ${networkLabel}`}</span>
-        {wallet.balanceWei !== null ? <p>Số dư: {formatWalletBalance(wallet.balanceWei)}</p> : null}</div>
-      <div className="library-actions">
-        {!wallet.address ? <button type="button" className="primary-cta-btn" onClick={() => void controller.connect()}>Kết nối ví Core</button> : null}
-        {wallet.address && wallet.chainId !== BigInt(campusNetwork.chainId) ? <button type="button" className="secondary-btn" onClick={() => void controller.switchNetwork()}>Chuyển mạng IntraCampus</button> : null}
-        {wallet.address ? <button className="secondary-btn" type="button" onClick={() => controller.disconnect()}>Ngắt kết nối</button> : null}
-      </div>
-      {wallet.message ? <p role="status">{wallet.message}</p> : null}
-      {wallet.status === 'no-wallet' ? <p role="status">Cài và mở ví Core trong trình duyệt để đăng nhập và ký giao dịch.</p> : null}
-      {wallet.address && !wallet.canProceed ? <p role="status">Chưa xác minh ví/RPC. Kiểm tra mạng và cấu hình trước khi giao dịch.</p> : null}
-    </section>
+    <LibraryWalletSummary />
     <LibraryWorkspace key={`${wallet.address}:${wallet.chainId}`} />
   </div>;
 }
@@ -42,6 +31,7 @@ function LibraryWorkspace() {
   const [error, setError] = useState<string | null>(null), [notice, setNotice] = useState('');
   const [books, setBooks] = useState<LibraryBook[]>([]), [requests, setRequests] = useState<LibraryRequest[]>([]), [loans, setLoans] = useState<LibraryLoan[]>([]);
   const [status, setStatus] = useState<LibraryAccountStatus | null>(null), [call, setCall] = useState<LibraryCall | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const query = useRef(''), active = useRef(true), operation = useRef(false);
   const reviewRef = useRef<HTMLElement>(null);
   const deployment = useMemo(() => { try { return getLibraryDeployment(); } catch { return null; } }, []);
@@ -63,6 +53,7 @@ function LibraryWorkspace() {
     if (results[1].status === 'fulfilled') setRequests(results[1].value);
     if (results[2].status === 'fulfilled') setLoans(results[2].value);
     setStatus(results[3].status === 'fulfilled' ? results[3].value : null);
+    setRefreshVersion(version => version + 1);
     setLoading(false);
     const failure = results.find(r => r.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
@@ -140,17 +131,40 @@ function LibraryWorkspace() {
         })}>Xác nhận và mở ví</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => setCall(null)}>Hủy</button></div>
       </section> : null}
       <LibraryRequests requests={requests} books={books} transactions={transactions} chainTime={status?.checkedAt ?? null}
+        onReplace={request => void run(async () => {
+          if (blocked || !request.depositConflict) throw new LibraryUiError('ACTION_UNAVAILABLE');
+          await api.session(wallet.address!);
+          const replacement = await api.create(request.bookId, `replacement-${request.requestId}`);
+          await refresh();
+          setNotice('Đã tạo hoặc mở lại yêu cầu thay thế. Xem mã trong danh sách yêu cầu. Chưa gửi cọc.');
+        })}
         walletReady={wallet.canProceed} busy={busy} blocked={blocked} onPrepare={prepare} onRecover={(id, action, hash) => void run(async () => {
         if (!transactions) throw new LibraryUiError('CONFIGURATION_ERROR');
         await transactions.reconcile(id, action, hash); await refresh(); setNotice('Đã đối chiếu. Nếu vẫn chưa rõ kết quả, tiếp tục giữ hash và chưa gửi lại.');
       })} />
+      <UnmatchedDeposits api={api} refreshVersion={refreshVersion} />
       <LibraryLoans loans={loans} books={books} busy={busy} onShortfall={loan => prepare(loan.requestId, 'payShortfall')}
         onReturn={loan => void run(async () => { await api.session(wallet.address!); await api.returnBook(loan.loanId); await refresh(); setNotice('Đã gửi yêu cầu trả. Đưa sách cho thủ thư kiểm tra.'); })} />
     </> : null}
-    <section className="surface-panel library-section" aria-labelledby="library-policy-title"><h2 id="library-policy-title">Quy chế mượn & tiền cọc</h2>
-      <p>Cọc 50 CAMPUS mỗi bản; giá thay thế hiển thị riêng. Sau duyệt mượn 14 ngày, ân hạn 3 ngày; phí trễ 0,1 CAMPUS cho mỗi đủ 24 giờ sau ân hạn, trần phí trễ 25 CAMPUS.</p>
-      <p>Trả không muộn hơn 30 ngày sau hạn: hoàn cọc sau trừ phí trễ và sửa chữa, tổng khấu trừ tối đa tiền cọc. Trả quá 30 ngày: giữ toàn bộ cọc. Mất sách tính theo giá thay thế, hoàn dư hoặc trả phần thiếu, không cộng phí trễ riêng.</p>
-      <p>Tiền và trạng thái cuối được xác minh từ hợp đồng. Không có bản còn sau khi cọc: chờ thủ thư hoàn hoặc nhận lại cọc khi hết 24 giờ duyệt.</p>
+    <section className="surface-panel library-section library-policy" aria-labelledby="library-policy-title"><h2 id="library-policy-title">Quy chế mượn & tiền cọc</h2>
+      <dl className="library-policy-facts">
+        <div><dt>Tiền cọc</dt><dd><strong>50 CAMPUS</strong> mỗi bản. Giá thay thế hiển thị riêng theo sách.</dd></div>
+        <div><dt>Chờ duyệt</dt><dd>Tối đa <strong>24 giờ</strong> từ lúc cọc xác nhận trên mạng. Đúng hạn này, thủ thư không thể duyệt thêm.</dd></div>
+        <div><dt>Thời hạn mượn</dt><dd><strong>14 ngày</strong> kể từ lúc duyệt.</dd></div>
+        <div><dt>Ân hạn</dt><dd><strong>3 ngày</strong> sau hạn trả, chưa tính phí trễ.</dd></div>
+        <div><dt>Phí trả trễ</dt><dd><strong>0,1 CAMPUS</strong> mỗi kỳ đủ 24 giờ sau ân hạn. Tối đa <strong>25 CAMPUS</strong>.</dd></div>
+      </dl>
+      <details className="library-policy-full"><summary>Hoàn cọc và trường hợp đặc biệt</summary>
+        <p>Quy chế đầy đủ về hoàn cọc và quyết toán. Tiền và trạng thái cuối được xác minh từ hợp đồng.</p>
+        <dl className="library-policy-cases">
+          <div><dt>Trả đúng hạn hoặc trong ân hạn</dt><dd>Sách nguyên vẹn được hoàn đủ 50 CAMPUS sau khi thủ thư nhận sách và giao dịch quyết toán được xác minh.</dd></div>
+          <div><dt>Trả trễ đến đúng 30 ngày</dt><dd>Hoàn cọc sau khi trừ phí trễ và sửa chữa nếu có, tổng khấu trừ tối đa tiền cọc. Sách nguyên vẹn trả đúng 30 ngày sau hạn tính 27 kỳ phí, giữ 2,7 CAMPUS và hoàn 47,3 CAMPUS.</dd></div>
+          <div><dt>Trả quá 30 ngày</dt><dd>Giữ toàn bộ cọc 50 CAMPUS khi quyết toán. Sinh viên vẫn có thể yêu cầu trả sách và xử lý phần thiếu để gỡ hạn chế tài khoản.</dd></div>
+          <div><dt>Sách hỏng</dt><dd>Phí sửa chữa thực thu cộng phí trễ không vượt tiền cọc. Sách cần bảo trì được ghi nhận riêng.</dd></div>
+          <div><dt>Mất sách</dt><dd>Tính theo giá thay thế của sách, hoàn cọc dư hoặc thanh toán phần thiếu. Không cộng phí trễ riêng.</dd></div>
+          <div><dt>Hết bản sau khi cọc hoặc hết giờ duyệt</dt><dd>Chưa tạo khoản mượn. Chờ thủ thư hoàn hoặc nhận lại cọc khi đủ 24 giờ từ lúc cọc xác nhận. Chỉ ghi nhận đã hoàn sau khi giao dịch được xác minh.</dd></div>
+        </dl>
+      </details>
     </section>
   </>;
 }

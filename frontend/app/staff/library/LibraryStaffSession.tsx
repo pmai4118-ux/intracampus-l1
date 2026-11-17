@@ -7,7 +7,8 @@ import { formatWalletBalance } from '../../../lib/chains';
 import { LibraryApi, LibraryUiError, libraryTransactionProof, wei } from '../../../lib/library-api';
 import { LibraryTransactions, type LibraryCall, type StaffAction, type LibraryJournal, type LibraryJournalEntry } from '../../../lib/library-transactions';
 import { signInLibraryWallet } from '../../../lib/library-session';
-import { libraryError } from '../../../lib/library';
+import { libraryError, libraryLabels, libraryJournalLabel, libraryJournalHint } from '../../../lib/library';
+import LibraryWalletSummary from '../../student/library/LibraryWalletSummary';
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const networkLabel = `IntraCampus · ${campusNetwork.chainId}`;
@@ -37,12 +38,9 @@ function decimalWei(value: string): string {
 }
 export default function LibraryStaffSession() { return <WalletSession><Wallet /></WalletSession>; }
 function Wallet() {
-  const { state, controller } = useCampusWallet();
+  const { state } = useCampusWallet();
   return <div className="library-shell"><header className="library-heading"><div><span className="eyebrow">IntraCampus / Thủ thư</span><h1>Quản lý thư viện</h1><p>Duyệt yêu cầu, nhận sách và quyết toán cọc.</p></div><Link href="/student/library" className="secondary-btn">Thư viện sinh viên</Link></header>
-    <section className="surface-panel library-wallet" aria-label="Ví và mạng"><div><span className="field-label">Ví đang chọn</span><p><code>{state.address ?? 'Chưa kết nối'}</code></p><span className="network-pill">{state.chainId === BigInt(campusNetwork.chainId) ? networkLabel : `Cần mạng ${networkLabel}`}</span>{state.balanceWei !== null && <p>Số dư: {formatWalletBalance(state.balanceWei)}</p>}</div><div className="library-actions">
-      {!state.address && <button type="button" className="primary-cta-btn" onClick={() => void controller.connect()}>Kết nối ví Core</button>}
-      {state.address && state.chainId !== BigInt(campusNetwork.chainId) && <button type="button" className="secondary-btn" onClick={() => void controller.switchNetwork()}>Chuyển mạng IntraCampus</button>}
-      {state.address && <button type="button" className="secondary-btn" onClick={() => controller.disconnect()}>Ngắt kết nối</button>}</div>{state.message && <p role="status">{state.message}</p>}</section>
+    <LibraryWalletSummary />
     <Workspace key={`${state.address}:${state.chainId}`} /></div>;
 }
 function Workspace() {
@@ -155,13 +153,13 @@ function Workspace() {
           const disabled = busy || journalUnavailable || !deposit || !wallet.canProceed;
           return <article className="surface-panel library-section" aria-label={'Yêu cầu ' + r.requestId} key={r.requestId}><h3>{title(r.bookId)}</h3>
             <p>Mã yêu cầu: <code>{r.requestId}</code></p><p>Người mượn: <code>{deposit?.borrower ?? 'Chưa có bằng chứng hợp lệ'}</code></p>
-            <p>Trạng thái: {r.status} · Hạn duyệt: {date(r.approvalDeadline)} · Cọc: {r.depositWei ? money(r.depositWei) : '—'}</p>
+            <p>Trạng thái: {libraryLabels[r.status] ?? 'Chưa xác minh'} · Hạn duyệt: {date(r.approvalDeadline)} · Cọc: {r.depositWei ? money(r.depositWei) : '—'}</p>
             <div className="library-actions">
               {r.status === 'PENDING_APPROVAL' && <button type="button" className="primary-cta-btn" disabled={disabled} onClick={() => prepare(r.requestId, 'approve')}>Duyệt</button>}
               {canReject && <button type="button" className="secondary-btn" disabled={disabled} onClick={() => prepare(r.requestId, 'reject')}>Từ chối</button>}
             </div></article>;
         })}</section>
-      <section className="surface-panel library-section" aria-label="Khoản mượn"><h2>Khoản mượn và sách trả</h2>{loans.length === 0 ? <p>Không có khoản mượn.</p> : loans.map(l => <article className="surface-panel library-section" aria-label={`Khoản mượn ${l.loanId}`} key={l.loanId}><h3>{title(l.bookId)}</h3><p>Mã: <code>{l.loanId}</code> · Người mượn: <code>{l.borrower}</code></p><p>{l.status} · Hạn trả: {date(l.dueAt)} · Yêu cầu trả: {date(l.returnRequestedAt)} · Nhận sách: {date(l.returnReceivedAt)}</p>{l.settlement && <SettlementDetails settlement={l.settlement} />}<div className="library-actions">{['ACTIVE','RETURN_REQUESTED'].includes(l.status) && l.returnReceivedAt === null && <><button type="button" className="secondary-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => prepare(l.requestId, 'confirmReturn')}>Xác nhận nhận sách</button><button type="button" className="secondary-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => startSettlement(l, 'LOST')}>Báo mất</button></>}{l.status === 'SETTLEMENT_PENDING' && l.returnReceivedAt !== null && <button type="button" className="primary-cta-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => startSettlement(l, 'RETURNED')}>Quyết toán trả</button>}</div></article>)}</section>
+      <section className="surface-panel library-section" aria-label="Khoản mượn"><h2>Khoản mượn và sách trả</h2>{loans.length === 0 ? <p>Không có khoản mượn.</p> : loans.map(l => <article className="surface-panel library-section" aria-label={`Khoản mượn ${l.loanId}`} key={l.loanId}><h3>{title(l.bookId)}</h3><p>Mã: <code>{l.loanId}</code> · Người mượn: <code>{l.borrower}</code></p><p>{libraryLabels[l.status] ?? 'Chưa xác minh'} · Hạn trả: {date(l.dueAt)} · Yêu cầu trả: {date(l.returnRequestedAt)} · Nhận sách: {date(l.returnReceivedAt)}</p>{l.settlement && <SettlementDetails settlement={l.settlement} />}<div className="library-actions">{['ACTIVE','RETURN_REQUESTED'].includes(l.status) && l.returnReceivedAt === null && <><button type="button" className="secondary-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => prepare(l.requestId, 'confirmReturn')}>Xác nhận nhận sách</button><button type="button" className="secondary-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => startSettlement(l, 'LOST')}>Báo mất</button></>}{l.status === 'SETTLEMENT_PENDING' && l.returnReceivedAt !== null && <button type="button" className="primary-cta-btn" disabled={busy || journalUnavailable || !wallet.canProceed} onClick={() => startSettlement(l, 'RETURNED')}>Quyết toán trả</button>}</div></article>)}</section>
       {selected && <section ref={settlementForm} tabIndex={-1} className="surface-panel library-section" aria-label="Thông tin quyết toán"><h2>{selected.outcome === 'RETURNED' ? 'Quyết toán sách trả' : 'Quyết toán sách mất'}</h2><p>{title(selected.loan.bookId)} · <code>{selected.loan.borrower}</code></p><form onSubmit={submitSettlement}>
         {selected.outcome === 'RETURNED' ? <><label>Tình trạng sách <select value={condition} onChange={e => setCondition(e.target.value as 'GOOD' | 'DAMAGED')}><option value="GOOD">Tốt</option><option value="DAMAGED">Hư hỏng</option></select></label><label>Phí sửa chữa (CAMPUS) <input inputMode="decimal" value={repair} aria-invalid={!!error} aria-describedby={error ? 'staff-error' : undefined} onChange={e => setRepair(e.target.value)} /></label></> : <label><input type="checkbox" checked={lostConfirmed} required aria-invalid={!!error} aria-describedby={error ? 'staff-error' : undefined} onChange={e => setLostConfirmed(e.target.checked)} /> Tôi xác nhận chưa nhận lại sách vật lý</label>}
         <label>Lý do <textarea value={reason} onChange={e => setReason(e.target.value)} required aria-invalid={!!error} aria-describedby={error ? 'staff-error' : undefined} /></label><div className="library-actions"><button className="primary-cta-btn" disabled={busy} type="submit">Xem quyết toán</button><button className="secondary-btn" type="button" onClick={() => { previewVersion.current++; if (previewInFlight.current) { previewAbort.current?.abort(); previewAbort.current = null; operationVersion.current++; operation.current = false; previewInFlight.current = false; setBusy(false); setLoading(false); } setSelected(null); trigger.current?.focus(); }}>Hủy</button></div></form></section>}
@@ -184,5 +182,14 @@ function Recovery({journal, api, escrow, busy, onRecover}: {journal: LibraryJour
   const deposit = libraryTransactionProof(request?.transactions.find(tx => tx.action === 'deposit'), journal.requestId, escrow);
   const tx = request?.transactions.find(t => t.action === journal.action && journal.hash && same(t.txHash, journal.hash));
   const proof = journal.phase === 'confirmed' && deposit ? libraryTransactionProof(tx, journal.requestId, escrow, deposit.borrower) : null;
-  return <article><p><strong>{labels[journal.action as StaffAction] ?? journal.action}</strong> · <code>{journal.requestId}</code> · {journal.phase}</p>{journal.hash && <p>Hash: <code>{journal.hash}</code></p>}{proof && <p>Đã xác minh {proof.eventName} · Người mượn <code>{proof.borrower}</code> · Block {proof.blockNumber}</p>}{!journal.hash && <label>Hash giao dịch (nếu có) <input value={hash} onChange={e => setHash(e.target.value)} /></label>}<button className="secondary-btn" type="button" disabled={busy} onClick={() => onRecover(hash.trim() || undefined)}>Đối chiếu</button></article>;
+  return <article className="library-record"><p><strong>{labels[journal.action as StaffAction] ?? journal.action}</strong> · {libraryJournalLabel(journal.phase)}</p>
+    <p>{libraryJournalHint(journal.phase)}</p>
+    {request?.refundStatus === 'REFUNDED' && <p className="network-pill">Cọc đã được hoàn về ví người mượn.</p>}
+    {proof && <p>Kết quả giao dịch đã được xác minh.</p>}
+    <details><summary>Chi tiết giao dịch và biên nhận</summary><p>Mã yêu cầu <code>{journal.requestId}</code></p>
+      {journal.hash && <p>Mã giao dịch <code>{journal.hash}</code></p>}
+      {proof && <p>Đã xác minh {proof.eventName} · Người mượn <code>{proof.borrower}</code> · Block {proof.blockNumber}</p>}
+    </details>
+    {!journal.hash && <label>Mã giao dịch từ lịch sử ví (nếu có) <input value={hash} spellCheck={false} autoComplete="off" onChange={e => setHash(e.target.value)} /></label>}
+    <button className="secondary-btn" type="button" disabled={busy} onClick={() => onRecover(hash.trim() || undefined)}>Đối chiếu</button></article>;
 }

@@ -3,10 +3,11 @@ import type { LibraryBook, LibraryRequest } from '@intracampus/network';
 import { canClaimLibraryRefund, libraryDate, libraryLabels, libraryRecoveryDetails } from '../../../lib/library';
 import { LibraryTransactions, type StudentAction } from '../../../lib/library-transactions';
 
-export default function LibraryRequests({ requests, books, transactions, busy, blocked, chainTime, walletReady, onPrepare, onRecover }: {
+export default function LibraryRequests({ requests, books, transactions, busy, blocked, chainTime, walletReady, onPrepare, onRecover, onReplace }: {
   requests: LibraryRequest[]; books: LibraryBook[]; transactions: LibraryTransactions | null; busy: boolean; blocked: boolean;
   chainTime: number | null; walletReady: boolean;
   onPrepare(id: string, action: StudentAction): void; onRecover(id: string, action: StudentAction, hash?: string): void;
+  onReplace(request: LibraryRequest): void;
 }) {
   return <section className="surface-panel library-section" aria-labelledby="requests-title"><span className="eyebrow">02 / Nộp cọc & chờ duyệt</span>
     <h2 id="requests-title">Yêu cầu của bạn</h2>{requests.length === 0 ? <p>Chưa có yêu cầu mượn.</p> : null}
@@ -15,9 +16,13 @@ export default function LibraryRequests({ requests, books, transactions, busy, b
       <p className="network-pill">{request.refundStatus === 'REFUNDED' && request.status === 'REJECTED_NO_COPY'
         ? 'Hết bản · đã hoàn cọc' : request.refundStatus === 'REFUNDED' && request.status === 'EXPIRED_REFUND_DUE'
           ? 'Hết hạn duyệt · đã hoàn cọc' : libraryLabels[request.status]}</p>
-      <dl className="library-details"><dt>Mã yêu cầu</dt><dd><code>{request.requestId}</code></dd><dt>Hạn duyệt</dt><dd>{libraryDate(request.approvalDeadline)}</dd>
+      <details><summary>Mã yêu cầu và bằng chứng</summary><p><code>{request.requestId}</code></p></details>
+      <dl className="library-details"><dt>Hạn duyệt</dt><dd>{libraryDate(request.approvalDeadline)}</dd>
         <dt>Hoàn cọc</dt><dd>{libraryLabels[request.refundStatus]}</dd></dl>
       {request.status === 'PENDING_APPROVAL' ? <p>Cọc đã xác minh. Khoản mượn chưa hoạt động; đang chờ thủ thư duyệt trước hạn trên.</p> : null}
+      {request.depositConflict && <aside className="wallet-warning"><p>Mã yêu cầu này đã có khoản cọc khác trên mạng, không khớp ví hoặc sách của bạn. Chưa tạo khoản mượn từ khoản cọc đó. Nếu bạn đã ký, giữ mã giao dịch và đối chiếu lượt cũ.</p>
+        <details><summary>Xem khoản cọc cần xử lý riêng</summary><p>Ví đã nộp <code>{request.depositConflict.borrower}</code></p><p>Mã giao dịch <code>{request.depositConflict.depositProof.txHash}</code></p><p>Tiền hoàn luôn về ví đã nộp, không chuyển về ví đang xem yêu cầu.</p></details>
+        <button type="button" className="secondary-btn" disabled={busy || blocked} onClick={() => onReplace(request)}>Tạo hoặc xem yêu cầu thay thế</button><p>Chỉ tạo yêu cầu mới, chưa gửi tiền hoặc mở ví ký.</p></aside>}
       {request.status === 'REJECTED_NO_COPY' && request.refundStatus === 'REFUND_DUE'
         ? <p>Không còn bản sau khi cọc. Thủ thư có thể từ chối để hoàn tiền; bạn có thể nhận lại cọc khi hết hạn duyệt.</p> : null}
       {request.status === 'AWAITING_DEPOSIT' ? <button type="button" className="primary-cta-btn" disabled={busy || blocked || !transactions || !request.depositIntent}
@@ -26,9 +31,10 @@ export default function LibraryRequests({ requests, books, transactions, busy, b
         onClick={() => onPrepare(request.requestId, 'refund')}>Xem hoàn cọc hết hạn</button> : null}
       {(['deposit','refund','payShortfall'] as StudentAction[]).map(action => <Recovery key={action} request={request} action={action}
         transactions={transactions} busy={busy} onRecover={onRecover} />)}
-      {request.transactions.filter(tx => !['deposit','refund','payShortfall'].includes(tx.action)).map(tx => <p key={tx.action}>
-        {libraryLabels[tx.action] ?? tx.action}: {libraryLabels[tx.status === 'CONFIRMED' && !transactions?.confirmedProof(request.requestId, tx) ? 'SUBMITTED' : tx.status]}<br /><code>{tx.txHash}</code>
+      {request.transactions.filter(tx => !['deposit','refund','payShortfall'].includes(tx.action)).map(tx => <p key={`${tx.action}:${tx.txHash}`}>
+        {libraryLabels[tx.action] ?? tx.action}: {libraryLabels[tx.status === 'CONFIRMED' && !transactions?.confirmedProof(request.requestId, tx) ? 'SUBMITTED' : tx.status]}
       </p>)}
+      {request.transactions.some(tx => !['deposit','refund','payShortfall'].includes(tx.action)) && <details><summary>Chi tiết giao dịch thủ thư</summary>{request.transactions.filter(tx => !['deposit','refund','payShortfall'].includes(tx.action)).map(tx => <p key={tx.txHash}>{libraryLabels[tx.action]} <code>{tx.txHash}</code></p>)}</details>}
     </li>)}</ul>
   </section>;
 }
@@ -40,7 +46,7 @@ function Recovery({ request, action, transactions, busy, onRecover }: {
   let record;
   try { record = transactions?.journal(request.requestId, action); } catch { return <div role="alert"><p>Nhật ký không đọc được. Giữ mã yêu cầu và hash để đối chiếu; chưa ký thêm.</p>
     {transactions?.retainedHash(request.requestId, action) ? <code>{transactions.retainedHash(request.requestId, action)}</code> : null}</div>; }
-  const tx = request.transactions.find(t => t.action === action);
+  const tx = request.transactions.find(t => t.action === action && (!record?.hash || t.txHash.toLowerCase() === record.hash.toLowerCase()));
   if (!record && !tx) return null;
   const unknown = record?.phase === 'unknown' && !record.hash;
   const { hash: storedHash, matchedTx } = libraryRecoveryDetails(record, tx);
@@ -48,8 +54,9 @@ function Recovery({ request, action, transactions, busy, onRecover }: {
   const label = unknown ? 'Chưa rõ ví đã gửi hay chưa'
     : libraryLabels[matchedTx && (matchedTx.status !== 'CONFIRMED' || proof) ? matchedTx.status : 'SUBMITTED'];
   return <div className="library-recovery"><p><strong>{libraryLabels[action]}</strong> · {label}</p>
-    {storedHash ? <code>{storedHash}</code> : <p>Lượt ký bị ngắt trước khi nhận hash. Không gửi lại; đối chiếu request hoặc lấy hash từ lịch sử ví.</p>}
-    {proof ? <p>Receipt đã xác minh · block {proof.blockNumber} · {proof.eventName}</p> : null}
+    {storedHash ? <details><summary>Chi tiết biên nhận và mã giao dịch</summary><code>{storedHash}</code>
+      {proof ? <p>Receipt đã xác minh · block {proof.blockNumber} · {proof.eventName}</p> : null}</details>
+      : <p>Lượt ký bị ngắt trước khi nhận hash. Không gửi lại; đối chiếu request hoặc lấy hash từ lịch sử ví.</p>}
     <button type="button" className="secondary-btn" disabled={busy || !transactions} onClick={() => onRecover(request.requestId, action, storedHash ?? undefined)}>Đối chiếu {libraryLabels[action].toLowerCase()}</button>
     {!storedHash ? <form onSubmit={e => { e.preventDefault(); onRecover(request.requestId, action, hash.trim()); }}>
       <label className="field-label" htmlFor={`recover-${request.requestId}-${action}`}>Hash {libraryLabels[action].toLowerCase()} từ ví</label>

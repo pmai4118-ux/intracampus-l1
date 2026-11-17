@@ -135,6 +135,19 @@ export type LibraryRequest = {
   transactions: LibraryTransaction[];
   createdAt: number;
   updatedAt: number;
+  depositConflict?: LibraryUnmatchedDeposit;
+};
+
+export type LibraryUnmatchedDeposit = {
+  requestId: LibraryBytes32;
+  bookId: LibraryBytes32;
+  borrower: LibraryAddress;
+  amountWei: LibraryWei;
+  approvalDeadline: number;
+  latestEvent: string;
+  depositProof: LibraryEventProof;
+  refundProof: LibraryEventProof | null;
+  refundIntent: LibraryDepositIntent | null;
 };
 
 export type LibrarySettlement =

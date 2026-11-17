@@ -211,6 +211,21 @@ test("a valid hinted receipt can resolve a missing log query result", async (t) 
   assert.equal((await service.lookup(invoiceId, txHash)).body.status, "paid");
 });
 
+test("an unverified recovery candidate stays out of the invoice journal and can be corrected despite missing logs", async (t) => {
+  const { repository, rpc, service } = setup(t);
+  await service.lookup(invoiceId, undefined, otherHash);
+  assert.equal(repository.get(invoiceId)?.transaction, null);
+  // Existing deployments may already have saved the incorrect hash using the old API.
+  await service.lookup(invoiceId, otherHash);
+  assert.equal(repository.get(invoiceId)?.transaction?.txHash, otherHash);
+  rpc.paid = true;
+  rpc.receipts.set(txHash, receipt());
+  const corrected = await service.lookup(invoiceId, undefined, txHash);
+  assert.equal(corrected.httpStatus, 200);
+  assert.equal(corrected.body.status, "paid");
+  assert.equal(repository.get(invoiceId)?.receipt?.txHash, txHash);
+});
+
 for (const corruption of ["receipt-hash", "receipt-block", "canonical-block", "late-block"] as const) {
   test(`inconsistent ${corruption} cannot confirm payment`, async (t) => {
     const { rpc, service } = setup(t);

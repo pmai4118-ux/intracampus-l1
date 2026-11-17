@@ -75,6 +75,22 @@ export function createLibraryRouter(service?: LibraryService, authService?: Auth
     } catch (error) { fail(res, error); }
   });
 
+  router.get("/api/library/unmatched-deposits", async (req, res) => {
+    try { ready(); res.json(await service!.listUnmatchedDeposits(account(req))); }
+    catch (error) { fail(res, error); }
+  });
+  router.post("/api/library/unmatched-deposits/:requestId/transactions", json, async (req, res) => {
+    try {
+      ready(); sameOrigin(req);
+      const session = account(req);
+      if (!req.is("application/json") || !exactBody(req.body, ["txHash"]) || typeof req.body.txHash !== "string") {
+        throw new LibraryServiceError("VALIDATION_ERROR", 400);
+      }
+      const result = await service!.trackUnmatchedRefund(session, req.params.requestId, req.body.txHash);
+      res.status(result.transaction.status === "SUBMITTED" ? 202 : 200).json(result);
+    } catch (error) { fail(res, error); }
+  });
+
   router.get("/api/library/requests", async (req, res) => {
     try {
       ready();

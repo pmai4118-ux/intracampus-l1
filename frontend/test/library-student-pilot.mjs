@@ -180,6 +180,7 @@ try {
       record('staff reconcile failure retains hash and allows safe retry');
     }
     await journal.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
+    await journal.locator('summary').click();
     await journal.getByText(`Đã xác minh ${eventName}`, { exact: false }).waitFor();
     await refreshStaff();
   }
@@ -367,6 +368,7 @@ try {
   await recoveryRegion.getByRole('alert').filter({ hasText: damagedJournalId }).getByText('Không đọc được nhật ký này.', { exact: false }).waitFor();
   const recovery = recoveryRegion.getByRole('article').filter({ hasText: rejected.requestId });
   await recovery.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
+  await recovery.locator('summary').click();
   await recovery.getByText('Đã xác minh RequestRejected', { exact: false }).waitFor();
   assert.equal(sends.length, beforeReject + 1, 'unknown reject recovery must not rebroadcast');
   assert.equal(await staffPage.getByRole('article', { name: `Yêu cầu ${rejected.requestId}` }).count(), 0);
@@ -429,7 +431,9 @@ try {
   const claimHistory = race.card.locator('.library-recovery').filter({ hasText: 'Nhận lại cọc hết hạn' });
   await race.card.getByText('Đã hoàn cọc', { exact: true }).waitFor();
   await claimHistory.getByText('Giao dịch thất bại', { exact: false }).waitFor();
+  await claimHistory.getByText('Chi tiết biên nhận và mã giao dịch', { exact: true }).click();
   await claimHistory.getByText(borrowerClaimHash, { exact: true }).waitFor();
+  await race.card.getByText('Chi tiết giao dịch thủ thư', { exact: true }).click();
   await race.card.getByText(librarianRefundHash, { exact: true }).waitFor();
   await page.reload();
   await race.card.getByText('Đã hoàn cọc', { exact: true }).waitFor();
@@ -448,8 +452,19 @@ try {
 
   async function submitAfterDeadline(request, action, button, afterExpiry) {
     await refreshStaff();
+    const beforePrepareBlock = await provider.getBlock('latest');
+    assert.ok(beforePrepareBlock.timestamp < request.approvalDeadline, 'the deadline race starts with a still-valid approval');
     await staffPage.getByRole('article', { name: `Yêu cầu ${request.requestId}` })
       .getByRole('button', { name: button, exact: true }).click();
+    try {
+      await staffPage.getByRole('button', { name: 'Xác nhận và mở ví', exact: true }).waitFor({ timeout: 10000 });
+    } catch (error) {
+      console.error('deadline prepare diagnostics', JSON.stringify({ action, requestId: request.requestId,
+        deadline: request.approvalDeadline, beforePrepareBlock, afterPrepareBlock: await provider.getBlock('latest'),
+        requestAfterPrepare: await service.getRequest(student, request.requestId),
+        staffError: await staffPage.locator('#staff-error').textContent().catch(() => null) }));
+      throw error;
+    }
     beforeStaffBroadcast = async ([tx]) => {
       assert.equal(tx.data, escrow.interface.encodeFunctionData(action, [request.requestId]));
       await provider.send('evm_increaseTime', [86401]);
@@ -487,6 +502,7 @@ try {
     return tx;
   });
   const lateRejectJournal = recoveryRegion.getByRole('article').filter({ hasText: lateRejectHash });
+  await lateRejectJournal.locator('summary').click();
   await lateRejectJournal.getByText('Đã xác minh RequestRejected', { exact: false }).waitFor();
   const lateRejectReceipt = await provider.getTransactionReceipt(lateRejectHash);
   const lateRejectBlock = await provider.getBlock(lateRejectReceipt.blockNumber);
@@ -538,19 +554,19 @@ try {
   const sendsBeforeApproval = sends.length;
   const lateApproveHash = await submitAfterDeadline(approveAfterExpiry, 'approve', 'Duyệt', async tx => ({ ...tx, gas: '0x30d40' }));
   const approvalJournal = recoveryRegion.getByRole('article').filter({ hasText: lateApproveHash });
-  await approvalJournal.getByText(/· reverted/).waitFor();
+  await approvalJournal.getByText('Giao dịch thất bại', { exact: false }).waitFor();
   const lateApproveReceipt = await provider.getTransactionReceipt(lateApproveHash);
   const lateApproveBlock = await provider.getBlock(lateApproveReceipt.blockNumber);
   assert.equal(lateApproveReceipt.status, 0);
   assert.ok(lateApproveBlock.timestamp >= approveAfterExpiry.approvalDeadline);
   await assert.rejects(service.submitTransaction(librarian, approveAfterExpiry.requestId, { action: 'approve', txHash: id('unrelated-approval') }), /CONFLICT/);
   await staffPage.reload();
-  await approvalJournal.getByText(/· reverted/).waitFor();
+  await approvalJournal.getByText('Giao dịch thất bại', { exact: false }).waitFor();
   const trackedAgain = staffPage.waitForResponse(response => response.request().method() === 'POST'
     && new URL(response.url()).pathname === `/api/library/requests/${approveAfterExpiry.requestId}/transactions`);
   await approvalJournal.getByRole('button', { name: 'Đối chiếu', exact: true }).click();
   assert.equal((await trackedAgain).status(), 200);
-  await approvalJournal.getByText(/· reverted/).waitFor();
+  await approvalJournal.getByText('Giao dịch thất bại', { exact: false }).waitFor();
   assert.equal(sends.length, sendsBeforeApproval + 1);
   const lateApproval = await service.getRequest(student, approveAfterExpiry.requestId);
   assert.equal(lateApproval.status, 'EXPIRED_REFUND_DUE');
@@ -558,6 +574,20 @@ try {
   assert.equal(lateApproval.transactions.find(tx => tx.txHash === lateApproveHash)?.status, 'REVERTED');
   await approvalJournal.screenshot({ path: join(evidenceDir, 'staff-approval-revert.png') });
   record('late approval revert survives staff reload and same-hash reconciliation without a new send or loan');
+
+  const conflictBook = (await service.listBooks(student.wallet)).find(book => book.copiesAvailable > 0);
+  assert.ok(conflictBook, 'one book is available for the unmatched deposit case');
+  const { request: conflictRequest } = await service.createRequest({ account: student, bookId: conflictBook.bookId, idempotencyKey: 'pilot-unmatched-original' });
+  const conflictDeposit = await (await escrow.connect(signers[6]).deposit(conflictRequest.requestId, conflictBook.bookId, { value: conflictBook.depositWei })).wait();
+  await refresh();
+  const conflictCard = page.locator('li.library-record').filter({ hasText: conflictRequest.requestId });
+  await conflictCard.getByText(/Mã yêu cầu này đã có khoản cọc khác/).waitFor();
+  assert.equal(await conflictCard.getByRole('button', { name: 'Xem cọc trước khi ký' }).isEnabled(), false);
+  const beforeReplacement = sends.length;
+  await conflictCard.getByRole('button', { name: 'Tạo hoặc xem yêu cầu thay thế' }).click();
+  await page.getByText(/Đã tạo hoặc mở lại yêu cầu thay thế/).waitFor();
+  assert.equal(sends.length, beforeReplacement);
+  await conflictCard.screenshot({ path: join(evidenceDir, 'student-unmatched-replacement.png') });
 
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); record('390px no horizontal overflow');
   await page.keyboard.press('Tab');
@@ -593,8 +623,27 @@ try {
   await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).click(); await page.getByRole('button', { name: 'Làm mới trạng thái' }).waitFor();
   await page.evaluate(() => window.pilotWallet.switchAccount()); await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).waitFor();
   assert.equal(await page.getByText('Đã trả và quyết toán', { exact: true }).count(), 0); record('account switch clears prior private history and requires new login');
+  await provider.send('evm_increaseTime', [86401]);
+  await provider.send('evm_mine', []);
+  clockOffset += 86401;
+  await page.getByRole('button', { name: 'Ký đăng nhập thư viện' }).click();
+  const unmatched = page.getByRole('region', { name: 'Cọc cần xử lý riêng' });
+  await unmatched.getByRole('button', { name: 'Xem hoàn cọc riêng' }).click();
+  const beforeUnmatchedRefund = sends.length;
+  beforeStudentBroadcast = async params => params;
+  await unmatched.getByRole('button', { name: 'Xác nhận và mở ví' }).click();
+  await unmatched.getByText('Đã xác minh hoàn cọc về ví đã nộp.', { exact: true }).waitFor();
+  assert.equal(sends.length, beforeUnmatchedRefund + 1);
+  const unmatchedRefund = await provider.getTransactionReceipt(sends.at(-1));
+  const unmatchedRefundEvent = unmatchedRefund.logs.flatMap(log => {
+    try { return [escrow.interface.parseLog(log)]; } catch { return []; }
+  }).find(event => event?.name === 'ExpiredRefundClaimed');
+  assert.equal(unmatchedRefundEvent?.args.borrower.toLowerCase(), accounts[6].toLowerCase());
+  assert.equal(unmatchedRefundEvent?.args.requestId, conflictRequest.requestId);
+  await unmatched.screenshot({ path: join(evidenceDir, 'student-unmatched-refund.png') });
+  record('unmatched deposit original owner replaces request without broadcasting; actual payer confirms refund once');
   assert.deepEqual(errors, []);
-  const receipts = await Promise.all([...sends, librarianRefundHash].map(async txHash => {
+  const receipts = await Promise.all([...sends, librarianRefundHash, conflictDeposit.hash].map(async txHash => {
     const receipt = await provider.getTransactionReceipt(txHash);
     assert.equal(receipt?.status, [borrowerClaimHash, lateApproveHash].includes(txHash) ? 0 : 1);
     const events = receipt.logs.filter(log => log.address.toLowerCase() === library.escrow.address.toLowerCase()).map(log => {
@@ -609,6 +658,7 @@ try {
   }
   record('staff librarian flows complete on isolated stack with no errors');
   const sourceFiles = ['frontend/app/student/library/LibrarySession.tsx', 'frontend/app/student/library/LibraryRequests.tsx', 'frontend/app/staff/library/LibraryStaffSession.tsx',
+    'frontend/app/student/library/UnmatchedDeposits.tsx',
     'frontend/lib/library-transactions.ts', 'frontend/lib/library-api.ts', 'frontend/lib/library-session.ts',
     'backend/src/modules/library/library.repository.ts', 'backend/src/modules/library/library.service.ts', 'frontend/test/library-student-pilot.mjs'];
   const sourceHashes = Object.fromEntries(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(workspace, file))).digest('hex')]));

@@ -124,10 +124,10 @@ export function librarySessionMessage(code: string): string {
     ACCOUNT_HELD: "Tài khoản đang bị giữ do khoản mượn quá hạn hoặc còn thiếu tiền. Xử lý khoản mượn trước khi giao dịch.",
     FORBIDDEN: "Tài khoản này không có quyền Student cho thao tác đang yêu cầu.",
     RATE_LIMITED: "Đã vượt ngưỡng đăng nhập. Chờ hết thời gian Retry-After rồi thử lại.",
-    STALE_CHAIN_STATE: "Chưa xác minh được trạng thái Library mới nhất. Thử lại sau khi chain đồng bộ.",
-    RPC_UNAVAILABLE: "Không đọc được trạng thái Library từ chain. Thử lại khi RPC hoạt động.",
-    CONFIGURATION_ERROR: "Library auth hoặc chain chưa được cấu hình đầy đủ.",
-    SESSION_UNAVAILABLE: "Không đọc được session Library. Kiểm tra kết nối rồi thử lại.",
+    STALE_CHAIN_STATE: "Dữ liệu mạng chưa đủ mới để xác minh. Chờ một lúc rồi thử lại, chưa ký thêm.",
+    RPC_UNAVAILABLE: "Chưa đọc được kết quả từ mạng. Giữ trang và mã giao dịch, kiểm tra kết nối rồi thử lại.",
+    CONFIGURATION_ERROR: "Dịch vụ chưa sẵn sàng. Liên hệ người phụ trách để kiểm tra cấu hình trước khi giao dịch.",
+    SESSION_UNAVAILABLE: "Chưa kiểm tra được đăng nhập. Kiểm tra kết nối rồi thử lại.",
     INVALID_RESPONSE: "Backend trả dữ liệu session không hợp lệ. Chưa mở giao dịch.",
   } as Record<string, string>)[code] ?? "Chưa xác minh được quyền Library. Thử lại trước khi giao dịch.";
 }

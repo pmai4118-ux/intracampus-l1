@@ -1,6 +1,13 @@
 import { librarySessionMessage } from './library-session.ts';
 import type { LibraryRequest, LibraryTransaction } from '@intracampus/network';
 import type { LibraryJournal } from './library-transactions.ts';
+import { formatWalletBalance } from './chains.ts';
+
+export function libraryBalance(wei: bigint) {
+  const precision = BigInt(10) ** BigInt(14);
+  const displayed = wei / precision * precision;
+  return { label: formatWalletBalance(displayed), approximate: displayed !== wei };
+}
 
 export function canClaimLibraryRefund(request: LibraryRequest, chainTime: number | null) {
   return request.refundStatus === 'REFUND_DUE' && (request.status === 'EXPIRED_REFUND_DUE' || request.status === 'REJECTED_NO_COPY')
@@ -12,6 +19,12 @@ export function libraryRecoveryDetails(record: LibraryJournal | null | undefined
   const matchedTx = tx && hash?.toLowerCase() === tx.txHash.toLowerCase() ? tx : undefined;
   return { hash, matchedTx };
 }
+export type UnmatchedRefundJournal = { phase: 'unknown' | 'pending' | 'reverted'; hash: string | null; previousHashes?: string[] };
+export function unmatchedRecoveryAllowed(record: UnmatchedRefundJournal, hash: string) {
+  const candidate = hash.toLowerCase();
+  if (record.hash) return record.hash.toLowerCase() === candidate;
+  return !(record.previousHashes ?? []).some(previous => previous.toLowerCase() === candidate);
+}
 export const libraryLabels: Record<string, string> = {
   AWAITING_DEPOSIT: 'Chờ nộp cọc', PENDING_APPROVAL: 'Đã cọc · chờ thủ thư duyệt', REJECTED_NO_COPY: 'Hết bản · chờ hoàn cọc',
   REJECTED: 'Đã từ chối', EXPIRED_REFUND_DUE: 'Hết hạn duyệt · có thể nhận lại cọc', APPROVED: 'Đã duyệt mượn',
@@ -22,8 +35,19 @@ export const libraryLabels: Record<string, string> = {
   deposit: 'Nộp cọc', refund: 'Nhận lại cọc hết hạn', payShortfall: 'Thanh toán phần thiếu',
   approve: 'Duyệt mượn', reject: 'Từ chối yêu cầu', confirmReturn: 'Xác nhận nhận sách', return: 'Quyết toán trả sách', settle: 'Quyết toán sách mất',
 };
+export function libraryJournalLabel(phase: string) {
+  return ({ unknown: 'Chưa rõ kết quả', pending: 'Đang chờ xác minh', confirmed: 'Đã xác minh', reverted: 'Giao dịch thất bại' } as Record<string, string>)[phase] ?? 'Chưa xác minh';
+}
+export function libraryJournalHint(phase: string) {
+  return ({
+    unknown: 'Không gửi lại. Giữ mã giao dịch từ lịch sử ví và đối chiếu lượt đã gửi.',
+    pending: 'Đã có mã giao dịch. Chờ xác minh hoặc đối chiếu lại, chưa ký thêm.',
+    confirmed: 'Kết quả đã được xác minh. Có thể mở chi tiết để kiểm tra biên nhận.',
+    reverted: 'Lượt giao dịch này thất bại và có thể tốn gas. Làm mới yêu cầu để xem hành động còn hợp lệ.',
+  } as Record<string, string>)[phase] ?? 'Làm mới và đối chiếu trước khi tiếp tục.';
+}
 export function libraryError(error: unknown): string {
-  const e = error as { code?: string; retryAfterSeconds?: number };
+  const e = error as { code?: string; retryAfterSeconds?: number; operation?: string };
   const message: Record<string, string> = {
     STORAGE_BLOCKED: 'Không lưu/đọc được nhật ký. Giữ request ID và hash; đối chiếu trước khi ký thêm.',
     RECOVERY_REQUIRED: 'Lượt trước chưa rõ kết quả. Đối chiếu giao dịch trước khi ký thêm.',
@@ -38,7 +62,7 @@ export function libraryError(error: unknown): string {
     CONFLICT: 'Yêu cầu xung đột với tồn kho hoặc trạng thái mới. Làm mới trước khi thử tiếp.',
     NOT_FOUND: 'Không tìm thấy yêu cầu thuộc tài khoản này.',
   };
-  const code = e?.code ?? 'RPC_UNAVAILABLE';
+  const code = e?.code === 'SIGNATURE_REJECTED' && e.operation === 'transaction' ? 'USER_REJECTED' : e?.code ?? 'RPC_UNAVAILABLE';
   return `${message[code] ?? librarySessionMessage(code)}${e?.retryAfterSeconds ? ` Thử lại sau ${e.retryAfterSeconds} giây.` : ''}`;
 }
 export function libraryDate(seconds: number | null) { return seconds === null ? 'Chưa có' : new Date(seconds * 1000).toLocaleString('vi-VN'); }

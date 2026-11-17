@@ -85,6 +85,11 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
     if (!wallet.address) return;
     setAccess(await readLibraryStudentAccess(wallet.address));
   }
+  if (payment?.status === "paid" && payment.receipt) return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`}>
+    <h4 id={`${id}-title`}>Thanh toán đã xác minh</h4>
+    <p role="status">Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác.</p>
+    <Receipt receipt={payment.receipt} />
+  </section>;
   return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>
     <h4 id={`${id}-title`}>Thanh toán bằng ví sinh viên</h4>
     <p>Core sẽ yêu cầu xác nhận giao dịch tới payment registry. Gas được tính riêng.</p>
@@ -111,9 +116,10 @@ export function PayInvoice({ preview }: { preview: InvoicePreview }) {
     {payment?.message ? <p className="wallet-status" role="status">{payment.message}</p> : null}
     {payment?.txHash ? <><p>Tx hash</p><code className="tx-hash-code">{payment.txHash}</code>
       <CopyButton label="Sao chép hash thanh toán" value={payment.txHash} /></> : null}
-    {payment?.status === "unknown" && !payment.txHash ? <div>
-      <label htmlFor={`${id}-hash`}>Hash từ lịch sử Core (nếu đã gửi)</label>
-      <input id={`${id}-hash`} className="invoice-payload" value={manualHash} onChange={(event) => setManualHash(event.target.value)} />
+    {payment?.canRecoverHash ? <div>
+      <label htmlFor={`${id}-hash`}>Hash từ lịch sử Core để đối chiếu</label>
+      <p>Hash nhập tay còn cần xác minh. Bạn có thể sửa khi sao chép nhầm; lượt gửi ban đầu vẫn được giữ và chưa được gửi lại.</p>
+      <input id={`${id}-hash`} className="invoice-payload" value={manualHash} onChange={(event) => setManualHash(event.target.value)} autoComplete="off" spellCheck={false} />
       <button type="button" className="secondary-btn" disabled={payment.busy || !manualHash.trim()} onClick={() => void controller?.refresh(manualHash.trim())}>Tra cứu hash cũ</button>
     </div> : null}
     <div className="inline-actions invoice-preview-actions">

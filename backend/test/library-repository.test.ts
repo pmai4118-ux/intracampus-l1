@@ -151,13 +151,13 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   const env = setup();
   t.after(env.cleanup);
   let repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 5);
+  assert.equal(repository.schemaVersion(), 6);
   assert.deepEqual(repository.sqliteSettings(), { foreignKeys: 1, journalMode: "wal", synchronous: 2, busyTimeoutMs: 5000 });
   assert.equal(repository.seedDemo(env.seed), "inserted");
   repository.close();
 
   repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 5);
+  assert.equal(repository.schemaVersion(), 6);
   assert.equal(repository.seedDemo(env.seed), "unchanged");
   assert.deepEqual(repository.listBooks()[0], {
     bookId, title: "Demo book", author: "Demo author", isbn: null, depositWei, replacementPriceWei: priceWei,
@@ -171,6 +171,27 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   assert.equal(db.prepare("PRAGMA journal_mode").get()?.journal_mode, "wal");
   assert.equal(db.prepare("PRAGMA synchronous").get()?.synchronous, 2);
   db.close();
+});
+
+test("canonical unmatched deposits survive restart and replay without allocating a copy", t => {
+  const env = setup();
+  let repository = new LibraryRepository(env.path);
+  t.after(() => { repository.close(); env.cleanup(); });
+  repository.seedDemo(env.seed);
+  const requestId = `0x${"71".repeat(32)}`;
+  repository.createDepositRequest({ requestId, wallet: studentA, bookId, idempotencyKey: "unmatched", createdAt: 99,
+    chainTime: 99, holdAfterSeconds: 2_592_000 });
+  const event: LibraryVerifiedChainEvent = { chainId: 20261, contractAddress: "0x4444444444444444444444444444444444444444",
+    txHash: `0x${"72".repeat(32)}`, logIndex: 0, blockNumber: 1, blockHash: `0x${"73".repeat(32)}`,
+    blockTimestamp: 100, transactionFrom: studentB, observedAt: 101, eventName: "DepositReceived", requestId,
+    borrower: studentB, bookId, amountWei: depositWei, depositedAt: 100, approvalDeadline: 86500 };
+  repository.recordVerifiedChainEvents([event], 1, 101, "{}");
+  repository.close();
+  repository = new LibraryRepository(env.path);
+  assert.equal(repository.unmatchedDeposits()[0].borrower, studentB);
+  assert.equal(repository.recordVerifiedChainEvents([event], 1, 102, "{}").duplicates, 1);
+  assert.equal(repository.listBooks()[0].copiesAvailable, 1);
+  assert.equal(repository.getRequest(requestId)?.copyId, null);
 });
 
 test("migration failure rolls back its schema and version", () => {
@@ -203,7 +224,7 @@ test("version 5 backfills existing transaction state into attempt history", (t) 
 
   const repository = new LibraryRepository(env.path);
   t.after(() => { repository.close(); env.cleanup(); });
-  assert.equal(repository.schemaVersion(), 5);
+  assert.equal(repository.schemaVersion(), 6);
   const migrated = new DatabaseSync(env.path);
   try {
     const attempt = migrated.prepare(`SELECT tx_hash, request_id, action, status, block_number, block_hash
@@ -221,9 +242,9 @@ test("two independent startup processes migrate a new file database once", async
     initializeDatabaseInWorker(env.path),
     initializeDatabaseInWorker(env.path),
   ]);
-  assert.deepEqual(versions, [5, 5]);
+  assert.deepEqual(versions, [6, 6]);
   const repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 5);
+  assert.equal(repository.schemaVersion(), 6);
   const db = new DatabaseSync(env.path);
   try {
     for (const table of ["library_reconcile_state", "library_transactions", "library_transaction_attempts", "library_event_canonicality"]) {

@@ -26,10 +26,13 @@ export function createInvoicesRouter(service?: ReceiptService, creation?: Invoic
   router.get("/api/invoices/:invoiceId", async (req, res) => {
     res.set("Cache-Control", "no-store");
     try {
-      if (!isHash(req.params.invoiceId) || Object.keys(req.query).some((key) => key !== "txHash")
-        || (req.query.txHash !== undefined && !isHash(req.query.txHash))) throw new InvoiceRequestError("INVALID_REQUEST");
+      const { txHash, candidateTxHash } = req.query;
+      if (!isHash(req.params.invoiceId) || Object.keys(req.query).some((key) => !["txHash", "candidateTxHash"].includes(key))
+        || (txHash !== undefined && !isHash(txHash)) || (candidateTxHash !== undefined && (!isHash(candidateTxHash) || txHash !== undefined))) {
+        throw new InvoiceRequestError("INVALID_REQUEST");
+      }
       if (!service) throw new InvoiceRequestError("INVOICE_NOT_FOUND");
-      const result = await service.lookup(req.params.invoiceId, req.query.txHash as string | undefined);
+      const result = await service.lookup(req.params.invoiceId, txHash, candidateTxHash);
       if (result.retryAfterSeconds) res.set("Retry-After", result.retryAfterSeconds.toString());
       res.status(result.httpStatus).json(result.body);
     } catch (error) {

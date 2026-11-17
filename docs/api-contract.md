@@ -115,6 +115,7 @@ POS (`/pos`) dùng endpoint này để poll trạng thái hóa đơn (chu kỳ �
 
 - **Path param:** `invoiceId` (`bytes32` hex `0x...`).
 - **Query param tùy chọn:** `?txHash=0x...` — khi trình duyệt đã có `txHash` từ ví hoặc người vận hành đối chiếu thủ công, backend có thể gọi `eth_getTransactionReceipt` cho `txHash` đó bên cạnh việc đọc trạng thái/log của `invoiceId`.
+- **Gợi ý khôi phục:** `?candidateTxHash=0x...` dùng cho mã người dùng nhập khi lượt gửi cũ chưa rõ kết quả. Tham số này tra biên nhận cùng giao kèo xác minh và chỉ ghi vào kho khi chứng minh hóa đơn đã thanh toán. Nếu chưa xác minh được, trạng thái theo dõi đã lưu vẫn được giữ. Mỗi yêu cầu chỉ dùng một loại tham số hash.
 
 #### Các trạng thái vòng đời (`InvoiceLifecycleStatus`)
 

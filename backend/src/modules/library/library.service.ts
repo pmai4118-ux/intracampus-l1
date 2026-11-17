@@ -4,7 +4,7 @@ import {
   campusNetwork, requireLibraryDeployment, type DeployedLibraryDeployment, type LibraryAccount,
   type LibraryApiErrorCode, type LibraryBook, type LibraryDepositIntent, type LibraryLoan,
   type LibraryRequest, type LibrarySettlement, type LibrarySettlementIntent, type LibrarySettlementIntentRequest,
-  type LibraryTransaction, type LibraryTransactionAction,
+  type LibraryTransaction, type LibraryTransactionAction, type LibraryUnmatchedDeposit, type LibraryEventProof,
 } from "@intracampus/network";
 import type { LibraryChainFreshness } from "./library.config.ts";
 import { LibraryConfigurationError } from "./library.config.ts";
@@ -111,7 +111,8 @@ export class LibraryService {
     } catch (error) { throw serviceFailure(error); }
     const held = this.accountStatusAt(input.account.wallet, chain.chainTime).held;
     const depositIntent = request.status === "AWAITING_DEPOSIT" && !held ? this.depositIntent(request, book) : null;
-    return { request: this.publicRequest(request, depositIntent), depositIntent };
+    const response = this.publicRequest(request, depositIntent);
+    return { request: response, depositIntent: response.depositIntent };
   }
 
   async listRequests(account: LibraryAccount, queue = false): Promise<LibraryRequest[]> {
@@ -126,6 +127,52 @@ export class LibraryService {
       heldByWallet.set(wallet, held);
       return this.publicRequest(record, held ? null : this.depositIntent(record, this.findBook(record.bookId)));
     });
+  }
+
+  async listUnmatchedDeposits(account: LibraryAccount): Promise<LibraryUnmatchedDeposit[]> {
+    const chain = await this.reconciled();
+    return this.repository.unmatchedDeposits(account.role === "LIBRARIAN" ? {} : { borrower: account.wallet })
+      .map(item => this.publicUnmatched(item, item.borrower === account.wallet.toLowerCase() ? chain.chainTime : 0));
+  }
+
+  async trackUnmatchedRefund(account: LibraryAccount, requestId: string, txHash: string) {
+    const chain = await this.reconciled();
+    if (!/^0x[0-9a-f]{64}$/i.test(txHash) || !/^0x[0-9a-f]{64}$/i.test(requestId)) throw new LibraryServiceError("VALIDATION_ERROR", 400);
+    const [item] = this.repository.unmatchedDeposits({ requestId, borrower: account.wallet });
+    if (!item) throw new LibraryServiceError("NOT_FOUND", 404);
+    let tx;
+    try { tx = await this.rpcClient().getTransaction(txHash); }
+    catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
+    const deployment = this.deploymentOrThrow();
+    const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
+    if (!tx || tx.hash.toLowerCase() !== txHash.toLowerCase() || tx.from.toLowerCase() !== item.borrower
+      || tx.to?.toLowerCase() !== deployment.escrow.address.toLowerCase() || tx.value !== 0n
+      || tx.data.toLowerCase() !== iface.encodeFunctionData("claimExpiredRefund", [item.requestId]).toLowerCase()) {
+      throw new LibraryServiceError("CONFLICT", 409);
+    }
+    const receipt = await this.readTransactionReceipt(txHash, chain.safeBlock);
+    const status = receipt.revertedBlock ? "REVERTED" : item.refund?.txHash.toLowerCase() === txHash.toLowerCase() ? "CONFIRMED" : "SUBMITTED";
+    const proof = receipt.revertedBlock ?? (status === "CONFIRMED" ? item.refund : null);
+    const transaction = this.repository.trackUnmatchedRefund(item.requestId, txHash, status, proof?.blockNumber ?? null, proof?.blockHash ?? null);
+    return { deposit: this.publicUnmatched(item, chain.chainTime), transaction };
+  }
+
+  private publicUnmatched(item: ReturnType<LibraryRepository["unmatchedDeposits"]>[number], chainTime: number): LibraryUnmatchedDeposit {
+    const deployment = this.deploymentOrThrow();
+    const proof = (event: typeof item.deposit | NonNullable<typeof item.refund>): LibraryEventProof => ({
+      chainId: 20261, contractAddress: event.contractAddress as `0x${string}`, txHash: event.txHash as `0x${string}`,
+      blockNumber: event.blockNumber, blockHash: event.blockHash as `0x${string}`, logIndex: event.logIndex,
+      eventName: event.eventName, requestId: event.requestId as `0x${string}`, borrower: event.borrower as `0x${string}`,
+    });
+    return { requestId: item.requestId as `0x${string}`, bookId: item.deposit.bookId as `0x${string}`,
+      borrower: item.borrower as `0x${string}`, amountWei: item.deposit.amountWei, approvalDeadline: item.deposit.approvalDeadline,
+      latestEvent: item.latestEvent, depositProof: proof(item.deposit), refundProof: item.refund ? proof(item.refund) : null,
+      refundIntent: item.latestEvent === "DepositReceived" && chainTime >= item.deposit.approvalDeadline ? {
+        chainId: 20261, to: deployment.escrow.address as `0x${string}`,
+        data: new Interface(deployment.escrow.abi as InterfaceAbi).encodeFunctionData("claimExpiredRefund", [item.requestId]) as `0x${string}`,
+        valueWei: "0", requestId: item.requestId as `0x${string}`, bookId: item.deposit.bookId as `0x${string}`,
+      } : null,
+    };
   }
 
   async getRequest(account: LibraryAccount, requestId: string): Promise<LibraryRequest> {
@@ -249,6 +296,30 @@ export class LibraryService {
     if (librarianAction && account.wallet.toLowerCase() !== deployment.roles.librarian.toLowerCase()) {
       throw new LibraryServiceError("FORBIDDEN", 403);
     }
+    // Tracking proves an already-sent attempt independently of the current business state.
+    if (["approve", "reject", "refund"].includes(action) && input.settlementIntentId === undefined) {
+      const receipt = await this.readTransactionReceipt(input.txHash, chain.safeBlock);
+      if (receipt.revertedBlock) {
+        let transaction;
+        try { transaction = await this.rpcClient().getTransaction(input.txHash); }
+        catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
+        const expected = action === "refund" ? "claimExpiredRefund" : action;
+        const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
+        const expectedFrom = librarianAction ? deployment.roles.librarian : record.wallet;
+        if (transaction && transaction.from.toLowerCase() !== expectedFrom.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
+        if (!transaction || transaction.hash.toLowerCase() !== input.txHash.toLowerCase()
+          || transaction.to?.toLowerCase() !== deployment.escrow.address.toLowerCase()
+          || transaction.from.toLowerCase() !== expectedFrom.toLowerCase() || transaction.value !== 0n
+          || transaction.data.toLowerCase() !== iface.encodeFunctionData(expected, [record.requestId]).toLowerCase()) {
+          throw new LibraryServiceError("CONFLICT", 409);
+        }
+        let attempt;
+        try { attempt = this.repository.recordHistoricalRevert({ requestId: record.requestId, action, txHash: input.txHash,
+          submittedAt: chain.chainTime, ...receipt.revertedBlock, checkedAt: chain.checkedAt }); }
+        catch (error) { throw serviceFailure(error); }
+        return { request: await this.getRequest(account, record.requestId), transaction: this.publicTransaction(attempt, record) };
+      }
+    }
     const confirmed = this.repository.getTransaction(record.requestId, action);
     if (confirmed && confirmed.txHash.toLowerCase() !== input.txHash.toLowerCase() && confirmed.status !== "REVERTED") {
       throw new LibraryServiceError("CONFLICT", 409);
@@ -296,7 +367,8 @@ export class LibraryService {
       if (existing && existing.txHash.toLowerCase() !== input.txHash.toLowerCase() && existing.status !== "REVERTED") {
         throw new LibraryServiceError("CONFLICT", 409);
       }
-      return { request: await this.getRequest(account, record.requestId), transaction: existing ? this.publicTransaction(existing, record) : null };
+      const exact = this.repository.getTransactionAttempt(record.requestId, action, input.txHash);
+      return { request: await this.getRequest(account, record.requestId), transaction: exact ? this.publicTransaction(exact, record) : null };
     }
     if (tx.hash.toLowerCase() !== input.txHash.toLowerCase()) throw new LibraryServiceError("CONFLICT", 409);
     const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
@@ -340,7 +412,7 @@ export class LibraryService {
     }
     if (receipt.successful) {
       await this.reconciled();
-      submitted = this.repository.getTransaction(record.requestId, action) ?? submitted;
+      submitted = this.repository.getTransactionAttempt(record.requestId, action, input.txHash) ?? submitted;
     }
     return { request: await this.getRequest(account, record.requestId), transaction: this.publicTransaction(submitted, record) };
   }
@@ -453,6 +525,8 @@ export class LibraryService {
   }
 
   private publicRequest(record: LibraryRequestRecord, depositIntent: LibraryDepositIntent | null): LibraryRequest {
+    const [conflict] = this.repository.unmatchedDeposits({ requestId: record.requestId });
+    if (conflict) depositIntent = null;
     const deployment = this.deploymentOrThrow();
     const transactions: LibraryTransaction[] = this.repository.listTransactions(record.requestId).map((item) => ({
       action: item.action,
@@ -470,7 +544,8 @@ export class LibraryService {
     return { requestId: record.requestId as `0x${string}`, bookId: record.bookId as `0x${string}`,
       status: record.status as LibraryRequest["status"], refundStatus: record.refundStatus,
       depositWei: record.depositWei, depositIntent, approvalDeadline: record.approvalDeadline,
-      loanId: loanId as `0x${string}` | null, transactions, createdAt: record.createdAt, updatedAt: record.updatedAt };
+      loanId: loanId as `0x${string}` | null, transactions, createdAt: record.createdAt, updatedAt: record.updatedAt,
+      ...(conflict ? { depositConflict: this.publicUnmatched(conflict, 0) } : {}) };
   }
 
   private publicTransaction(item: NonNullable<ReturnType<LibraryRepository["getTransaction"]>>, record: LibraryRequestRecord): LibraryTransaction {

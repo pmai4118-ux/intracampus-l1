@@ -117,7 +117,8 @@ export class LibraryReconciler {
       if (error instanceof LibraryRpcError) throw new LibraryChainError(error.code);
       throw new LibraryChainError("RPC_UNAVAILABLE");
     }
-    const reverted = receipts.filter(({ receipt }) => receipt?.status === 0 && Number.isSafeInteger(receipt.blockNumber)
+    const reverted = receipts.filter(({ receipt, transaction }) => receipt?.status === 0
+      && receipt.hash?.toLowerCase() === transaction.txHash.toLowerCase() && Number.isSafeInteger(receipt.blockNumber)
       && receipt.blockNumber <= chain.safeBlock && typeof receipt.blockHash === "string");
     let blocks;
     try {
@@ -128,7 +129,7 @@ export class LibraryReconciler {
     }
     for (const [index, entry] of reverted.entries()) {
       const block = blocks[index];
-      if (!block?.hash || block.hash.toLowerCase() !== entry.receipt!.blockHash.toLowerCase()) continue;
+      if (!block?.hash || block.number !== entry.receipt!.blockNumber || block.hash.toLowerCase() !== entry.receipt!.blockHash.toLowerCase()) continue;
       try {
         this.repository.markTransactionReverted({ requestId: entry.transaction.requestId, action: entry.transaction.action,
           txHash: entry.transaction.txHash, blockNumber: entry.receipt!.blockNumber, blockHash: block.hash, checkedAt: chain.checkedAt });

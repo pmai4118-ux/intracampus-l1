@@ -36,16 +36,40 @@
 
 /* Library: keep the Student/POS form system; page components own layout only. */
 .library-shell { width: min(100%, 68rem); margin-inline: auto; padding-block: 1.5rem 4rem; }
-.library-shell h1 { margin: .35rem 0; }
-.library-shell h2 { margin: .45rem 0 1rem; }
-.library-shell h3 { margin: 0 0 .45rem; }
-.library-shell p { line-height: 1.65; }
+.library-shell { font-size: 1rem; }
+.library-shell h1 { margin: .5rem 0 .6rem; font-size: 1.875rem; line-height: 1.25; letter-spacing: -.025em; text-wrap: balance; }
+.library-shell h2 { margin: 0 0 1rem; font-size: 1.2rem; line-height: 1.4; }
+.library-shell h3 { margin: 0 0 .6rem; font-size: 1rem; line-height: 1.45; }
+.library-shell p { line-height: 1.6; }
 .library-heading, .library-wallet, .library-section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
-.library-heading { margin-bottom: 1.5rem; flex-wrap: wrap; }
+.library-heading { margin-bottom: 1.5rem; padding: 0 0 1.5rem; flex-wrap: wrap; background: transparent; border-bottom: 1px solid var(--border-hairline); align-items: center; }
+.library-heading .eyebrow { font-size: .875rem; font-weight: 500; color: var(--ink-muted); }
+.library-heading p { color: var(--ink-secondary); margin: 0; }
 .library-heading header { position: static; }
 .library-section, .library-review, .library-wallet { margin-bottom: 1.25rem; }
-.library-wallet { flex-wrap: wrap; }
+.library-shell .surface-panel { padding: 1.5rem; }
+.library-shell .library-section .surface-panel { padding: 1.15rem; box-shadow: none; }
+.library-wallet { display: block; }
+.library-wallet-summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1.5rem; align-items: center; }
+.library-wallet-account, .library-wallet-balance { display: grid; gap: .4rem; min-width: 0; }
+.library-meta-label, .library-wallet-note { font-size: .875rem; color: var(--ink-muted); line-height: 1.5; }
+.library-account-value { font-family: ui-monospace, Consolas, monospace; font-size: 1rem; font-weight: 600; }
+.library-balance-value { font-size: 1.2rem; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.library-network { color: var(--verified-ink); font-size: .875rem; }
+.library-network-warning { color: var(--warning-ink); }
+.library-wallet-buttons { display: flex; gap: .65rem; flex-wrap: wrap; }
+.library-wallet-exact { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-hairline); }
+.library-wallet-exact dl { display: grid; gap: .5rem; }
+.library-wallet-exact dd { margin: 0 0 .5rem; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.library-shell summary { cursor: pointer; min-height: 2.75rem; padding-block: .6rem; font-weight: 600; color: var(--accent-emerald); }
+.library-policy-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2rem; margin: 0; }
+.library-policy-facts > div { padding: 1rem 0; border-top: 1px solid var(--border-hairline); }
+.library-policy-facts dt, .library-policy-cases dt { font-weight: 600; margin-bottom: .4rem; }
+.library-policy-facts dd, .library-policy-cases dd { margin: 0; color: var(--ink-secondary); line-height: 1.65; }
+.library-policy-full { margin-top: .5rem; border-top: 1px solid var(--border-hairline); padding-top: .5rem; }
+.library-policy-cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem 2rem; margin: 1rem 0 0; }
 .library-actions { display: flex; gap: .65rem; flex-wrap: wrap; align-items: center; }
+.library-actions > .primary-cta-btn { width: auto; }
 .library-list { list-style: none; padding: 0; margin: 1.25rem 0 0; display: grid; gap: 1rem; }
 .library-book, .library-record { border: 1px solid var(--border-hairline); border-radius: 1rem; padding: 1.15rem; min-width: 0; }
 .library-book { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, .85fr); align-items: start; gap: 1rem; }
@@ -53,7 +77,7 @@
 .library-details { display: grid; grid-template-columns: minmax(7rem, .3fr) minmax(0, 1fr); gap: .6rem 1rem; }
 .library-details dt { font-weight: 600; }
 .library-details dd { margin: 0; min-width: 0; }
-.library-shell code { overflow-wrap: anywhere; word-break: break-word; font-size: .8rem; }
+.library-shell code { overflow-wrap: anywhere; word-break: break-word; font-size: .875rem; }
 .library-shell input { width: 100%; min-width: 0; min-height: 2.8rem; padding: .65rem .8rem; border: 1px solid var(--border-hairline); border-radius: .65rem; background: var(--bg-surface); color: inherit; font: inherit; }
 .library-shell input[type="checkbox"] { width: auto; min-height: auto; margin-right: .5rem; }
 .library-shell select, .library-shell textarea { width: 100%; min-width: 0; padding: .65rem .8rem; border: 1px solid var(--border-hairline); border-radius: .65rem; background: var(--bg-surface); color: inherit; font: inherit; }
@@ -67,6 +91,20 @@
 .library-review { border: 2px solid var(--accent-emerald); scroll-margin-top: 6rem; }
 .library-shell :focus-visible { outline: 3px solid var(--accent-emerald); outline-offset: 4px; }
 @media (max-width: 56rem) { .library-book { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 56rem) {
+  .library-wallet-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .library-wallet-buttons { grid-column: 1 / -1; }
+}
+@media (max-width: 37.5rem) {
+  .library-shell { padding-top: .5rem; }
+  .library-shell h1 { font-size: 1.625rem; }
+  .library-shell .surface-panel { padding: 1.15rem; }
+  .library-wallet-summary, .library-policy-facts, .library-policy-cases { grid-template-columns: minmax(0, 1fr); }
+  .library-wallet-summary { gap: 1rem; }
+  .library-wallet-balance { border-top: 1px solid var(--border-hairline); padding-top: 1rem; }
+  .library-wallet-buttons { gap: .5rem; }
+  .library-wallet-buttons button { flex: 1 1 auto; }
+}
 @media (max-width: 28rem) {
   .library-search { align-items: stretch; flex-direction: column; }
   .library-details { grid-template-columns: minmax(0, 1fr); gap: .3rem; }
