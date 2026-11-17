@@ -5,14 +5,14 @@ Tài liệu này hướng dẫn chạy giao diện POS/Student và API. Luồng 
 ## 1. Yêu cầu
 
 - Windows PowerShell, Node.js 24.x và pnpm 11.25.0.
-- Nhánh có code U03. Khi PR #15 chưa được merge vào `main`, lấy nhánh PR:
+- Checkout nhánh dự án cần chạy. Để lấy bộ sửa lỗi/setup đang bàn giao trong PR này:
 
 ```powershell
 git fetch origin
-git switch codex/U03-student-payment
+git switch codex/stale-chain-demo-readiness
 ```
 
-Nếu bạn đang ở đúng nhánh rồi thì không cần chạy lại lệnh chuyển nhánh.
+Sau khi PR được merge, dùng `git switch main` rồi `git pull --ff-only` để lấy bản mới nhất.
 
 Kiểm tra công cụ:
 
@@ -82,6 +82,81 @@ Không đưa các file `.env` này lên Git.
 Các biến `NEXT_PUBLIC_*` sẽ được đưa vào frontend, nên chỉ điền RPC URL không có secret và các địa chỉ contract công khai. Không điền private key vào đây.
 
 L1 cần có cặp merchant/category bãi xe được bật trong registry. Không dùng Fuji C-Chain `43113`, AVAX hay faucet Fuji thay cho mạng và CAMPUS của dự án.
+
+### Nối Core với L1 local trên Windows/WSL2
+
+Phần này dùng L1 local đã được tạo và đang chạy trong WSL2. Không chạy lại lệnh `avalanche blockchain create` hoặc `deploy` chỉ để mở ứng dụng: tạo lại chain sẽ đổi lịch sử và có thể làm manifest/địa chỉ contract cũ không còn hợp lệ.
+
+Mở PowerShell và kiểm tra distro/công cụ. Nếu tên distro hoặc đường dẫn `cast` trên máy khác, thay cho đúng môi trường của bạn:
+Chạy các khối PowerShell trong cùng một cửa sổ để giữ `$Distro` và `$RpcUrl`.
+
+```powershell
+$Distro = 'IntraCampus-L01-Ubuntu'
+wsl.exe --list --quiet
+wsl.exe -d $Distro -- /root/.foundry/bin/cast --version
+```
+
+Đặt RPC URL đúng theo lần `avalanche blockchain deploy` hiện tại. Ví dụ đã ghi nhận cho chain local này dùng cổng `9654` và blockchain ID dưới đây; nếu bạn tạo lại chain, lấy blockchain ID mới từ Avalanche CLI thay vì dùng lại ví dụ:
+
+```powershell
+$RpcUrl = 'http://127.0.0.1:9654/ext/bc/ei1KeTdVU9HTCEPGRgYUBAqpd7CyHxGJUDzoseXQFQHubTXfW/rpc'
+$Body = @{ jsonrpc = '2.0'; id = 1; method = 'eth_chainId'; params = @() } | ConvertTo-Json -Compress
+$Probe = Invoke-RestMethod -Uri $RpcUrl -Method Post -ContentType 'application/json' -Body $Body
+if ($Probe.result -ne '0x4f25') { throw "Sai chain ID: $($Probe.result); cần 0x4f25 (20261)." }
+$Probe.result
+```
+
+Kết quả phải là `0x4f25`. Nếu PowerShell không kết nối được, kiểm tra node L1 còn chạy và RPC URL có đúng blockchain ID không. Có thể kiểm tra cùng endpoint bằng `cast` trong WSL:
+
+```powershell
+wsl.exe -d $Distro -- /root/.foundry/bin/cast rpc --rpc-url $RpcUrl eth_chainId
+```
+
+Trong Core Wallet trên Chrome:
+
+1. Chọn hoặc tạo tài khoản **demo riêng**. Không dùng tài khoản mainnet/tiền thật cho chain local.
+2. Mở **Settings → Networks → Custom → Add** (hoặc sửa mục IntraCampus L1 đã có).
+3. Điền network name `IntraCampus L1`, RPC URL bằng `$RpcUrl`, Chain ID `20261`, Token symbol `CAMPUS`, Token name `CAMPUS token`; explorer URL có thể để trống.
+4. Lưu rồi chọn IntraCampus L1. Ví cần đang ở đúng account demo và đúng chain trước khi mở app.
+
+`CAMPUS` là đồng gốc của L1 local, cũng là đồng trả gas. Cấu hình symbol/token name trong mạng là phần cần thiết để Core hiển thị đồng gốc; đừng nhập private key/seed phrase vào trang web, file `.env`, QR hoặc chat. Chỉ sao chép địa chỉ công khai của tài khoản demo. Nếu Core không hiện CAMPUS, đối chiếu network/RPC/chain ID trước; đừng tự thêm một token ERC-20 trừ khi manifest của môi trường đó có contract token ERC-20 được xác nhận.
+
+### Kiểm tra số dư và nạp ví demo bằng PowerShell
+
+Lấy địa chỉ công khai của Student/Librarian từ Core rồi gán vào PowerShell. Dùng RPC đã kiểm tra ở trên:
+
+```powershell
+$Student = '0xDIA_CHI_STUDENT_TREN_CORE'
+$Librarian = '0xDIA_CHI_LIBRARIAN_TREN_CORE'
+wsl.exe -d $Distro -- /root/.foundry/bin/cast balance --rpc-url $RpcUrl $Student
+wsl.exe -d $Distro -- /root/.foundry/bin/cast balance --rpc-url $RpcUrl $Librarian
+```
+
+`cast balance` trả số dư CAMPUS theo wei (18 chữ số thập phân). Để nạp, dùng **funder demo riêng** đã được cấp CAMPUS và import dưới dạng keystore Foundry; tên ví bên dưới là ví dụ:
+
+```powershell
+wsl.exe -d $Distro -- /root/.foundry/bin/cast wallet import intracampus-funder --interactive
+wsl.exe -d $Distro -- /root/.foundry/bin/cast wallet address --account intracampus-funder
+```
+
+Lệnh import hỏi khóa qua prompt ẩn và mật khẩu keystore; chỉ nhập khóa của funder demo riêng từ nguồn tin cậy. Không nhập khóa/seed phrase của tài khoản Student/Librarian trong Core. Nếu chưa được cấp khóa funder và ví này chưa có CAMPUS, dừng trước lệnh gửi tiền; dùng quy trình B03 ở [docs/demo-accounts.md](demo-accounts.md) hoặc nhờ người giữ funder demo riêng nạp.
+
+Đối chiếu địa chỉ funder, Student/Librarian, chain `20261` và số dư trước khi gửi. Các lệnh sau tạo giao dịch thật trên L1 local, hỏi mật khẩu keystore trong terminal và trừ gas từ funder:
+
+```powershell
+wsl.exe -d $Distro -- /root/.foundry/bin/cast send --rpc-url $RpcUrl --chain 20261 --account intracampus-funder --value 3000ether $Student
+wsl.exe -d $Distro -- /root/.foundry/bin/cast send --rpc-url $RpcUrl --chain 20261 --account intracampus-funder --value 1ether $Librarian
+```
+
+Chỉ chạy nếu cần nạp; nếu ví đã đủ tiền thì bỏ qua. `3000ether` ở đây là 3.000 CAMPUS (không phải AVAX). Dùng funder riêng, không thay bằng khóa deployer, POS signer hoặc grant issuer. Nếu chưa có funder riêng, dừng tại đây và dùng quy trình seed an toàn trong [docs/demo-accounts.md](demo-accounts.md); không lấy/chép khóa từ Core hoặc repo. `cast send` in transaction hash và receipt; có thể đối chiếu lại bằng:
+
+```powershell
+$TxHash = '0xHASH_DO_CAST_SEND_TRA_VE'
+wsl.exe -d $Distro -- /root/.foundry/bin/cast receipt --rpc-url $RpcUrl $TxHash
+wsl.exe -d $Distro -- /root/.foundry/bin/cast balance --rpc-url $RpcUrl $Student
+```
+
+Sau đó chạy `pnpm rpc:check`, rồi mở [http://127.0.0.1:4000/api/network](http://127.0.0.1:4000/api/network). `rpc:check` kiểm tra chain ID; trước giao dịch demo cũng xem `latestBlock`/`headAgeSeconds`. Nếu head cũ hơn 300 giây, app sẽ chặn thao tác để tránh ký invoice đã hết hạn. Xem [mục chẩn đoán Library, FOOD và gửi xe](#chẩn-đoán-local-library-food-và-gửi-xe-17112026). Không reset chain hoặc bỏ qua giới hạn freshness.
 
 ## 3. Kiểm tra RPC và khởi động
 
