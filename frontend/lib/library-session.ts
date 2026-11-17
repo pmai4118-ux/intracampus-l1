@@ -129,5 +129,8 @@ export function librarySessionMessage(code: string): string {
     CONFIGURATION_ERROR: "Dịch vụ chưa sẵn sàng. Liên hệ người phụ trách để kiểm tra cấu hình trước khi giao dịch.",
     SESSION_UNAVAILABLE: "Chưa kiểm tra được đăng nhập. Kiểm tra kết nối rồi thử lại.",
     INVALID_RESPONSE: "Backend trả dữ liệu session không hợp lệ. Chưa mở giao dịch.",
+    WALLET_UNAVAILABLE: "Chưa nhận được chữ ký từ Core. Mở Core, kiểm tra yêu cầu đăng nhập rồi thử lại.",
+    INVALID_SIGNATURE: "Core trả chữ ký không đúng định dạng Ethereum. Chưa tạo phiên đăng nhập.",
+    WRONG_CHAIN: "Chuyển Core về IntraCampus L1 (20261), rồi ký đăng nhập lại.",
   } as Record<string, string>)[code] ?? "Chưa xác minh được quyền Library. Thử lại trước khi giao dịch.";
 }

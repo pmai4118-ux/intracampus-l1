@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { browserWalletConfig, campusNetwork, formatWalletBalance } from "../../lib/chains";
-import { WalletController, type WalletProvider, type WalletSnapshot } from "../../lib/wallet";
+import { WalletController, selectInjectedWallet, type WalletSnapshot } from "../../lib/wallet";
 import { InvoicePreview } from "./InvoicePreview";
 import GrantPanel from "./GrantPanel";
 
@@ -16,18 +16,13 @@ function WalletSubscription({ controller, children }: { controller: WalletContro
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   return <WalletContext.Provider value={{ state, controller }}>{children}</WalletContext.Provider>;
 }
-function injectedWallet(): WalletProvider | undefined {
-  const provider = (window as Window & { ethereum?: Partial<WalletProvider> }).ethereum;
-  return provider && typeof provider.request === "function" && typeof provider.on === "function"
-    && typeof provider.removeListener === "function" ? provider as WalletProvider : undefined;
-}
 export function WalletSession({ children }: { children: ReactNode }) {
   const [controller, setController] = useState<WalletController | null>(null);
   useEffect(() => {
     let config;
     try { config = browserWalletConfig(); }
     catch { config = { rpcUrl: "invalid-config" }; }
-    const session = new WalletController({ provider: injectedWallet(), config });
+    const session = new WalletController({ provider: selectInjectedWallet(window as Window & { avalanche?: unknown; ethereum?: unknown }), config });
     setController(session); void session.start();
     const refresh = () => { if (session.getSnapshot().address) void session.refresh(); };
     window.addEventListener("focus", refresh);
