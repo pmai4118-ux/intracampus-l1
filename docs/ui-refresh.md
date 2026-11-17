@@ -67,6 +67,20 @@ Trong phiên làm việc này, máy có Node.js 26 mặc định. Các kiểm tr
 
 ## Ảnh và bằng chứng
 
+### Khắc phục review #28 trong bản local
+
+Nhánh UI đã merge thông thường bản sửa nhà ăn `ea07c2ab180cecdc632b291e7b30af8c0305f836`. Khi mở lại đơn WALLET, backend đối chiếu receipt trước khi chặn việc chuẩn bị thanh toán mới do hold. [Giao kèo và regression nhà ăn](canteen.md) mô tả phạm vi.
+
+Điều hướng ẩn nhãn mạng phụ và cho xuống hàng ở màn rộng tối đa 832px. Trên 576px đến 704px, sáu link chia thành hai hàng ba mục. Màn từ 576px trở xuống giữ thanh sáu biểu tượng hiện có. Không dùng cắt tràn ngang để che nội dung.
+
+Regression browser kiểm tra đủ sáu link, label nằm trong viewport, active state, focus bàn phím và Back trên sáu trang với 11 độ rộng. Chạy khi server UI đã sẵn sàng, với Python Playwright và Chrome đã cài:
+
+```sh
+python frontend/test/navigation-browser.py --origin http://127.0.0.1:3158 --output artifacts/navigation-new-run
+```
+
+Output phải là thư mục mới. Có thể dùng `--channel msedge` khi kiểm tra bằng Edge. Bộ artifacts dưới đây giữ nguyên lượt bàn giao đầu; ảnh và log khắc phục mới được lưu cùng báo cáo `IntraCampus-L1-PR28-remediation.md` trên Desktop. Bản local chưa push hoặc thay đổi draft/base của PR.
+
 - [Trang chủ desktop](../artifacts/ui-refresh/home-desktop.jpg) · [mobile](../artifacts/ui-refresh/home-mobile.jpg).
 - [Sinh viên desktop](../artifacts/ui-refresh/student-desktop.jpg) · [mobile](../artifacts/ui-refresh/student-mobile.jpg).
 - [Nhà ăn desktop](../artifacts/ui-refresh/canteen-desktop.jpg) · [mobile](../artifacts/ui-refresh/canteen-mobile.jpg).
