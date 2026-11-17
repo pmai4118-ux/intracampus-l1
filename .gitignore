@@ -1,6 +1,7 @@
 # Local dependencies and build outputs
 node_modules/
 .next/
+.next-tests/
 dist/
 coverage/
 *.tsbuildinfo

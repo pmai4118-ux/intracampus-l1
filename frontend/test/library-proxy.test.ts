@@ -6,6 +6,7 @@ import { createServer as createHttpServer } from "node:http";
 import { createRequire } from "node:module";
 import { createServer as createNetServer } from "node:net";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
@@ -99,11 +100,14 @@ function stopProcessTree(pid: number | undefined): void {
 }
 
 async function startNextDev(t: TestContext, nextPort: number, backendOrigin: string): Promise<string> {
+  await mkdir(join(frontendDir, ".next-tests"), { recursive: true });
+  const testDir = await mkdtemp(join(frontendDir, ".next-tests", "run-"));
+  await writeFile(join(testDir, "tsconfig.json"), JSON.stringify({ extends: "../../tsconfig.json", include: ["../../**/*.ts", "../../**/*.tsx"], exclude: ["../../node_modules", "../../.next", "../../.next-tests"] }));
   const nextServer = join(frontendDir, "server.mjs");
   const output: string[] = [];
   const child = spawn(process.execPath, [nextServer, "--dev", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
     cwd: frontendDir,
-    env: childEnvironment(backendOrigin),
+    env: { ...childEnvironment(backendOrigin), INTRACAMPUS_TEST_DIST_DIR: testDir },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -125,6 +129,7 @@ async function startNextDev(t: TestContext, nextPort: number, backendOrigin: str
     if (child.exitCode === null && child.signalCode === null) {
       await Promise.race([once(child, "exit"), delay(3000)]);
     }
+    if (child.exitCode !== null || child.signalCode !== null) await rm(testDir, { recursive: true, force: true });
   });
 
   const nextOrigin = `http://127.0.0.1:${nextPort}`;
