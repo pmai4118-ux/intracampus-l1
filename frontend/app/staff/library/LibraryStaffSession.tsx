@@ -105,6 +105,7 @@ function Wallet() {
           <button type="button" className="secondary-btn" aria-pressed={mode === 'demo'} onClick={() => setMode('demo')}>Xem bản minh họa</button>
         </div>
       </div>
+      <Link href="/staff/canteen" className="secondary-btn">Quầy bếp nhà ăn</Link>
       <Link href="/student/library" className="secondary-btn">Thư viện sinh viên</Link>
     </PageHeading>
     {mode === 'live' ? <>
