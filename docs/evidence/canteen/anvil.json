@@ -1,0 +1,23 @@
+{
+  "environment": "local-anvil",
+  "chainId": 20261,
+  "scope": "Real EVM, current source-verified contracts and canteen services. Not Core or Avalanche L1 acceptance.",
+  "cases": [
+    {
+      "method": "WALLET",
+      "orderId": "a5d32f26-50f6-4eef-8127-d248739b8b1f",
+      "totalWei": "1000000000000000000000",
+      "paidAmountWei": "900000000000000000000",
+      "txHash": "0x3b5406cf0e39217e50ecf5d379042eef4316e7134356cc385dbe39400dd152fe",
+      "blockNumber": 26
+    },
+    {
+      "method": "FOOD",
+      "orderId": "43264942-3910-4f16-8a02-515576066d35",
+      "totalWei": "1000000000000000000000",
+      "paidAmountWei": "1000000000000000000000",
+      "txHash": "0x94d6ca9c08a41d4a1b791a5e39ee340128f196e16bf54cae7b5f5fb216d54827",
+      "blockNumber": 27
+    }
+  ]
+}

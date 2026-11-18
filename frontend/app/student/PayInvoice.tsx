@@ -12,10 +12,11 @@ import { Receipt } from "../pos/Receipt";
 import { CopyButton } from "../demo-controls";
 import { useCampusWallet } from "./WalletPanel";
 
-export function PayInvoice({ preview }: { preview: InvoicePreview }) {
+export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPaid?: (hash: string) => void }) {
   const { state: wallet, controller: walletController } = useCampusWallet();
   const [controller, setController] = useState<PaymentController | null>(null);
   const [payment, setPayment] = useState<PaymentSnapshot | null>(null);
+  useEffect(() => { if (payment?.status === "paid" && payment.receipt) onPaid?.(payment.receipt.txHash); }, [payment?.status, payment?.receipt?.txHash, onPaid]);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [manualHash, setManualHash] = useState("");
   const [access, setAccess] = useState<LibraryStudentAccess | null>(null);

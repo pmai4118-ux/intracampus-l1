@@ -75,3 +75,7 @@ Xem [phạm vi MVP và cách làm luân phiên của nhóm](docs/scope.md) cùng
 2. Xem [giao kèo hóa đơn EIP-712 và QR](docs/invoice-contract.md) cùng [giao kèo HTTP API và mã lỗi](docs/api-contract.md) (P02) để triển khai song song `L04`, `B01`, `B02` và `U03`. Sau đó làm luồng tạo QR → ký → biên nhận trước khi thêm voucher.
 
 Tham khảo: [Avalanche Starter Kit](https://github.com/ava-labs/avalanche-starter-kit) cho Foundry và cách nối RPC Avalanche L1; [Vercel App Router Playground](https://github.com/vercel/next-app-router-playground) cho tổ chức giao diện theo route; [chính sách hỗ trợ Next.js](https://nextjs.org/support-policy) cho lựa chọn phiên bản.
+
+## Nhà ăn
+
+Chạy `pnpm --filter @intracampus/backend seed:canteen`, rồi mở `/student/canteen` để chọn món, tạo đơn và thanh toán bằng ví hoặc học bổng FOOD. Xem [module nhà ăn](docs/canteen.md).

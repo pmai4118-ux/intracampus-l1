@@ -1,3 +1,5 @@
+import { CanteenRepository } from './modules/canteen/canteen.repository.ts';
+import { CanteenService } from './modules/canteen/canteen.service.ts';
 import { createApp } from "./app.ts";
 import { fileURLToPath } from "node:url";
 import { SqliteInvoiceRepository } from "./modules/invoices/invoices.repository.ts";
@@ -42,11 +44,13 @@ try {
 } catch {
   // Keep unrelated API modules available; auth endpoints fail closed with CONFIGURATION_ERROR.
 }
+const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
+const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => server.close(() => { grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
+  process.once(signal, () => server.close(() => { canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
 }

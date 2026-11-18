@@ -377,3 +377,7 @@ Settlement intent của thủ thư trả borrower, treasury, escrow, chain, call
 Session cookie opaque do server quản lý và `HttpOnly`; role chỉ tra từ server. Đăng nhập dùng challenge ví gắn domain với nonce dùng một lần, thời hạn session/challenge phải cấu hình và write request phải kiểm tra same-origin. Không nhận role từ JSON client. Mã lỗi/status cho input sai, chưa đăng nhập, sai quyền, resource ngoài scope, conflict, lỗi chain/config và SQLite bận được định nghĩa ở giao kèo Library, gồm `CONFIGURATION_ERROR` 503.
 
 Trạng thái account và đường khôi phục vẫn truy cập được khi shared hold guard chặn payment/grant/mượn mới. Return, deposit refund, settlement và trả shortfall không bị hold chặn. Thiếu cấu hình, sai chain, chain time cũ hoặc tương lai phải fail closed `503` cho quyết định được bảo vệ; test local cấp cấu hình rõ ràng và không đại diện production.
+
+## Nhà ăn
+
+Xem [giao kèo nhà ăn](canteen.md) cho menu SQLite, đơn của sinh viên và hai phương thức thanh toán. API canteen sử dụng session auth hiện có; POST phải cùng Origin. Public POST /api/invoices tiếp tục chỉ nhận menu parking, không nhận amount tùy ý.

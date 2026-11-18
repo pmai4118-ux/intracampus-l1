@@ -58,7 +58,17 @@ export class InvoiceCreationService {
 
   async create(request: unknown) {
     validateInvoiceRequest(request);
-    const { deployment, config } = this;
+    return this.createForService(parkingService, this.config.merchant);
+  }
+
+  /** Internal trusted catalog entry; never pass request JSON as a service. */
+  async createForService(service: { merchantId: string; merchantName: string; serviceId: string; serviceName: string;
+    categoryCode: string; amount: bigint; ttlSeconds: number }, merchant?: string, stableCode?: string) {
+    if (stableCode) {
+      const stored = this.repository.get(id(stableCode));
+      if (stored) return this.response(stored.envelope);
+    }
+    const deployment = this.deployment, config = { ...this.config, merchant };
     if (!deployment || !isAddress(deployment.contractAddress) || !isAddress(config.merchant)) {
       throw new InvoiceCreationError("RPC_UNAVAILABLE");
     }
@@ -77,7 +87,7 @@ export class InvoiceCreationService {
       const block = object(await this.rpc.call("eth_getBlockByNumber", ["latest", false]));
       safeQuantity(block.number);
       issuedAt = safeQuantity(block.timestamp);
-      if (!Number.isSafeInteger(issuedAt + parkingService.ttlSeconds)
+      if (!Number.isSafeInteger(issuedAt + service.ttlSeconds)
         || !Number.isFinite(new Date(issuedAt * 1000).getTime())) throw new Error();
       const rawSigner = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
         data: signerAbi.encodeFunctionData("posSigner") }, block.number]);
@@ -90,29 +100,33 @@ export class InvoiceCreationService {
         if (typeof sbt !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(sbt)
           || !same(`0x${sbt.slice(-40)}`, config.studentSbt)) throw new Error();
         const allowed = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
-          data: signerAbi.encodeFunctionData("allowedMerchantCategories", [config.merchant, id(parkingService.categoryCode)]) }, block.number]);
+          data: signerAbi.encodeFunctionData("allowedMerchantCategories", [config.merchant, id(service.categoryCode)]) }, block.number]);
         if (allowed !== `0x${"0".repeat(63)}1`) throw new Error();
       }
     } catch (error) {
       if (error instanceof InvoiceCreationError) throw error;
       throw new InvoiceCreationError("RPC_UNAVAILABLE");
     }
-    const invoiceCode = `INV-${new Date(issuedAt * 1000).toISOString().slice(0, 10).replaceAll("-", "")}-PARKING-${randomUUID()}`;
+    const invoiceCode = stableCode ?? `INV-${new Date(issuedAt * 1000).toISOString().slice(0, 10).replaceAll("-", "")}-PARKING-${randomUUID()}`;
     const domain: SignedInvoiceEnvelope["domain"] = { name: "IntraCampusPayment", version: "1",
       chainId: campusNetwork.chainId, verifyingContract: deployment.contractAddress.toLowerCase() };
-    const invoice = { invoiceId: id(invoiceCode), merchant: config.merchant.toLowerCase(), category: id(parkingService.categoryCode),
-      amount: parkingService.amount.toString(), expiresAt: issuedAt + parkingService.ttlSeconds };
+    const invoice = { invoiceId: id(invoiceCode), merchant: config.merchant.toLowerCase(), category: id(service.categoryCode),
+      amount: service.amount.toString(), expiresAt: issuedAt + service.ttlSeconds };
     const envelope: SignedInvoiceEnvelope = { schemaVersion: 1, domain, invoice,
-      meta: { invoiceCode, merchantId: parkingService.merchantId, merchantName: parkingService.merchantName,
-        serviceId: parkingService.serviceId, serviceName: parkingService.serviceName, categoryCode: parkingService.categoryCode, issuedAt },
+      meta: { invoiceCode, merchantId: service.merchantId, merchantName: service.merchantName,
+        serviceId: service.serviceId, serviceName: service.serviceName, categoryCode: service.categoryCode, issuedAt },
       signer: wallet.address, signature: await wallet.signTypedData(domain, invoiceTypes, invoice) };
     try { this.repository.create(envelope); }
     catch { throw new InvoiceCreationError("INTERNAL_ERROR"); }
-    const discount = parkingService.amount / 10n;
+    return this.response(envelope);
+  }
+
+  private response(envelope: SignedInvoiceEnvelope) {
+    const invoice = envelope.invoice, amount = BigInt(invoice.amount), discount = amount / 10n;
     return { invoiceId: invoice.invoiceId, status: "pending" as const, envelope, qrPayload: JSON.stringify(envelope),
       pricingPreview: {
         standard: { tier: 0, discountBps: 0, discountAmount: "0", paidAmount: invoice.amount },
-        studentSbt: { tier: 1, discountBps: 1000, discountAmount: discount.toString(), paidAmount: (parkingService.amount - discount).toString() },
+        studentSbt: { tier: 1, discountBps: 1000, discountAmount: discount.toString(), paidAmount: (amount - discount).toString() },
       }, transaction: null };
   }
 }
