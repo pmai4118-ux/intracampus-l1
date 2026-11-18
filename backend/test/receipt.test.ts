@@ -15,7 +15,7 @@ function setup(t: TestContext, options: { blockRange?: number; maxScanRanges?: n
   t.after(() => repository.close());
   repository.create(envelope);
   const rpc = new FakeRpc();
-  let clock = envelope.meta.issuedAt * 1000;
+  let clock = envelope.invoice.expiresAt * 1000;
   const events: Record<string, unknown>[] = [];
   const service = new ReceiptService({ repository, rpc, deployment, now: () => clock, log: (e) => events.push(e), ...options });
   return { repository, rpc, service, events, advance: (ms: number) => { clock += ms; } };
@@ -119,12 +119,37 @@ test("a canonical payment wins a wrong hinted txHash", async (t) => {
 });
 
 test("chain timestamp, including the exact expiry second, controls lifecycle", async (t) => {
-  const { rpc, service, advance } = setup(t);
-  advance(86400 * 1000);
+  const { rpc, service } = setup(t);
   assert.equal((await service.lookup(invoiceId)).body.status, "pending");
   rpc.timestamp++;
   const result = await service.lookup(invoiceId);
   assert.equal(result.httpStatus, 200); assert.equal(result.body.status, "expired");
+});
+
+test("stale latest chain time is reported as retryable instead of a pending invoice", async (t) => {
+  const { repository, rpc, service, advance } = setup(t);
+  advance(301_000);
+  const stale = await service.lookup(invoiceId);
+  assert.equal(stale.httpStatus, 503);
+  assert.equal(stale.body.status, "rpc-error");
+  assert.equal(stale.body.error?.code, "STALE_CHAIN_STATE");
+  assert.equal(repository.get(invoiceId)!.lastKnownStatus, null);
+
+  advance(2_000);
+  rpc.timestamp += 301;
+  const recovered = await service.lookup(invoiceId);
+  assert.equal(recovered.httpStatus, 200);
+  assert.equal(recovered.body.status, "expired");
+});
+
+test("a stale head still permits canonical historical payment verification", async (t) => {
+  const { rpc, service, advance } = setup(t);
+  advance(301_000);
+  rpc.receipts.set(txHash, receipt());
+  const result = await service.lookup(invoiceId, txHash);
+  assert.equal(result.httpStatus, 200);
+  assert.equal(result.body.status, "paid");
+  assert.equal(result.body.receipt?.txHash, txHash);
 });
 
 for (const expired of [false, true]) {

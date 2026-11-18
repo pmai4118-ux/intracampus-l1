@@ -22,7 +22,7 @@ test("HTTP lookup returns the documented 200/503 shapes and no-store/retry heade
   const repository = new SqliteInvoiceRepository(":memory:");
   t.after(() => repository.close()); repository.create(envelope);
   const rpc = new FakeRpc();
-  const service = new ReceiptService({ repository, rpc, deployment });
+  const service = new ReceiptService({ repository, rpc, deployment, now: () => rpc.timestamp * 1000 });
   const api = await serve(t, createApp(undefined, service));
   let response = await fetch(`${api}/api/invoices/${invoiceId}?txHash=${txHash}`);
   assert.equal(response.status, 200); assert.equal(response.headers.get("Cache-Control"), "no-store");
@@ -40,7 +40,7 @@ test("HTTP reverted transaction returns the full 422 lookup snapshot", async (t)
   const repository = new SqliteInvoiceRepository(":memory:");
   t.after(() => repository.close()); repository.create(envelope);
   const rpc = new FakeRpc(); rpc.receipts.set(txHash, { ...receipt(), status: "0x0" });
-  const api = await serve(t, createApp(undefined, new ReceiptService({ repository, rpc, deployment })));
+  const api = await serve(t, createApp(undefined, new ReceiptService({ repository, rpc, deployment, now: () => rpc.timestamp * 1000 })));
   const response = await fetch(`${api}/api/invoices/${invoiceId}?txHash=${txHash}`);
   const body = await response.json();
   assert.equal(response.status, 422); assert.equal(body.status, "pending");

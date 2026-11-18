@@ -63,6 +63,10 @@ export function libraryError(error: unknown): string {
     NOT_FOUND: 'Không tìm thấy yêu cầu thuộc tài khoản này.',
   };
   const code = e?.code === 'SIGNATURE_REJECTED' && e.operation === 'transaction' ? 'USER_REJECTED' : e?.code ?? 'RPC_UNAVAILABLE';
-  return `${message[code] ?? librarySessionMessage(code)}${e?.retryAfterSeconds ? ` Thử lại sau ${e.retryAfterSeconds} giây.` : ''}`;
+  const providerCode = (error as { providerCode?: number })?.providerCode;
+  const stage = (error as { signingStage?: string })?.signingStage;
+  const stageLabels: Record<string, string> = { 'account-check': 'đọc ví trước ký', encoding: 'mã hóa thông điệp', 'personal-sign': 'yêu cầu ký Core', 'account-recheck': 'đọc lại ví sau ký' };
+  const diagnostic = code === 'WALLET_UNAVAILABLE' ? `${Number.isSafeInteger(providerCode) ? ` Mã lỗi Core: ${providerCode}.` : ''}${stage && stageLabels[stage] ? ` Bước lỗi: ${stageLabels[stage]}.` : ''}` : '';
+  return `${message[code] ?? librarySessionMessage(code)}${diagnostic}${e?.retryAfterSeconds ? ` Thử lại sau ${e.retryAfterSeconds} giây.` : ''}`;
 }
 export function libraryDate(seconds: number | null) { return seconds === null ? 'Chưa có' : new Date(seconds * 1000).toLocaleString('vi-VN'); }

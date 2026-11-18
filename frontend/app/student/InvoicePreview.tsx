@@ -18,6 +18,7 @@ const messages: Record<string, string> = {
   INVOICE_ALREADY_PAID: "Hóa đơn này đã được thanh toán. Không mở yêu cầu giao dịch mới.",
   PAYMENT_IN_PROGRESS: "Hóa đơn đang có giao dịch chưa xác minh. Giữ hash cũ và tra cứu trên POS; không thanh toán thêm.",
   WRONG_CHAIN: "RPC đang kết nối sai mạng. Yêu cầu IntraCampus L1 · Chain 20261.",
+  STALE_CHAIN_STATE: "Block mới nhất của IntraCampus L1 đã cũ. Kiểm tra node/RPC đang chạy và có block mới, rồi thử lại.",
   DEPLOYMENT_NOT_CONFIGURED: "Chưa có địa chỉ verifier và POS signer từ manifest L06. Chưa thể xác minh hóa đơn.",
   PAYMENT_SIMULATION_FAILED: "Contract chưa chấp nhận thanh toán tại trạng thái hiện tại. Kiểm tra chữ ký hóa đơn, dịch vụ và số dư CAMPUS rồi thử lại.",
   WALLET_REQUIRED: "Hãy kết nối ví Core của người trả tiền trước khi xác minh giá cuối.",
@@ -139,7 +140,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     <h3 id="invoice-preview-title">Quét hoặc dán hóa đơn POS</h3>
     <p>Đối chiếu hóa đơn với backend và chain 20261, sau đó kiểm tra số tiền trước khi mở Core xác nhận.</p>
     <label htmlFor="student-invoice-payload">Payload QR</label>
-    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={5}
+    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={5} placeholder="Dán nội dung mã QR từ điểm thu vào đây…"
       aria-describedby={error ? "student-invoice-help student-invoice-error" : "student-invoice-help"} aria-invalid={Boolean(error)}
       onChange={(event) => { setPayload(event.target.value); clearPreview(); }} />
     <p id="student-invoice-help" className="metric-note">Bạn có thể dùng camera hoặc dán payload đã sao chép từ POS.</p>

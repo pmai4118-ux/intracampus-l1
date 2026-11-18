@@ -180,7 +180,9 @@ export class PaymentController {
   async refresh(manualHash?: string) {
     if (this.options.exclusive) {
       try { await this.options.exclusive(this.key, () => this.refreshLocked(manualHash)); }
-      catch { this.update({ message: "Một cửa sổ khác đang đối chiếu hóa đơn. Giữ lượt gửi cũ và thử lại sau." }); }
+      catch { this.update({ message: this.record
+        ? "Một cửa sổ khác đang đối chiếu lần thanh toán đã lưu. Giữ invoiceId/hash và không gửi lại."
+        : null }); }
       return;
     }
     await this.refreshLocked(manualHash);

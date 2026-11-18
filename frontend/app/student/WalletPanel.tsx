@@ -1,9 +1,10 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { browserWalletConfig, campusNetwork, formatWalletBalance } from "../../lib/chains";
-import { WalletController, type WalletProvider, type WalletSnapshot } from "../../lib/wallet";
+import { WalletController, selectInjectedWallet, type WalletSnapshot } from "../../lib/wallet";
 import { InvoicePreview } from "./InvoicePreview";
 import GrantPanel from "./GrantPanel";
+import Icon from "../components/Icon";
 
 const WalletContext = createContext<{ state: WalletSnapshot; controller: WalletController } | null>(null);
 /** U04/U06 consume this context; readiness does not replace fresh payment preflight. */
@@ -16,18 +17,13 @@ function WalletSubscription({ controller, children }: { controller: WalletContro
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   return <WalletContext.Provider value={{ state, controller }}>{children}</WalletContext.Provider>;
 }
-function injectedWallet(): WalletProvider | undefined {
-  const provider = (window as Window & { ethereum?: Partial<WalletProvider> }).ethereum;
-  return provider && typeof provider.request === "function" && typeof provider.on === "function"
-    && typeof provider.removeListener === "function" ? provider as WalletProvider : undefined;
-}
 export function WalletSession({ children }: { children: ReactNode }) {
   const [controller, setController] = useState<WalletController | null>(null);
   useEffect(() => {
     let config;
     try { config = browserWalletConfig(); }
     catch { config = { rpcUrl: "invalid-config" }; }
-    const session = new WalletController({ provider: injectedWallet(), config });
+    const session = new WalletController({ provider: selectInjectedWallet(window as Window & { avalanche?: unknown; ethereum?: unknown }), config });
     setController(session); void session.start();
     const refresh = () => { if (session.getSnapshot().address) void session.refresh(); };
     window.addEventListener("focus", refresh);
@@ -60,11 +56,12 @@ export function StudentWallet() {
   return <div className="student-shell live-wallet-view">
     <section className="surface-panel student-identity-panel" aria-labelledby="wallet-title" aria-busy={busy}>
       <div className="panel-top-row">
-        <div><h1 id="wallet-title" className="screen-title">Ví sinh viên</h1><p className="screen-subtitle">Kết nối ví để xem số dư và quyền ưu đãi</p></div>
+        <div><span className="panel-eyebrow">CAMPUS WALLET</span><h2 id="wallet-title" className="screen-title">Ví sinh viên</h2><p className="screen-subtitle">Số dư và quyền ưu đãi của bạn</p></div>
         <span className={`network-pill ${state.status === "wrong-chain" ? "pill-danger" : correctChain ? "pill-ok" : ""}`}>
           <span className="status-dot" aria-hidden="true" />{state.chainId === null ? "Chưa xác định mạng" : correctChain ? campusNetwork.name : `Chain ${state.chainId.toString()}`}
         </span>
       </div>
+      <div className="wallet-card-motif" aria-hidden="true"><Icon name="graduation" /><span>YOUR CAMPUS.<br /><strong>YOUR WALLET.</strong></span><span className="wallet-card-l1">L1</span></div>
       <p className="wallet-status" role="status">{statusLabels[state.status]}</p>
       {state.status === "no-wallet" ? <p>Mở trang trong trình duyệt của ví Core hoặc MetaMask, hoặc cài tiện ích ví trên máy tính, rồi tải lại trang.</p> : null}
       {state.status === "rejected" ? <p>Bạn đã từ chối kết nối. Bấm kết nối khi sẵn sàng.</p> : null}
@@ -101,7 +98,7 @@ export function StudentWallet() {
       </div>
     </section>
     <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title">
-      <h2 id="payment-gate-title">Thanh toán bằng QR</h2>
+      <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name="qr" /></span><div><span className="panel-eyebrow">QUÉT & THANH TOÁN</span><h2 id="payment-gate-title">Thanh toán bằng QR</h2></div><span className="step-label">01 / 02</span></div>
       <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
       <InvoicePreview wallet={state} />
     </section>

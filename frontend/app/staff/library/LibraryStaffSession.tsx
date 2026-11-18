@@ -9,6 +9,7 @@ import { LibraryTransactions, type LibraryCall, type StaffAction, type LibraryJo
 import { signInLibraryWallet } from '../../../lib/library-session';
 import { libraryError, libraryLabels, libraryJournalLabel, libraryJournalHint } from '../../../lib/library';
 import LibraryWalletSummary from '../../student/library/LibraryWalletSummary';
+import PageHeading from '../../components/PageHeading';
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const networkLabel = `IntraCampus · ${campusNetwork.chainId}`;
@@ -39,7 +40,7 @@ function decimalWei(value: string): string {
 export default function LibraryStaffSession() { return <WalletSession><Wallet /></WalletSession>; }
 function Wallet() {
   const { state } = useCampusWallet();
-  return <div className="library-shell"><header className="library-heading"><div><span className="eyebrow">IntraCampus / Thủ thư</span><h1>Quản lý thư viện</h1><p>Duyệt yêu cầu, nhận sách và quyết toán cọc.</p></div><Link href="/student/library" className="secondary-btn">Thư viện sinh viên</Link></header>
+  return <div className="library-shell"><PageHeading eyebrow="KHÔNG GIAN THỦ THƯ" title="Quản lý thư viện" description="Duyệt yêu cầu, nhận sách và quyết toán cọc." icon="shield"><Link href="/student/library" className="secondary-btn">Thư viện sinh viên</Link></PageHeading>
     <LibraryWalletSummary />
     <Workspace key={`${state.address}:${state.chainId}`} /></div>;
 }

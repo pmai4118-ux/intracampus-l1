@@ -55,7 +55,7 @@ export default function StudentDemo() {
       <header className="surface-panel student-identity-panel">
         <div className="panel-top-row">
           <div>
-            <h1 className="screen-title">Ví sinh viên</h1>
+            <h2 className="screen-title">Ví sinh viên</h2>
             <p className="screen-subtitle">
               Thanh toán trong khuôn viên trường
             </p>

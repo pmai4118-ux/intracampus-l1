@@ -1,0 +1,288 @@
+{
+  "date": "2026-11-18",
+  "baseBranch": "codex/canteen-ordering",
+  "baseCommit": "d614ff74c7714b75b85e4b792de357c496b62650",
+  "browser": "Codex Browser / Chromium",
+  "context": "Production UI with seeded local menu API; no wallet signing or live L1 transactions",
+  "checks": [
+    {
+      "label": "canteen-1440-cart-2000",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 1425,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "viewportWidth": 1440
+    },
+    {
+      "label": "/-320",
+      "activeNav": "Tổng quan",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/student-320",
+      "activeNav": "Sinh viên",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/student/canteen-320",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/student/library-320",
+      "activeNav": "Thư viện",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/pos-320",
+      "activeNav": "Điểm thu",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/staff/library-320",
+      "activeNav": "Thủ thư",
+      "clientWidth": 305,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 305,
+      "viewportWidth": 320
+    },
+    {
+      "label": "/-390",
+      "activeNav": "Tổng quan",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/student-390",
+      "activeNav": "Sinh viên",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/student/canteen-390",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/student/library-390",
+      "activeNav": "Thư viện",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/pos-390",
+      "activeNav": "Điểm thu",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/staff/library-390",
+      "activeNav": "Thủ thư",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "/-768",
+      "activeNav": "Tổng quan",
+      "clientWidth": 753,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/student-768",
+      "activeNav": "Sinh viên",
+      "clientWidth": 753,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/student/canteen-768",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 753,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/student/library-768",
+      "activeNav": "Thư viện",
+      "clientWidth": 753,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/pos-768",
+      "activeNav": "Điểm thu",
+      "clientWidth": 753,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 753,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/staff/library-768",
+      "activeNav": "Thủ thư",
+      "clientWidth": 768,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 768,
+      "viewportWidth": 768
+    },
+    {
+      "label": "/-1280",
+      "activeNav": "Tổng quan",
+      "clientWidth": 1265,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "/student-1280",
+      "activeNav": "Sinh viên",
+      "clientWidth": 1265,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "/student/canteen-1280",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 1265,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "/student/library-1280",
+      "activeNav": "Thư viện",
+      "clientWidth": 1265,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "/pos-1280",
+      "activeNav": "Điểm thu",
+      "clientWidth": 1265,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1265,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "/staff/library-1280",
+      "activeNav": "Thủ thư",
+      "clientWidth": 1280,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1280,
+      "viewportWidth": 1280
+    },
+    {
+      "label": "canteen-cart-food-390",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "student-demo-receipt-390",
+      "activeNav": "Sinh viên",
+      "clientWidth": 375,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 375,
+      "viewportWidth": 390
+    },
+    {
+      "label": "canteen-restored-1440",
+      "activeNav": "Nhà ăn",
+      "clientWidth": 1425,
+      "h1Count": 1,
+      "overflow": [],
+      "scrollWidth": 1425,
+      "viewportWidth": 1440
+    }
+  ],
+  "actions": [
+    {
+      "scenario": "Two portions of Cơm tấm",
+      "total": "Tổng giá món\n2.000 CAMPUS",
+      "createBlocked": true
+    },
+    {
+      "scenario": "1 Cơm tấm + 1 Bún bò + 2 Phở bò",
+      "total": "Tổng giá món\n4.900 CAMPUS"
+    },
+    {
+      "scenario": "Remove all dishes",
+      "total": "Tổng giá món\n0 CAMPUS",
+      "decrementBlocked": true
+    },
+    {
+      "scenario": "Home service card opens canteen; mobile FOOD selection",
+      "total": "Tổng giá món\n2.000 CAMPUS",
+      "note": "FOOD chi đúng tổng món; gas trả bằng CAMPUS trong ví.",
+      "createBlocked": true
+    },
+    {
+      "scenario": "Menu API stopped then restored; retry without page reload",
+      "menuCount": 3
+    }
+  ],
+  "consoleBeforeIntentionalApiOutage": []
+}

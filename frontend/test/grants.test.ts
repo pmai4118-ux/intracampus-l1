@@ -50,7 +50,7 @@ function mockRpc(overrides: Record<string, unknown> = {}, calls: Array<{ method:
     throw Error("Unexpected RPC method");
   };
 }
-function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: GrantSender["sendTransactionWithGuard"]; db?: Map<string, string>;
+function harness(options: { orderId?: string; fetcher?: typeof fetch; rpc?: WalletRpc; send?: GrantSender["sendTransactionWithGuard"]; db?: Map<string, string>;
   beforeBoundary?: () => Promise<void>;
   accountGuard?: (account: string) => Promise<void>;
   store?: Pick<Storage, "getItem" | "setItem" | "removeItem">; lock?: (name: string, run: () => Promise<void>) => Promise<void> } = {}) {
@@ -66,7 +66,7 @@ function harness(options: { fetcher?: typeof fetch; rpc?: WalletRpc; send?: Gran
     return options.send ? options.send(account, tx, beforeBroadcast) : hash;
   } };
   const fetcher: typeof fetch = options.fetcher ?? (async (url) => response(body(BigInt(4000) * unit, String(url).includes("txHash") ? "verified" : "none")));
-  const controller = new GrantController({ config, rpc: options.rpc ?? mockRpc(), wallet, storage: store, fetcher,
+  const controller = new GrantController({ orderId: options.orderId, config, rpc: options.rpc ?? mockRpc(), wallet, storage: store, fetcher,
     accountGuard: options.accountGuard, lock: options.lock ?? (async (_name, run) => run()), pollMs: 100_000 });
   return { controller, db, walletState, sends: () => sends };
 }
@@ -399,4 +399,15 @@ test("without a browser transaction lock, reads work and sends fail closed", asy
   const h = harness({ lock: async () => { throw new GrantUiError("LOCK_UNAVAILABLE"); } }); t.after(() => h.controller.dispose());
   await h.controller.bindWallet(beneficiary); assert.ok(h.controller.getSnapshot().lookup); await h.controller.spend(amount);
   assert.equal(h.sends(), 0); assert.equal(h.controller.getSnapshot().errorCode, "LOCK_UNAVAILABLE");
+});
+
+
+test("canteen order identity survives an unknown FOOD broadcast and reload", async () => {
+ const first = harness({ orderId: "canteen-order-a", send: async () => { throw new TypeError("lost wallet response"); } });
+ await first.controller.bindWallet(beneficiary); await first.controller.spend(amount);
+ assert.equal(first.controller.getSnapshot().intent?.orderId, "canteen-order-a");
+ assert.equal(first.controller.getSnapshot().phase, "unknown"); first.controller.dispose();
+ const second = harness({ orderId: "canteen-order-b", db: first.db }); await second.controller.bindWallet(beneficiary);
+ assert.equal(second.controller.getSnapshot().intent?.orderId, "canteen-order-a");
+ await second.controller.spend(amount); assert.equal(second.sends(), 0); second.controller.dispose();
 });

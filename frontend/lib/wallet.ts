@@ -1,3 +1,4 @@
+import { getAddress } from "ethers";
 import { campusNetwork, campusChainHex, isWalletAddress, validateWalletConfig, walletChainParameters, type WalletConfig } from "./chains.ts";
 
 export interface WalletProvider {
@@ -5,14 +6,26 @@ export interface WalletProvider {
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   removeListener(event: string, listener: (...args: unknown[]) => void): unknown;
 }
+export function selectInjectedWallet(source: { avalanche?: unknown; ethereum?: unknown }): WalletProvider | undefined {
+  for (const candidate of [source.avalanche, source.ethereum]) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const provider = candidate as Partial<WalletProvider>;
+    if (typeof provider.request === "function" && typeof provider.on === "function"
+      && typeof provider.removeListener === "function") return provider as WalletProvider;
+  }
+  return undefined;
+}
 export type WalletRpc = (method: string, params: unknown[], signal?: AbortSignal) => Promise<unknown>;
 export type WalletTransaction = { to: string; data: string; value: string };
 export class WalletTransactionError extends Error {
   readonly code: string;
   readonly outcome: "not-sent" | "rejected" | "unknown";
   readonly operation?: "message" | "transaction";
-  constructor(code: string, outcome: "not-sent" | "rejected" | "unknown", operation?: "message" | "transaction") {
+  readonly providerCode?: number;
+  signingStage?: "account-check" | "encoding" | "personal-sign" | "account-recheck";
+  constructor(code: string, outcome: "not-sent" | "rejected" | "unknown", operation?: "message" | "transaction", providerCode?: number) {
     super(code); this.name = "WalletTransactionError"; this.code = code; this.outcome = outcome; this.operation = operation;
+    if (Number.isSafeInteger(providerCode)) this.providerCode = providerCode;
   }
 }
 export type WalletStatus = "initializing" | "no-wallet" | "disconnected" | "connecting" | "rejected"
@@ -194,6 +207,7 @@ export class WalletController {
     const provider = this.provider;
     if (!provider || !selected()) throw fail("WALLET_SESSION_CHANGED");
     this.sending = true;
+    let signingStage: WalletTransactionError["signingStage"] = "account-check";
     try {
       const [available, chain] = await Promise.all([
         provider.request({ method: "eth_accounts" }).then(accounts),
@@ -201,14 +215,17 @@ export class WalletController {
       ]);
       if (chain !== BigInt(campusNetwork.chainId)) throw fail("WRONG_CHAIN");
       if (!selected() || !available.includes(expectedAccount.toLowerCase())) throw fail("WALLET_SESSION_CHANGED");
+      signingStage = "encoding";
       const data = `0x${Array.from(new TextEncoder().encode(message), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
       let signature: unknown;
       try {
-        signature = await provider.request({ method: "personal_sign", params: [data, expectedAccount] });
+        signingStage = "personal-sign";
+        signature = await provider.request({ method: "personal_sign", params: [data, getAddress(expectedAccount)] });
       } catch (error) {
         if (errorCode(error) === 4001) throw new WalletTransactionError("SIGNATURE_REJECTED", "rejected", "message");
-        throw fail("WALLET_UNAVAILABLE");
+        throw new WalletTransactionError("WALLET_UNAVAILABLE", "not-sent", "message", errorCode(error));
       }
+      signingStage = "account-recheck";
       const [accountsAfter, chainAfter] = await Promise.all([
         provider.request({ method: "eth_accounts" }).then(accounts),
         provider.request({ method: "eth_chainId" }).then(quantity),
@@ -218,8 +235,9 @@ export class WalletController {
       if (typeof signature !== "string" || !/^0x(?:[0-9a-f]{128}|[0-9a-f]{130})$/i.test(signature)) throw fail("INVALID_SIGNATURE");
       return signature;
     } catch (error) {
-      if (error instanceof WalletTransactionError) throw error;
-      throw fail("WALLET_UNAVAILABLE");
+      const failure = error instanceof WalletTransactionError ? error : fail("WALLET_UNAVAILABLE");
+      failure.signingStage = signingStage;
+      throw failure;
     } finally { this.sending = false; }
   }
   /** The connected student signs. A returned hash survives account changes while Core is open. */
@@ -252,7 +270,7 @@ export class WalletController {
       if (guardResult !== undefined) fail("INVALID_BROADCAST_GUARD");
       requested = true;
       const hash = await this.provider!.request({ method: "eth_sendTransaction", params: [{
-        from: expectedAccount, to: transaction.to, data: transaction.data, value: transaction.value,
+        from: getAddress(expectedAccount), to: transaction.to, data: transaction.data, value: transaction.value,
         chainId: campusChainHex,
       }] });
       if (typeof hash !== "string" || !/^0x[0-9a-f]{64}$/i.test(hash) || /^0x0{64}$/i.test(hash)) {

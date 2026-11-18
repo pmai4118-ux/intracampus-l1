@@ -13,13 +13,13 @@ import LibraryLoans from './LibraryLoans';
 import LibraryRequests from './LibraryRequests';
 import UnmatchedDeposits from './UnmatchedDeposits';
 import LibraryWalletSummary from './LibraryWalletSummary';
+import PageHeading from '../../components/PageHeading';
 
 export default function LibrarySession() { return <WalletSession><LibraryWallet /></WalletSession>; }
 function LibraryWallet() {
   const { state: wallet } = useCampusWallet();
   return <div className="library-shell">
-    <header className="library-heading"><div><span className="eyebrow">IntraCampus / Sinh viên</span><h1>Thư viện</h1>
-      <p>Tìm sách, theo dõi lượt mượn và quản lý cọc CAMPUS.</p></div><Link href="/student" className="secondary-btn">Về ví sinh viên</Link></header>
+    <PageHeading eyebrow="KHÔNG GIAN HỌC TẬP" title="Thư viện" description="Tìm sách, theo dõi lượt mượn và quản lý cọc CAMPUS." icon="book"><Link href="/student" className="secondary-btn">Về ví sinh viên</Link></PageHeading>
     <LibraryWalletSummary />
     <LibraryWorkspace key={`${wallet.address}:${wallet.chainId}`} />
   </div>;

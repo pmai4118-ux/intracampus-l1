@@ -23,7 +23,7 @@ test("CLI help describes read-only default and explicit apply without requiring 
   assert.doesNotMatch(result.stdout + result.stderr, /SECRET/);
 });
 test("CLI refuses unconfigured L06 manifest and never logs supplied secrets", async () => {
-  const result = await cli(["--accounts", "scripts/demo-accounts.example.json"]);
+  const result = await cli(["--accounts", "scripts/demo-accounts.example.json", "--deployment", "test/fixtures/unconfigured-deployment.json"]);
   assert.equal(result.code, 1); assert.match(result.stderr, /DEPLOYMENT_NOT_CONFIGURED/);
   assert.doesNotMatch(result.stdout + result.stderr, /SECRET/);
 });

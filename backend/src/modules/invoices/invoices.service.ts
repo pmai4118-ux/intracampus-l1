@@ -4,6 +4,7 @@ import { campusNetwork, type SignedInvoiceEnvelope } from "@intracampus/network"
 import { parkingService, type InvoiceCreationConfig } from "./invoice.config.ts";
 import type { InvoiceRepository } from "./invoices.repository.ts";
 import type { InvoiceRpc } from "./invoices.rpc.ts";
+import { defaultInvoiceChainFreshness, isFreshInvoiceChainTimestamp, type InvoiceChainFreshness } from "./chain-freshness.ts";
 import { isAddress, object, quantity, safeQuantity, same } from "./invoices.schema.ts";
 import type { InvoiceDeployment } from "./receipt.service.ts";
 
@@ -15,13 +16,14 @@ export const invoiceTypes = { Invoice: [
 const signerAbi = new Interface(["function posSigner() view returns (address)",
   "function studentSbt() view returns (address)", "function allowedMerchantCategories(address,bytes32) view returns (bool)"]);
 type CreationErrorCode = "INVALID_REQUEST" | "UNKNOWN_SERVICE_OR_MERCHANT" | "INVALID_SIGNATURE"
-  | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "INTERNAL_ERROR";
+  | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE" | "INTERNAL_ERROR";
 const errors: Record<CreationErrorCode, [number, string, string]> = {
   INVALID_REQUEST: [400, "Dữ liệu yêu cầu không hợp lệ hoặc bị thiếu.", "Kiểm tra lại thông tin dịch vụ và thử lại."],
   UNKNOWN_SERVICE_OR_MERCHANT: [400, "Điểm thu hoặc dịch vụ không nằm trong danh sách được phép.", "Chọn dịch vụ hợp lệ từ menu demo trên POS."],
   INVALID_SIGNATURE: [400, "Chữ ký hóa đơn không hợp lệ hoặc dữ liệu đã bị thay đổi.", "Không ký giao dịch; yêu cầu POS kiểm tra cấu hình signer và tạo hóa đơn mới."],
   RPC_UNAVAILABLE: [503, "Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu.", "Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại."],
   WRONG_CHAIN: [503, "Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261).", "Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại."],
+  STALE_CHAIN_STATE: [503, "Block mới nhất của IntraCampus L1 đã quá cũ để tạo hóa đơn an toàn.", "Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tạo hóa đơn mới."],
   INTERNAL_ERROR: [500, "Không thể lưu hoặc đọc dữ liệu hóa đơn.", "Liên hệ người vận hành để kiểm tra kho hóa đơn."],
 };
 export class InvoiceCreationError extends Error {
@@ -31,7 +33,7 @@ export class InvoiceCreationError extends Error {
   get body() {
     const [, message, nextStep] = errors[this.code];
     return { error: { code: this.code, message, nextStep,
-      retryable: this.code === "RPC_UNAVAILABLE" || this.code === "WRONG_CHAIN" } };
+      retryable: this.code === "RPC_UNAVAILABLE" || this.code === "WRONG_CHAIN" || this.code === "STALE_CHAIN_STATE" } };
   }
 }
 export function validateInvoiceRequest(value: unknown): void {
@@ -51,14 +53,28 @@ export class InvoiceCreationService {
   private rpc: InvoiceRpc;
   private deployment?: InvoiceDeployment;
   private config: InvoiceCreationConfig;
-  constructor(options: { repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment; config: InvoiceCreationConfig }) {
+  private now: () => number;
+  private chainFreshness: InvoiceChainFreshness;
+  constructor(options: { repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment; config: InvoiceCreationConfig;
+    now?: () => number; chainFreshness?: InvoiceChainFreshness }) {
     this.repository = options.repository; this.rpc = options.rpc;
     this.deployment = options.deployment; this.config = options.config;
+    this.now = options.now ?? Date.now; this.chainFreshness = options.chainFreshness ?? defaultInvoiceChainFreshness;
   }
 
   async create(request: unknown) {
     validateInvoiceRequest(request);
-    const { deployment, config } = this;
+    return this.createForService(parkingService, this.config.merchant);
+  }
+
+  /** Internal trusted catalog entry; never pass request JSON as a service. */
+  async createForService(service: { merchantId: string; merchantName: string; serviceId: string; serviceName: string;
+    categoryCode: string; amount: bigint; ttlSeconds: number }, merchant?: string, stableCode?: string) {
+    if (stableCode) {
+      const stored = this.repository.get(id(stableCode));
+      if (stored) return this.response(stored.envelope);
+    }
+    const deployment = this.deployment, config = { ...this.config, merchant };
     if (!deployment || !isAddress(deployment.contractAddress) || !isAddress(config.merchant)) {
       throw new InvoiceCreationError("RPC_UNAVAILABLE");
     }
@@ -77,8 +93,11 @@ export class InvoiceCreationService {
       const block = object(await this.rpc.call("eth_getBlockByNumber", ["latest", false]));
       safeQuantity(block.number);
       issuedAt = safeQuantity(block.timestamp);
-      if (!Number.isSafeInteger(issuedAt + parkingService.ttlSeconds)
+      if (!Number.isSafeInteger(issuedAt + service.ttlSeconds)
         || !Number.isFinite(new Date(issuedAt * 1000).getTime())) throw new Error();
+      if (!isFreshInvoiceChainTimestamp(issuedAt, this.now(), this.chainFreshness)) {
+        throw new InvoiceCreationError("STALE_CHAIN_STATE");
+      }
       const rawSigner = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
         data: signerAbi.encodeFunctionData("posSigner") }, block.number]);
       if (typeof rawSigner !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(rawSigner)) throw new Error();
@@ -90,29 +109,33 @@ export class InvoiceCreationService {
         if (typeof sbt !== "string" || !/^0x0{24}[0-9a-f]{40}$/i.test(sbt)
           || !same(`0x${sbt.slice(-40)}`, config.studentSbt)) throw new Error();
         const allowed = await this.rpc.call("eth_call", [{ to: deployment.contractAddress,
-          data: signerAbi.encodeFunctionData("allowedMerchantCategories", [config.merchant, id(parkingService.categoryCode)]) }, block.number]);
+          data: signerAbi.encodeFunctionData("allowedMerchantCategories", [config.merchant, id(service.categoryCode)]) }, block.number]);
         if (allowed !== `0x${"0".repeat(63)}1`) throw new Error();
       }
     } catch (error) {
       if (error instanceof InvoiceCreationError) throw error;
       throw new InvoiceCreationError("RPC_UNAVAILABLE");
     }
-    const invoiceCode = `INV-${new Date(issuedAt * 1000).toISOString().slice(0, 10).replaceAll("-", "")}-PARKING-${randomUUID()}`;
+    const invoiceCode = stableCode ?? `INV-${new Date(issuedAt * 1000).toISOString().slice(0, 10).replaceAll("-", "")}-PARKING-${randomUUID()}`;
     const domain: SignedInvoiceEnvelope["domain"] = { name: "IntraCampusPayment", version: "1",
       chainId: campusNetwork.chainId, verifyingContract: deployment.contractAddress.toLowerCase() };
-    const invoice = { invoiceId: id(invoiceCode), merchant: config.merchant.toLowerCase(), category: id(parkingService.categoryCode),
-      amount: parkingService.amount.toString(), expiresAt: issuedAt + parkingService.ttlSeconds };
+    const invoice = { invoiceId: id(invoiceCode), merchant: config.merchant.toLowerCase(), category: id(service.categoryCode),
+      amount: service.amount.toString(), expiresAt: issuedAt + service.ttlSeconds };
     const envelope: SignedInvoiceEnvelope = { schemaVersion: 1, domain, invoice,
-      meta: { invoiceCode, merchantId: parkingService.merchantId, merchantName: parkingService.merchantName,
-        serviceId: parkingService.serviceId, serviceName: parkingService.serviceName, categoryCode: parkingService.categoryCode, issuedAt },
+      meta: { invoiceCode, merchantId: service.merchantId, merchantName: service.merchantName,
+        serviceId: service.serviceId, serviceName: service.serviceName, categoryCode: service.categoryCode, issuedAt },
       signer: wallet.address, signature: await wallet.signTypedData(domain, invoiceTypes, invoice) };
     try { this.repository.create(envelope); }
     catch { throw new InvoiceCreationError("INTERNAL_ERROR"); }
-    const discount = parkingService.amount / 10n;
+    return this.response(envelope);
+  }
+
+  private response(envelope: SignedInvoiceEnvelope) {
+    const invoice = envelope.invoice, amount = BigInt(invoice.amount), discount = amount / 10n;
     return { invoiceId: invoice.invoiceId, status: "pending" as const, envelope, qrPayload: JSON.stringify(envelope),
       pricingPreview: {
         standard: { tier: 0, discountBps: 0, discountAmount: "0", paidAmount: invoice.amount },
-        studentSbt: { tier: 1, discountBps: 1000, discountAmount: discount.toString(), paidAmount: (parkingService.amount - discount).toString() },
+        studentSbt: { tier: 1, discountBps: 1000, discountAmount: discount.toString(), paidAmount: (amount - discount).toString() },
       }, transaction: null };
   }
 }

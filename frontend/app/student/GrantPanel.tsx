@@ -7,6 +7,7 @@ import { GrantController, GrantUiError, grantConfig, grantMessage, parseGrantAmo
 import { librarySessionMessage, LibrarySessionError, readLibraryStudentAccess, requireLibraryStudentNotHeld,
   signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
 import { useCampusWallet } from "./WalletPanel";
+import Icon from "../components/Icon";
 
 function GrantView({ controller, config, access, onSignIn, onRefreshAccess, signingIn }: { controller: GrantController; config: GrantConfig;
   access: LibraryStudentAccess; onSignIn: () => void; onRefreshAccess: () => void; signingIn: boolean }) {
@@ -145,8 +146,8 @@ export default function GrantPanel() {
     if (!walletState.address) return;
     setAccess(await readLibraryStudentAccess(walletState.address));
   }
-  return <section className="surface-panel" aria-labelledby="grant-title">
-    <h2 id="grant-title">Voucher học bổng</h2>
+  return <section className="surface-panel grant-panel" aria-labelledby="grant-title">
+    <div className="panel-heading-with-icon"><span className="panel-icon icon-gold"><Icon name="sparkle" /></span><div><span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span><h2 id="grant-title">Voucher học bổng</h2></div></div>
     <p>Chi ngân sách FOOD tại căn-tin bằng ví được cấp.</p>
     {error ? <p role="status">{error}</p> : session && access ? <GrantView controller={session.controller} config={session.config} access={access}
       onSignIn={() => void signIn()} onRefreshAccess={() => void refreshAccess()} signingIn={signingIn} />

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Interface, Signature, verifyMessage, Wallet } from 'ethers';
-import { WalletController, WalletTransactionError, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
+import { WalletController, WalletTransactionError, selectInjectedWallet, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
 import { formatWalletBalance, validateWalletConfig, walletChainParameters } from '../lib/chains.ts';
 
 const A = `0x${'11'.repeat(20)}`, B = `0x${'22'.repeat(20)}`, SBT = `0x${'33'.repeat(20)}`;
@@ -36,6 +36,11 @@ class Provider implements WalletProvider {
       assert.equal(params?.[1], this.signingAccount);
       if (this.reject) throw { code: this.reject };
       return this.signPending ?? this.signature;
+    }
+    if (method === 'eth_sendTransaction') {
+      assert.equal((params?.[0] as { from?: string } | undefined)?.from, this.signingAccount);
+      if (this.reject) throw { code: this.reject };
+      return `0x${'cd'.repeat(32)}`;
     }
     if (method === 'wallet_switchEthereumChain') {
       assert.deepEqual(params, [{ chainId: '0x4f25' }]);
@@ -77,7 +82,7 @@ class Rpc {
       const request = params[0] as { to: string; data: string };
       assert.equal(request.to, SBT);
       const fn = abi.parseTransaction({ data: request.data }); assert.ok(fn);
-      assert.ok([A, B].includes(fn.args[0].toLowerCase()));
+      assert.ok([A, B].includes(fn.args[0].toLowerCase()) || this.balances.has(fn.args[0].toLowerCase()));
       if (fn.name === 'tierOf') return this.badTier ?? abi.encodeFunctionResult('tierOf', [this.tier]);
       return this.badCredential ?? abi.encodeFunctionResult('credentials', [this.tokenId, this.expiry]);
     }
@@ -89,6 +94,14 @@ function setup() {
   const c = new WalletController({ provider, config, rpc: rpc.call });
   return { provider, rpc, c };
 }
+test('Core direct provider is preferred to a conflicting ethereum injection', async () => {
+  const core = new Provider(), other = new Provider();
+  assert.equal(selectInjectedWallet({ avalanche: core, ethereum: other }), core);
+  assert.equal(selectInjectedWallet({ avalanche: {}, ethereum: other }), other);
+  assert.equal(selectInjectedWallet({ ethereum: other }), other);
+  assert.equal(selectInjectedWallet({ avalanche: {}, ethereum: {} }), undefined);
+  assert.equal(await selectInjectedWallet({ avalanche: core })!.request({ method: 'eth_chainId' }), '0x4f25');
+});
 async function waitFor(c: WalletController, predicate: () => boolean) {
   if (predicate()) return;
   await new Promise<void>((resolve, reject) => {
@@ -124,6 +137,15 @@ test('message signing uses UTF-8 personal_sign and rechecks selected wallet and 
   await assert.rejects(c.signMessage(A, message), (error: unknown) =>
     error instanceof WalletTransactionError && error.code === 'WRONG_CHAIN');
 });
+test('Core signing receives the checksummed account after state normalizes it for comparisons', async (t) => {
+  const signer = new Wallet(`0x${'12'.repeat(32)}`);
+  const { c, provider, rpc } = setup(); t.after(() => c.dispose());
+  provider.accounts = [signer.address]; provider.signingAccount = signer.address;
+  rpc.balances.set(signer.address.toLowerCase(), '0x0');
+  await c.connect();
+  assert.equal(c.getSnapshot().address, signer.address.toLowerCase());
+  await c.signMessage(signer.address.toLowerCase(), 'Library login');
+});
 test('message signing accepts a valid compact 64-byte Ethereum signature', async (t) => {
   const signer = new Wallet(`0x${'11'.repeat(32)}`);
   const message = 'IntraCampus Library compact signature';
@@ -140,6 +162,18 @@ test('message signing accepts a valid compact 64-byte Ethereum signature', async
 
   assert.equal(await c.signMessage(signer.address, message), signature);
 });
+
+test('message signing preserves only the numeric provider error for diagnostics', async (t) => {
+  const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
+  const original = provider.request.bind(provider);
+  provider.request = async args => {
+    if (args.method === 'personal_sign') throw { code: -32603, message: 'private wallet details' };
+    return original(args);
+  };
+  await assert.rejects(c.signMessage(A, 'Library login'), (error: unknown) =>
+    error instanceof WalletTransactionError && error.providerCode === -32603
+      && error.code === 'WALLET_UNAVAILABLE' && !error.message.includes('private'));
+});
 test('account changes while the user approves a message discard that signature', async (t) => {
   const { c, provider } = setup(); t.after(() => c.dispose()); await c.connect();
   const pending = deferred(); provider.signPending = pending.promise;
@@ -150,6 +184,15 @@ test('account changes while the user approves a message discard that signature',
   pending.resolve(provider.signature);
   await assert.rejects(signing, (error: unknown) =>
     error instanceof WalletTransactionError && error.code === 'WALLET_SESSION_CHANGED');
+});
+test('Core transactions receive the checksummed from account after state normalization', async (t) => {
+  const signer = new Wallet(`0x${'21'.repeat(32)}`);
+  const { c, provider, rpc } = setup(); t.after(() => c.dispose());
+  provider.accounts = [signer.address]; provider.signingAccount = signer.address;
+  rpc.balances.set(signer.address.toLowerCase(), '0x0');
+  await c.connect();
+  assert.equal(c.getSnapshot().address, signer.address.toLowerCase());
+  assert.equal(await c.sendTransaction(signer.address.toLowerCase(), { to: B, data: '0x1234', value: '0x0' }), `0x${'cd'.repeat(32)}`);
 });
 for (const scenario of [
   { tier: 0, tokenId: 0, expiry: 0, status: 'none' },

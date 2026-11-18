@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import { basename, dirname, resolve } from "node:path";
+
+const testDir = process.env.INTRACAMPUS_TEST_DIST_DIR;
+if (testDir && dirname(resolve(testDir)) !== resolve(".next-tests")) {
+  throw new Error("Test output must be a child directory of .next-tests");
+}
 
 const backendUrl = new URL(process.env.BACKEND_URL?.trim() || "http://127.0.0.1:4000");
 if (!["http:", "https:"].includes(backendUrl.protocol) || backendUrl.username || backendUrl.password
@@ -8,10 +14,12 @@ if (!["http:", "https:"].includes(backendUrl.protocol) || backendUrl.username ||
 }
 
 const nextConfig: NextConfig = {
+  ...(testDir ? { distDir: `.next-tests/${basename(testDir)}/build`, typescript: { tsconfigPath: `.next-tests/${basename(testDir)}/tsconfig.json` } } : {}),
   transpilePackages: ["@intracampus/network"],
   async rewrites() {
     const backend = backendUrl.origin;
     return [
+      { source: "/api/canteen/:path*", destination: `${backend}/api/canteen/:path*` },
       { source: "/api/invoices", destination: `${backend}/api/invoices` },
       { source: "/api/invoices/:path*", destination: `${backend}/api/invoices/:path*` },
       { source: "/api/grants/:path*", destination: `${backend}/api/grants/:path*` },
