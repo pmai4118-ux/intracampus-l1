@@ -2,12 +2,14 @@
 import { Receipt } from "./Receipt";
 import type { InvoiceStatusSnapshot } from "../../lib/invoice-status";
 import { CopyButton } from "../demo-controls";
+import Icon from "../components/Icon";
 
 export function InvoiceStatus({ state }: { state: InvoiceStatusSnapshot }) {
   const lookup = state.lookup;
   const labels = { pending: "Chờ thanh toán / xác minh", expired: "Hóa đơn đã hết hạn",
     "rpc-error": "Chưa đọc được mạng để xác minh", paid: "Đã xác minh thanh toán" };
-  return <section className="surface-panel" aria-labelledby="pos-payment-status">
+  return <section className="surface-panel pos-status-panel" aria-labelledby="pos-payment-status">
+    <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name={lookup?.status === "paid" ? "check" : "clock"} /></span><span className="panel-eyebrow">02 · THEO DÕI THANH TOÁN</span></div>
     <h2 id="pos-payment-status">{lookup ? labels[lookup.status] : state.invoiceId ? "Đang tra cứu hóa đơn" : "Chưa có hóa đơn đang theo dõi"}</h2>
     <p role="status">{state.announcement}</p>
     {state.storageWarning ? <p className="wallet-warning" role="alert">{state.storageWarning}</p> : null}

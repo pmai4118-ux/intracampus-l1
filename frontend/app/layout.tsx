@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import AppNav from "./components/AppNav";
+import Icon from "./components/Icon";
 import "./styles.css";
+import "./campus.css";
 
 export const metadata: Metadata = {
   title: "IntraCampus L1",
@@ -16,18 +18,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a className="skip-link" href="#main-content">
           Bỏ qua điều hướng
         </a>
-        <header>
-          <nav aria-label="Điều hướng chính">
-            <Link href="/" className="brand">
-              IntraCampus L1
-            </Link>
-            <Link href="/student">Sinh viên</Link>
-            <Link href="/student/library">Thư viện</Link>
-            <Link href="/staff/library">Thủ thư</Link>
-            <Link href="/pos">Điểm thu</Link>
-          </nav>
-        </header>
+        <AppNav />
         <main id="main-content">{children}</main>
+        <footer className="app-footer"><span><Icon name="graduation" />IntraCampus L1 <span className="footer-divider">/</span> Một kết nối, nhiều trải nghiệm.</span>
+          <span>Built on Avalanche <span className="avalanche-mark" aria-hidden="true">▲</span></span></footer>
       </body>
     </html>
   );

@@ -4,6 +4,8 @@ import { campusNetwork } from "@intracampus/network";
 import { useState } from "react";
 import { CopyButton, DemoControls } from "../demo-controls";
 import { InvoiceForm } from "./InvoiceForm";
+import PageHeading from "../components/PageHeading";
+import Icon from "../components/Icon";
 import {
   calculateInvoiceQuote,
   type DemoErrorKind,
@@ -64,9 +66,9 @@ function PointOfSaleDemo() {
       {/* Đầu trang Màn hình thu tiền nhà xe */}
       <header className="pos-header-bar surface-panel">
         <div>
-          <h1 className="screen-title">
+          <h2 className="screen-title">
             Điểm thu · {invoice.meta.merchantName}
-          </h1>
+          </h2>
           <p className="screen-subtitle">
             Xem hóa đơn, số tiền và trạng thái thu tiền tại bãi xe
           </p>
@@ -482,10 +484,14 @@ function PointOfSaleDemo() {
 export default function PointOfSalePage() {
   const [mode, setMode] = useState<"live" | "demo">("live");
   return <>
-    <div className="student-mode-switch" role="group" aria-label="Chế độ POS">
+    <PageHeading eyebrow="KHÔNG GIAN ĐIỂM THU" title="Mỗi lượt thu, thật rõ ràng." description="Tạo hóa đơn QR và theo dõi biên lai trong cùng một không gian." icon="store">
+      <span className="page-context-tag"><Icon name="store" />Bãi xe campus</span>
+    </PageHeading>
+    <div className="workspace-toolbar"><p className="workspace-caption">Đơn giản cho điểm thu. Thuận tiện cho sinh viên.</p><div className="student-mode-switch" role="group" aria-label="Chế độ POS">
       <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>POS thật</button>
       <button type="button" className="secondary-btn" aria-pressed={mode === "demo"} onClick={() => setMode("demo")}>Xem bản minh họa</button>
     </div>
-    {mode === "live" ? <InvoiceForm /> : <PointOfSaleDemo />}
+    </div>
+    {mode === "live" ? <div className="pos-live-workspace"><InvoiceForm /></div> : <PointOfSaleDemo />}
   </>;
 }
