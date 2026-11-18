@@ -15,6 +15,9 @@ if (!["http:", "https:"].includes(backendUrl.protocol) || backendUrl.username ||
 
 const nextConfig: NextConfig = {
   ...(testDir ? { distDir: `.next-tests/${basename(testDir)}/build`, typescript: { tsconfigPath: `.next-tests/${basename(testDir)}/tsconfig.json` } } : {}),
+  turbopack: {
+    root: resolve(".."),
+  },
   transpilePackages: ["@intracampus/network"],
   async rewrites() {
     const backend = backendUrl.origin;
