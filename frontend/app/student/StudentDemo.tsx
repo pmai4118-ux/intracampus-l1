@@ -275,6 +275,11 @@ export default function StudentDemo() {
               ? "Đang chờ bạn xác nhận ký"
               : "Đang chờ xác nhận giao dịch"}
           </h2>
+          {uiState === "pending" ? (
+            <div className="l1-shimmer-track" aria-hidden="true">
+              <div className="l1-shimmer-bar" />
+            </div>
+          ) : null}
           <p>
             {uiState === "awaiting-signature"
               ? "Kiểm tra số tiền và đích nhận. Trong bản tích hợp, ví sẽ yêu cầu bạn xác nhận ở bước này."
@@ -446,8 +451,12 @@ export default function StudentDemo() {
         ) : null}
 
         {uiState === "receipt" ? (
-          <button type="button" className="primary-cta-btn" disabled>
-            Đang xem biên lai mẫu
+          <button
+            type="button"
+            className="secondary-btn full-width"
+            onClick={resetPreview}
+          >
+            Quay lại hóa đơn mẫu
           </button>
         ) : null}
       </div>

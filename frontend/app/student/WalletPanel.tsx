@@ -1,12 +1,20 @@
 "use client";
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { browserWalletConfig, campusNetwork, formatWalletBalance } from "../../lib/chains";
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { browserWalletConfig, campusNetwork, formatWalletBalanceCompact } from "../../lib/chains";
+import { LibrarySessionError, readLibraryStudentAccess, signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
 import { WalletController, selectInjectedWallet, type WalletSnapshot } from "../../lib/wallet";
 import { InvoicePreview } from "./InvoicePreview";
 import GrantPanel from "./GrantPanel";
 import Icon from "../components/Icon";
 
-const WalletContext = createContext<{ state: WalletSnapshot; controller: WalletController } | null>(null);
+const WalletContext = createContext<{
+  state: WalletSnapshot;
+  controller: WalletController;
+  access: LibraryStudentAccess | null;
+  signingIn: boolean;
+  signIn: () => Promise<void>;
+  refreshAccess: () => Promise<void>;
+} | null>(null);
 /** U04/U06 consume this context; readiness does not replace fresh payment preflight. */
 export function useCampusWallet() {
   const wallet = useContext(WalletContext);
@@ -15,7 +23,32 @@ export function useCampusWallet() {
 }
 function WalletSubscription({ controller, children }: { controller: WalletController; children: ReactNode }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
-  return <WalletContext.Provider value={{ state, controller }}>{children}</WalletContext.Provider>;
+  const [access, setAccess] = useState<LibraryStudentAccess | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setAccess(null);
+    if (!state.address) return () => { active = false; };
+    void readLibraryStudentAccess(state.address).then((result) => { if (active) setAccess(result); });
+    return () => { active = false; };
+  }, [state.address]);
+  const signIn = useCallback(async () => {
+    if (!state.address || signingIn) return;
+    setSigningIn(true);
+    try {
+      const result = await signInLibraryStudent(state.address, (account, message) => controller.signMessage(account, message));
+      setAccess(result);
+    } catch (cause) {
+      setAccess({ status: "error", code: cause instanceof LibrarySessionError ? cause.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] });
+    } finally {
+      setSigningIn(false);
+    }
+  }, [state.address, signingIn, controller]);
+  const refreshAccess = useCallback(async () => {
+    if (!state.address) return;
+    setAccess(await readLibraryStudentAccess(state.address));
+  }, [state.address]);
+  return <WalletContext.Provider value={{ state, controller, access, signingIn, signIn, refreshAccess }}>{children}</WalletContext.Provider>;
 }
 export function WalletSession({ children }: { children: ReactNode }) {
   const [controller, setController] = useState<WalletController | null>(null);
@@ -48,11 +81,18 @@ function expiryLabel(value: bigint | null) {
   const date = new Date(Number(value) * 1000);
   return Number.isFinite(date.getTime()) ? date.toLocaleString("vi-VN") : `Unix ${value.toString()}`;
 }
-export function StudentWallet() {
+export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) {
   const { state, controller } = useCampusWallet();
+  const [addressCopied, setAddressCopied] = useState(false);
   const connected = state.address !== null;
   const busy = state.status === "connecting" || state.status === "loading";
   const correctChain = state.chainId === BigInt(campusNetwork.chainId);
+  const compactBalance = state.balanceWei === null ? null : formatWalletBalanceCompact(state.balanceWei, 2);
+  useEffect(() => {
+    if (!addressCopied) return;
+    const timer = window.setTimeout(() => setAddressCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [addressCopied]);
   return <div className="student-shell live-wallet-view">
     <section className="surface-panel student-identity-panel" aria-labelledby="wallet-title" aria-busy={busy}>
       <div className="panel-top-row">
@@ -61,24 +101,76 @@ export function StudentWallet() {
           <span className="status-dot" aria-hidden="true" />{state.chainId === null ? "Chưa xác định mạng" : correctChain ? campusNetwork.name : `Chain ${state.chainId.toString()}`}
         </span>
       </div>
-      <div className="wallet-card-motif" aria-hidden="true"><Icon name="graduation" /><span>YOUR CAMPUS.<br /><strong>YOUR WALLET.</strong></span><span className="wallet-card-l1">L1</span></div>
+      <div className="campus-live-pass" aria-hidden="true">
+        <div className="live-pass-top">
+          <span className="live-pass-brand"><Icon name="graduation" />IntraCampus Pass</span>
+          <span className="live-pass-chain">{correctChain ? "L1 · 20261" : "CHỜ MẠNG 20261"}</span>
+        </div>
+        <div className="live-pass-body">
+          <div className="pass-chip"><i /><i /><i /></div>
+          <div className="live-pass-identity">
+            <span className="live-pass-kicker">{state.card.tier === 1 ? "THẺ SINH VIÊN SBT · ƯU ĐÃI -10%" : state.card.tier === 0 ? "TÀI KHOẢN TIÊU CHUẨN · GIÁ GỐC" : "CHƯA XÁC MINH QUYỀN THẺ"}</span>
+            <strong>{connected && state.address ? `${state.address.slice(0, 6)}…${state.address.slice(-4)}` : "CHƯA KẾT NỐI VÍ"}</strong>
+          </div>
+          <Icon name="leaf" className="live-pass-leaf" />
+        </div>
+        <div className="live-pass-bottom">
+          <span>{state.card.tokenId !== null && state.card.tokenId > BigInt(0) ? `PASS #${state.card.tokenId.toString().padStart(4, "0")}` : "CHƯA CẤP MÃ THẺ"}</span>
+          <span>{state.card.expiresAt !== null && state.card.expiresAt > BigInt(0) ? `HẠN ${expiryLabel(state.card.expiresAt)}` : "INTRACAMPUS L1"}</span>
+        </div>
+      </div>
       <p className="wallet-status" role="status">{statusLabels[state.status]}</p>
       {state.status === "no-wallet" ? <p>Mở trang trong trình duyệt của ví Core hoặc MetaMask, hoặc cài tiện ích ví trên máy tính, rồi tải lại trang.</p> : null}
       {state.status === "rejected" ? <p>Bạn đã từ chối kết nối. Bấm kết nối khi sẵn sàng.</p> : null}
       {state.status === "wrong-chain" ? <p className="wallet-warning">Ví đang ở sai mạng. Hãy chuyển sang IntraCampus L1 · Chain 20261 trước khi tiếp tục.</p> : null}
       {state.message ? <p className="wallet-warning">{state.message}</p> : null}
       <div className="wallet-summary-grid">
-        <div className="metric-block"><span className="metric-label">Tài khoản ví</span>
-          {connected ? <code className="wallet-address">{state.address}</code> : <strong>Chưa kết nối</strong>}
+        <div className="metric-block metric-block-wide">
+          <span className="metric-label">Tài khoản ví</span>
+          {connected && state.address ? (
+            <div className="wallet-address-row">
+              <code className="wallet-address" translate="no">{state.address}</code>
+              <button
+                type="button"
+                className={`hash-chip-btn hash-copy-icon-btn ${addressCopied ? "is-copied" : ""}`}
+                aria-label={`Sao chép địa chỉ ví: ${state.address}`}
+                title={addressCopied ? "Đã chép" : "Sao chép địa chỉ ví"}
+                onClick={() => {
+                  void navigator.clipboard.writeText(state.address!).then(() => setAddressCopied(true)).catch(() => {});
+                }}
+              >
+                <Icon name={addressCopied ? "check" : "copy"} />
+                {addressCopied ? <span>Đã chép</span> : null}
+              </button>
+            </div>
+          ) : <strong>Chưa kết nối</strong>}
           {state.accounts.length > 1 ? <label className="wallet-account-picker">Chọn tài khoản đã cấp quyền
             <select value={state.address ?? ""} onChange={(e) => void controller.selectAccount(e.target.value)}>
               {state.accounts.map((account) => <option key={account} value={account}>{account}</option>)}
             </select></label> : null}
           <span className="metric-note">Đổi tài khoản trong ví để dùng ví demo khác.</span>
         </div>
-        <div className="metric-block"><span className="metric-label">Số dư CAMPUS</span>
-          <strong className="tabular-value wallet-balance">{state.balanceWei === null ? "Chưa đọc được" : formatWalletBalance(state.balanceWei)}</strong>
-          <span className="metric-note">{state.balanceWei === null ? "Chưa có số dư đã xác minh" : "Số dư đọc từ RPC · chưa trừ gas"}</span>
+        <div className="metric-block">
+          <span className="metric-label">Số dư CAMPUS</span>
+          <strong
+            className="tabular-value wallet-balance"
+            title={compactBalance ? `Số dư chính xác: ${compactBalance.exact}` : undefined}
+          >
+            {compactBalance === null ? "Chưa đọc được" : compactBalance.display}
+          </strong>
+          {compactBalance?.rounded ? (
+            <details className="exact-balance-disclosure">
+              <summary>Xem số chính xác</summary>
+              <code className="mono-value" translate="no">{compactBalance.exact}</code>
+            </details>
+          ) : (
+            <span className="metric-note">{compactBalance === null ? "Chưa có số dư đã xác minh" : "Số dư đọc từ RPC · chưa trừ gas"}</span>
+          )}
+        </div>
+        <div className="metric-block">
+          <span className="metric-label">Mức ưu đãi hiện tại</span>
+          <strong>{state.card.tier === 1 ? "Giảm 10% tự động" : state.card.tier === 0 ? "Giá niêm yết (0%)" : "Chưa xác định"}</strong>
+          <span className="metric-note">{state.card.tier === 1 ? "Áp dụng cho bãi xe & nhà ăn" : state.card.tier === 0 ? "Cần thẻ SBT còn hạn để giảm 10%" : "Kết nối mạng 20261 để tra cứu"}</span>
         </div>
       </div>
       <div className={`sbt-banner ${state.card.status === "valid" ? "sbt-active" : "sbt-muted"}`}>
@@ -88,6 +180,19 @@ export function StudentWallet() {
         <p>{state.card.tier === 1 ? "Đủ điều kiện ưu đãi sinh viên. Giá cuối sẽ được kiểm tra khi thanh toán."
           : state.card.tier === 0 ? "Hiện không có quyền ưu đãi sinh viên." : "Chưa thể kết luận quyền ưu đãi của tài khoản này."}</p>
         {state.card.tokenId !== null && state.card.tokenId > BigInt(0) ? <span className="sbt-meta">Thẻ #{state.card.tokenId.toString()} · Hạn: {expiryLabel(state.card.expiresAt)}</span> : null}
+        {state.card.tier === 0 ? (
+          <div className="sbt-tier0-guidance">
+            {onOpenDemo ? (
+              <button type="button" className="link-action-btn" onClick={onOpenDemo}>
+                Xem thử ưu đãi thẻ SBT (-10%) ở bản minh họa →
+              </button>
+            ) : null}
+            <details className="sbt-mint-guide">
+              <summary>Làm sao để nhận thẻ sinh viên SBT demo?</summary>
+              <p>Chuyển sang ví sinh viên đã cấp thẻ trong Core, hoặc nhờ quản trị viên chạy lệnh cấp thẻ demo cho địa chỉ ví này (<code>pnpm --filter @intracampus/backend seed:demo</code>).</p>
+            </details>
+          </div>
+        ) : null}
       </div>
       <div className="inline-actions wallet-actions">
         {!connected && state.status !== "no-wallet" ? <button type="button" className="primary-cta-btn" disabled={busy} onClick={() => void controller.connect()}>{busy ? "Đang chờ ví…" : "Kết nối ví"}</button> : null}
