@@ -1,4 +1,4 @@
-import { CanteenRepository } from './modules/canteen/canteen.repository.ts';
+import { CanteenRepository, demoDishes } from './modules/canteen/canteen.repository.ts';
 import { CanteenService } from './modules/canteen/canteen.service.ts';
 import { createApp } from "./app.ts";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,7 @@ try {
   // Keep unrelated API modules available; auth endpoints fail closed with CONFIGURATION_ERROR.
 }
 const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
+canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
   authService, libraryAuthConfig, libraryService, canteenService).listen(port, host, () => {
