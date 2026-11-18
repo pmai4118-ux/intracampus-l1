@@ -167,7 +167,12 @@ export async function verifyInvoicePreview(
     const response = await fetch(`/api/invoices/${encodeURIComponent(envelope.invoice.invoiceId)}`, {
       cache: "no-store", headers: { accept: "application/json" }, signal,
     });
-    if (response.status === 503) throw new InvoicePreviewError("RPC_UNAVAILABLE");
+    if (response.status === 503) {
+      const failure: unknown = await response.json().catch(() => null);
+      const error = failure && typeof failure === "object" && "error" in failure ? failure.error : null;
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      throw new InvoicePreviewError(code === "STALE_CHAIN_STATE" ? code : "RPC_UNAVAILABLE");
+    }
     if (!response.ok) throw new InvoicePreviewError(response.status === 404 ? "INVOICE_NOT_FOUND" : "API_UNAVAILABLE");
     lookup = rpcRecord(await response.json());
   } catch (error) {

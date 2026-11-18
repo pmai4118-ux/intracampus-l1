@@ -20,8 +20,18 @@ async function getNetworkStatus() {
     });
     if (response.status !== 200 && response.status !== 503) return { ready: false, label: "Không đọc được trạng thái từ API" };
     const data = await response.json() as NetworkProbe;
-    if (data.status === "wrong-chain") return { ready: false, label: `${labels[data.status]} (${data.chainId})` };
-    return { ready: data.status === "ready", label: labels[data.status] ?? "Không đọc được trạng thái từ API" };
+    if (data.status === "ready" || data.status === "wrong-chain") {
+      const head = data.latestBlock;
+      if (!head || !Number.isSafeInteger(head.number) || !Number.isSafeInteger(data.headAgeSeconds)) {
+        return { ready: false, label: "Chưa đọc được block mới nhất từ API" };
+      }
+      const age = data.headAgeSeconds < 0 ? `Timestamp block ở tương lai ${-data.headAgeSeconds} giây` : `Tuổi block: ${data.headAgeSeconds} giây`;
+      return {
+        ready: data.status === "ready",
+        label: `${labels[data.status]} (${data.chainId}). Block ${head.number}. ${age}. Các thao tác sẽ kiểm tra độ mới của dữ liệu trước khi ký.`,
+      };
+    }
+    return { ready: false, label: labels[data.status] ?? "Không đọc được trạng thái từ API" };
   } catch {
     return { ready: false, label: "Không kết nối được POS API" };
   }

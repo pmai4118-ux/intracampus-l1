@@ -207,3 +207,7 @@ Demo Anvil qua manifest chuẩn cần `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=true` và R
 ## Nhà ăn MVP · 2026-11-17
 
 Menu và snapshot đơn ở SQLite riêng; một đơn cố định nguồn WALLET hoặc FOOD. WALLET giữ ưu đãi SBT của registry, FOOD chi đúng tổng đơn từ vault. Không thay ABI. Hash chỉ được gắn một đơn trong DB, mọi trạng thái PAID cần receipt/event khớp; xem docs/canteen.md về giới hạn liên kết orderId off-chain. Dùng auth và account hold hiện có. MVP chỉ có màn sinh viên, chưa có bếp/nhân viên.
+
+## Network head metadata · 2026-11-17
+
+NetworkProbe bổ sung latestBlock.number/timestamp và headAgeSeconds khi đọc được chain/latest block. status ready tiếp tục nghĩa chain ID đúng; service nghiệp vụ tự áp freshness configuration. Tuổi block tính bằng server clock, không clamp block tương lai. Probe đọc hai RPC song song trong timeout 2.5 giây; malformed/missing block báo unreachable. Quyết định này giúp phát hiện node local không tạo block khi idle mà vẫn giữ guard invoice/Library.

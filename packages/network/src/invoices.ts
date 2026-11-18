@@ -23,7 +23,7 @@ export type VerifiedInvoiceReceipt = {
 };
 
 export type InvoiceApiError = {
-  code: "INVALID_REQUEST" | "INVOICE_NOT_FOUND" | "RPC_UNAVAILABLE" | "WRONG_CHAIN"
+  code: "INVALID_REQUEST" | "INVOICE_NOT_FOUND" | "RPC_UNAVAILABLE" | "WRONG_CHAIN" | "STALE_CHAIN_STATE"
     | "TX_REVERTED" | "RECEIPT_EVENT_MISMATCH" | "INTERNAL_ERROR";
   message: string;
   retryable: boolean;

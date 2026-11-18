@@ -91,6 +91,19 @@ test("verifies trusted backend envelope, current chain quote and payInvoice simu
   } finally { globalThis.fetch = previousFetch; }
 });
 
+test("reports a stale backend chain head distinctly during invoice preflight", async () => {
+  const envelope = currentEnvelope();
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "rpc-error", error: { code: "STALE_CHAIN_STATE" } }),
+    { status: 503, headers: { "content-type": "application/json" } });
+  const { rpc, calls } = mockRpc(envelope);
+  try {
+    await assert.rejects(verifyInvoicePreview(JSON.stringify(envelope), payer, trustedDeployment(envelope), rpc), (error: unknown) =>
+      error instanceof InvoicePreviewError && error.code === "STALE_CHAIN_STATE");
+    assert.equal(calls.length, 0);
+  } finally { globalThis.fetch = previousFetch; }
+});
+
 test("rejects already-paid invoices before simulating a new payment", async () => {
   const envelope = currentEnvelope();
   const previousFetch = globalThis.fetch;

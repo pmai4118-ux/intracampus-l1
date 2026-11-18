@@ -19,7 +19,7 @@ export { LIBRARY_REQUEST_BODY_LIMIT_BYTES } from "./library.ts";
 export type NetworkProbe = {
   expectedChainId: number;
 } & (
-  | { status: "ready" | "wrong-chain"; chainId: number }
+  | { status: "ready" | "wrong-chain"; chainId: number; latestBlock: { number: number; timestamp: number }; headAgeSeconds: number }
   | { status: "not-configured" | "unreachable" }
 );
 
