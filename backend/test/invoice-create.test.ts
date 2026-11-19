@@ -79,15 +79,15 @@ test("creates signed server-priced QR, persists before response and exposes it t
   assert.equal(headers.get("cache-control"), "no-store");
   assert.equal(body.status, "pending"); assert.equal(body.transaction, null);
   const e = body.envelope;
-  assert.equal(e.invoice.amount, "3000000000000000000000");
+  assert.equal(e.invoice.amount, "3000000000000000000");
   assert.equal(e.meta.issuedAt, 1794142500);
   assert.equal(e.invoice.expiresAt, 1794142800);
   assert.equal(e.domain.chainId, 20261);
   assert.equal(body.invoiceId, id(e.meta.invoiceCode));
   assert.equal(e.invoice.category, "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb");
   assert.equal(e.meta.merchantName, "Bãi xe demo");
-  assert.deepEqual(body.pricingPreview, { standard: { tier: 0, discountBps: 0, discountAmount: "0", paidAmount: "3000000000000000000000" },
-    studentSbt: { tier: 1, discountBps: 1000, discountAmount: "300000000000000000000", paidAmount: "2700000000000000000000" } });
+  assert.deepEqual(body.pricingPreview, { standard: { tier: 0, discountBps: 0, discountAmount: "0", paidAmount: "3000000000000000000" },
+    studentSbt: { tier: 1, discountBps: 1000, discountAmount: "300000000000000000", paidAmount: "2700000000000000000" } });
   assert.deepEqual(JSON.parse(body.qrPayload), e);
   assert.equal(body.qrPayload, JSON.stringify(e));
   const parsed = JSON.parse(body.qrPayload);

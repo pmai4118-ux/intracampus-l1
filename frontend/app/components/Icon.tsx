@@ -16,6 +16,7 @@ const paths = {
   leaf: "M5 19C-2 6 11 3 21 3c0 10-3 23-16 16Zm0 0L16 8",
   utensils: "M4 3v6c0 3 6 3 6 0V3M7 3v18M17 3c-3 3-3 8 0 9h3M20 3v18",
   bowl: "M3 12h18c0 10-18 10-18 0ZM6 21h12M7 8c-3-3 3-3 0-6m5 6c-3-3 3-3 0-6m5 6c-3-3 3-3 0-6",
+  copy: "M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1ZM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1",
 } as const;
 
 export type IconName = keyof typeof paths;

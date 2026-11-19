@@ -56,3 +56,21 @@ export function formatWalletBalance(wei: bigint): string {
   const fraction = (wei % unit).toString().padStart(campusNetwork.nativeCurrency.decimals, "0").replace(/0+$/, "");
   return `${whole}${fraction ? `,${fraction}` : ""} ${campusNetwork.nativeCurrency.symbol}`;
 }
+export function formatWalletBalanceCompact(wei: bigint, maxDecimals = 2): { display: string; exact: string; rounded: boolean } {
+  const exact = formatWalletBalance(wei);
+  const decimals = campusNetwork.nativeCurrency.decimals;
+  const unit = BigInt(10) ** BigInt(decimals);
+  if (wei % unit === BigInt(0) || maxDecimals >= decimals) {
+    return { display: exact, exact, rounded: false };
+  }
+  const scale = BigInt(10) ** BigInt(decimals - maxDecimals);
+  const truncatedUnits = wei / scale;
+  const factor = BigInt(10) ** BigInt(maxDecimals);
+  const whole = (truncatedUnits / factor).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const fraction = (truncatedUnits % factor).toString().padStart(maxDecimals, "0");
+  return {
+    display: `${whole},${fraction} ${campusNetwork.nativeCurrency.symbol}`,
+    exact,
+    rounded: wei % scale !== BigInt(0),
+  };
+}

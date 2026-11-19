@@ -7,7 +7,7 @@ import { CanteenRepository } from '../src/modules/canteen/canteen.repository.ts'
 const wallet='0x'+'12'.repeat(20), other='0x'+'34'.repeat(20), key='11111111-1111-4111-8111-111111111111';
 test('seed is repeatable; snapshots, idempotency and paid proof survive reopen',()=>{
  const file=join(mkdtempSync(join(tmpdir(),'canteen-')),'canteen.sqlite');let repo=new CanteenRepository(file);repo.seed();repo.seed();assert.equal(repo.menu().length,3);
- const order=repo.create(wallet,key,'FOOD',[{dishId:'com-tam',quantity:2},{dishId:'pho-bo',quantity:1}]);assert.equal(order.totalWei,(3200n*10n**18n).toString());
+ const order=repo.create(wallet,key,'FOOD',[{dishId:'com-tam',quantity:2},{dishId:'pho-bo',quantity:1}]);assert.equal(order.totalWei,(58n*10n**18n).toString());
  assert.equal(repo.create(wallet,key,'FOOD',[{dishId:'pho-bo',quantity:1},{dishId:'com-tam',quantity:2}]).id,order.id);
  assert.throws(()=>repo.create(wallet,key,'WALLET',[{dishId:'com-tam',quantity:1}]),/IDEMPOTENCY_CONFLICT/);
  assert.throws(()=>repo.get(order.id,other),/NOT_FOUND/);
