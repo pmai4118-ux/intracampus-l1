@@ -79,4 +79,22 @@ export class CanteenService {
     if (events.length !== 1) throw new CanteenError('RECEIPT_MISMATCH',422);
     return this.repository.confirm(order.id,order.wallet,txHash,order.totalWei);
   }
+  async staffOverview() {
+    let merchantWallet: string | null = null;
+    try { merchantWallet = this.deployment().merchants.canteen.address; } catch { merchantWallet = null; }
+    const initial = this.repository.listAllWithFulfillment();
+    const pendingWallet = initial.filter(o => o.status === 'AWAITING_PAYMENT' && o.method === 'WALLET' && o.invoiceId !== null).slice(0, 8);
+    for (const candidate of pendingWallet) {
+      try { await this.reconcileWallet(candidate); } catch { /* Best-effort background check for counter screen */ }
+    }
+    const orders = this.repository.listAllWithFulfillment().map(({ wallet, ...rest }) => ({
+      ...rest,
+      payerHint: `${wallet.slice(0, 6)}…${wallet.slice(-4)}`,
+    }));
+    return {
+      merchantWallet,
+      dishes: this.repository.menu(),
+      orders,
+    };
+  }
 }

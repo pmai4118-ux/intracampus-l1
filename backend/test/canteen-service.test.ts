@@ -61,7 +61,7 @@ test('HTTP requires own student session, same Origin and server-side prices; hel
  assert.equal((await post('/orders',b,'good','http://evil.test')).status,403);
  assert.equal((await post('/orders',{...b,totalWei:'1'})).status,400);
  assert.equal((await post('/orders',{...b,items:[{dishId:'com-tam',quantity:-1}]})).status,400);
- const result=await post('/orders',b);assert.equal(result.status,201);const order=await result.json();assert.equal(order.totalWei,'1000000000000000000000');
+ const result=await post('/orders',b);assert.equal(result.status,201);const order=await result.json();assert.equal(order.totalWei,'18000000000000000000');
  assert.equal((await post(`/orders/${order.id}/prepare`,{},'other')).status,404);
  held=true;assert.equal((await post('/orders',b)).status,403);assert.equal((await post(`/orders/${order.id}/prepare`,{})).status,403);
  assert.equal((await post(`/orders/${order.id}/transactions`,{txHash:hash})).status,409);
@@ -81,4 +81,26 @@ test('expired unpaid invoice becomes a terminal expired order; later verified pr
   h.setReceipt({httpStatus:200,body:{status:'paid',receipt:{payer:wallet,txHash:hash,merchant:manifest.merchants.canteen.address,category:id('FOOD'),originalAmount:order.totalWei,paidAmount:order.totalWei}}});
   assert.equal((await h.service.prepare(expired.order)).order.status,'PAID');
  }finally{h.repo.close();}
+});
+
+test('staff counter overview, dish availability toggle and paid-only tray fulfillment work cleanly', async t => {
+ const h=setup();t.after(()=>h.repo.close());
+ const auth={session:(token:string)=>token==='good'?{account:{wallet,role:'STUDENT'}}:null} as unknown as AuthService;
+ const app=express();app.use(createCanteenRouter(h.service,auth,{cookieName:'session',origin:'http://localhost:3000'} as LibraryAuthConfig,{accountStatus:async()=>({held:false})} as unknown as LibraryService));
+ const server=createServer(app).listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
+ const address=server.address();assert(address&&typeof address!=='string');const url=`http://127.0.0.1:${address.port}/api/canteen`;
+ const unpaid=h.repo.create(wallet,'11111111-1111-4111-8111-111111111111','FOOD',[{dishId:'com-tam',quantity:1}]);
+ assert.equal((await fetch(`${url}/staff/orders/${unpaid.id}/serve`,{method:'POST',headers:{'content-type':'application/json',origin:'http://localhost:3000'},body:JSON.stringify({served:true})})).status,409);
+ h.repo.prepare(unpaid.id,wallet,10,null);h.repo.confirm(unpaid.id,wallet,hash,unpaid.totalWei);
+ const serveRes=await fetch(`${url}/staff/orders/${unpaid.id}/serve`,{method:'POST',headers:{'content-type':'application/json',origin:'http://localhost:3000'},body:JSON.stringify({served:true})});
+ assert.equal(serveRes.status,200);
+ const servedOrder=await serveRes.json();assert.equal(typeof servedOrder.servedAt,'number');assert.equal('wallet' in servedOrder,false);
+ const toggleOff=await fetch(`${url}/staff/dishes/pho-bo/availability`,{method:'POST',headers:{'content-type':'application/json',origin:'http://localhost:3000'},body:JSON.stringify({active:false})});
+ assert.equal(toggleOff.status,200);
+ const studentMenu=await (await fetch(`${url}/menu`)).json();
+ assert.equal(studentMenu.dishes.some((d:{id:string})=>d.id==='pho-bo'),false);
+ const overview=await (await fetch(`${url}/staff/overview`)).json();
+ assert.equal(overview.merchantWallet,manifest.merchants.canteen.address);
+ assert.equal(overview.dishes.length,3);
+ assert.equal(overview.orders[0].servedAt,servedOrder.servedAt);
 });

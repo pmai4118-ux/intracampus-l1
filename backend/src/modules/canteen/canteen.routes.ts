@@ -21,6 +21,28 @@ export function createCanteenRouter(service?: CanteenService, auth?: AuthService
     if (!service) throw new CanteenError('CONFIGURATION_ERROR',503);
     res.json({ dishes: service.repository.menu().filter(d => d.active) });
   } catch(e) { next(e); } });
+  router.get('/api/canteen/staff/overview', async (_req,res,next) => { try {
+    if (!service) throw new CanteenError('CONFIGURATION_ERROR',503);
+    res.json(await service.staffOverview());
+  } catch(e) { next(e); } });
+  router.post('/api/canteen/staff/orders/:id/serve', (req,res,next) => { try {
+    if (!service) throw new CanteenError('CONFIGURATION_ERROR',503);
+    if (config && req.get('Origin') !== config.origin) throw new CanteenError('FORBIDDEN',403);
+    if (!req.body || Object.keys(req.body).join(',') !== 'served' || typeof req.body.served !== 'boolean') {
+      throw new CanteenError('INVALID_REQUEST');
+    }
+    const updated = service.repository.setServed(String(req.params.id), req.body.served);
+    const { wallet, ...rest } = updated;
+    res.json({ ...rest, payerHint: `${wallet.slice(0, 6)}…${wallet.slice(-4)}` });
+  } catch(e) { next(e); } });
+  router.post('/api/canteen/staff/dishes/:id/availability', (req,res,next) => { try {
+    if (!service) throw new CanteenError('CONFIGURATION_ERROR',503);
+    if (config && req.get('Origin') !== config.origin) throw new CanteenError('FORBIDDEN',403);
+    if (!req.body || Object.keys(req.body).join(',') !== 'active' || typeof req.body.active !== 'boolean') {
+      throw new CanteenError('INVALID_REQUEST');
+    }
+    res.json({ dish: service.repository.setDishActive(String(req.params.id), req.body.active) });
+  } catch(e) { next(e); } });
   router.get('/api/canteen/orders', (req,res,next) => { try { res.json({ orders: service!.repository.list(account(req).wallet) }); } catch(e) { next(e); } });
   router.post('/api/canteen/orders', async (req,res,next) => { try {
     const actor = account(req);

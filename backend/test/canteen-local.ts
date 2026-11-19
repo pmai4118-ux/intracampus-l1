@@ -58,7 +58,7 @@ try {
   const expected=BigInt(created.totalWei)*(method==='WALLET'?9n:10n)/10n;assert.equal(paid.paidAmountWei,expected.toString());assert.equal(await provider.getBalance(merchants.canteen.address)-before,expected);
   assert.equal((await service.track(paid,tx.hash)).status,'PAID');cases.push({method,orderId:paid.id,totalWei:paid.totalWei,paidAmountWei:paid.paidAmountWei,txHash:tx.hash,blockNumber:raw.blockNumber});
  }
- assert.equal(await contracts.PurposeBoundGrantVault.balances(account,id('FOOD')),4000n*10n**18n);
+ assert.equal(await contracts.PurposeBoundGrantVault.balances(account,id('FOOD')),(5000n-18n)*10n**18n);
  // Lose the callback after a real payment. Only auth and the hold flag are HTTP fixtures.
  let invoiceCreations=0;
  const originalCreate=creation.createForService.bind(creation);

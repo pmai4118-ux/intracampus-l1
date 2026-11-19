@@ -18,5 +18,5 @@ export function readInvoiceCreationConfig(env: NodeJS.ProcessEnv, manifest: unkn
 export const parkingService = {
   merchantId: "parking-demo", merchantName: "Bãi xe demo",
   serviceId: "parking-single", serviceName: "Một lượt gửi xe demo",
-  categoryCode: "PARKING", amount: 3000000000000000000000n, ttlSeconds: 300,
+  categoryCode: "PARKING", amount: 3000000000000000000n, ttlSeconds: 300,
 } as const;
