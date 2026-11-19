@@ -3,6 +3,7 @@ import { isWalletAddress } from "./chains.ts";
 import { parseInvoicePayload, sameInvoiceEnvelope } from "./invoice.ts";
 
 export const POS_ACTIVE_INVOICE_KEY = "intracampus.pos.invoiceId.v1";
+export const POS_ACTIVE_PAYLOAD_KEY = "intracampus.pos.qrPayload.v1";
 export const isInvoiceHash = (value: unknown): value is string => typeof value === "string" && /^0x[0-9a-f]{64}$/i.test(value);
 const same = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
 const integer = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0;

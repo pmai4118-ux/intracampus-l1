@@ -1,9 +1,12 @@
 "use client";
 
+import QRCode from "qrcode";
 import { campusNetwork } from "@intracampus/network";
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CopyButton, DemoControls } from "../demo-controls";
 import { InvoiceForm } from "./InvoiceForm";
+import PosShiftLedger from "./PosShiftLedger";
 import PageHeading from "../components/PageHeading";
 import Icon from "../components/Icon";
 import {
@@ -11,6 +14,7 @@ import {
   type DemoErrorKind,
   demoErrorScenarios,
   demoPosServices,
+  demoPosSessionHistory,
   type DemoUiState,
   type DemoWalletKind,
   demoWalletProfiles,
@@ -21,16 +25,40 @@ import {
   shortenHex,
 } from "../demo-fixtures";
 
-function InvoiceQrPlaceholder() {
-  return (
+function InvoiceQrPlaceholder({ code }: { code: string }) {
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void QRCode.toDataURL(sharedQrPayloadString, {
+      errorCorrectionLevel: "Q",
+      margin: 2,
+      width: 280,
+    })
+      .then((url) => {
+        if (active) setQrSrc(url);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  return qrSrc ? (
+    <div className="qr-image-wrap demo-qr-wrap">
+      <img
+        src={qrSrc}
+        alt={`Mã QR mẫu cho phiếu ${code}`}
+        width={240}
+        height={240}
+      />
+    </div>
+  ) : (
     <div
       className="qr-placeholder"
       role="img"
-      aria-label="Vùng QR mẫu, chưa có mã để quét"
+      aria-label="Vùng QR mẫu, đang khởi tạo"
     >
       <span aria-hidden="true">QR</span>
-      <strong>Vùng hiển thị mã QR</strong>
-      <small>Chưa kích hoạt quét trong bản xem thử</small>
+      <strong>Đang tạo mã QR mẫu…</strong>
     </div>
   );
 }
@@ -39,8 +67,16 @@ function PointOfSaleDemo() {
   const [uiState, setUiState] = useState<DemoUiState>("waiting");
   const [walletKind, setWalletKind] = useState<DemoWalletKind>("sbt");
   const [errorKind, setErrorKind] = useState<DemoErrorKind>("expired");
+  const [autoRenewDemo, setAutoRenewDemo] = useState(true);
+  const [demoCycle, setDemoCycle] = useState(0);
+  const [demoCountdown, setDemoCountdown] = useState<number | null>(null);
+  const [demoLastPaid, setDemoLastPaid] = useState<{ code: string; paidAmountWei: string } | null>(null);
 
   const invoice = sharedParkingInvoiceEnvelope;
+  const activeInvoiceCode =
+    demoCycle === 0
+      ? invoice.meta.invoiceCode
+      : `PK-DEMO-${String(1048 + demoCycle)}`;
   const sbtQuote = calculateInvoiceQuote(
     invoice.invoice.amount,
     demoWalletProfiles.sbt.sbt.discountBps,
@@ -51,6 +87,30 @@ function PointOfSaleDemo() {
   );
   const receipt = getDemoReceiptFixture(walletKind);
   const activeError = demoErrorScenarios[errorKind];
+
+  useEffect(() => {
+    if (uiState !== "receipt" || !autoRenewDemo) {
+      setDemoCountdown(null);
+      return;
+    }
+    setDemoCountdown(4);
+    const interval = window.setInterval(() => {
+      setDemoCountdown((prev) => (prev !== null && prev > 1 ? prev - 1 : prev));
+    }, 1000);
+    const timer = window.setTimeout(() => {
+      setDemoLastPaid({
+        code: activeInvoiceCode,
+        paidAmountWei: receipt.paidAmountWei,
+      });
+      setDemoCycle((prev) => prev + 1);
+      setDemoCountdown(null);
+      setUiState("waiting");
+    }, 4000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timer);
+    };
+  }, [uiState, autoRenewDemo, activeInvoiceCode, receipt.paidAmountWei]);
 
   return (
     <div className="pos-shell">
@@ -153,8 +213,21 @@ function PointOfSaleDemo() {
           <div className="pos-sidebar-actions">
             <button
               type="button"
+              className={`pos-autorenew-toggle ${autoRenewDemo ? "is-on" : ""}`}
+              aria-pressed={autoRenewDemo}
+              onClick={() => setAutoRenewDemo((prev) => !prev)}
+            >
+              <span className="autorenew-dot" aria-hidden="true" />
+              Tự làm mới QR khi thu xong:{" "}
+              <strong>{autoRenewDemo ? "Đang bật" : "Đang tắt"}</strong>
+            </button>
+            <button
+              type="button"
               className="primary-cta-btn"
-              onClick={() => setUiState("waiting")}
+              onClick={() => {
+                setDemoCountdown(null);
+                setUiState("waiting");
+              }}
             >
               Đặt lại phiếu mẫu
             </button>
@@ -201,6 +274,34 @@ function PointOfSaleDemo() {
 
           {uiState === "waiting" ? (
             <div className="pos-stage-waiting">
+              {demoLastPaid ? (
+                <div className="pos-last-paid-banner" role="status">
+                  <div className="last-paid-copy">
+                    <span className="last-paid-check" aria-hidden="true">
+                      <Icon name="check" />
+                    </span>
+                    <div>
+                      <strong>
+                        Lượt mẫu vừa qua cổng ({demoLastPaid.code}): Đã thu{" "}
+                        {formatCampusWei(demoLastPaid.paidAmountWei)}
+                      </strong>
+                      <p>
+                        Mã QR mẫu bên dưới đã tự động làm mới (
+                        {activeInvoiceCode}) — sẵn sàng cho xe tiếp theo quét.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="last-paid-actions">
+                    <button
+                      type="button"
+                      className="text-action-btn"
+                      onClick={() => setDemoLastPaid(null)}
+                    >
+                      Ẩn
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="pos-stage-top">
                 <div>
                   <span className="live-waiting-badge">
@@ -211,7 +312,7 @@ function PointOfSaleDemo() {
                   <p className="muted-line">
                     Mã số phiếu:{" "}
                     <code className="inline-code">
-                      {invoice.meta.invoiceCode}
+                      {activeInvoiceCode}
                     </code>
                   </p>
                 </div>
@@ -228,7 +329,7 @@ function PointOfSaleDemo() {
 
               <div className="pos-qr-showcase">
                 <div className="qr-frame">
-                  <InvoiceQrPlaceholder />
+                  <InvoiceQrPlaceholder code={activeInvoiceCode} />
                   <span className="qr-caption">
                     Dùng “Sao chép phiếu mẫu” để thử ô nhập trên trang Sinh
                     viên.
@@ -315,6 +416,11 @@ function PointOfSaleDemo() {
                   ? "Chờ sinh viên xác nhận trong ví"
                   : "Chờ xác nhận từ blockchain"}
               </h2>
+              {uiState === "pending" ? (
+                <div className="l1-shimmer-track" aria-hidden="true">
+                  <div className="l1-shimmer-bar" />
+                </div>
+              ) : null}
               <p>
                 Không xác nhận đã thu tiền khi giao dịch chưa có receipt hợp lệ.
                 Bản xem thử không kết nối ví hoặc RPC.
@@ -405,9 +511,19 @@ function PointOfSaleDemo() {
                 <div className="pos-verification-notice">
                   <strong>Trạng thái vé xe:</strong>
                   <p>
-                    Phiếu <strong>{receipt.invoiceCode}</strong> đang hiển thị
-                    biên lai giả lập. Nút bên dưới chỉ đặt lại cùng phiếu mẫu;
-                    chưa tạo hóa đơn mới hoặc cập nhật Student qua API.
+                    Phiếu <strong>{activeInvoiceCode}</strong> đang hiển thị
+                    biên lai giả lập.{" "}
+                    {demoCountdown !== null ? (
+                      <>
+                        Hệ thống sẽ tự động cấp mã QR mới cho xe tiếp theo sau{" "}
+                        <strong>{demoCountdown}s</strong>…
+                      </>
+                    ) : (
+                      <>
+                        Bấm nút bên dưới để phát hành mã QR mẫu cho lượt tiếp
+                        theo.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -416,10 +532,32 @@ function PointOfSaleDemo() {
                 <button
                   type="button"
                   className="primary-cta-btn"
-                  onClick={() => setUiState("waiting")}
+                  onClick={() => {
+                    setDemoLastPaid({
+                      code: activeInvoiceCode,
+                      paidAmountWei: receipt.paidAmountWei,
+                    });
+                    setDemoCycle((prev) => prev + 1);
+                    setDemoCountdown(null);
+                    setUiState("waiting");
+                  }}
                 >
-                  Đặt lại phiếu mẫu
+                  {demoCountdown !== null
+                    ? "Làm mới QR mẫu ngay"
+                    : "Tạo lượt QR mẫu tiếp theo"}
                 </button>
+                {demoCountdown !== null ? (
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => {
+                      setAutoRenewDemo(false);
+                      setDemoCountdown(null);
+                    }}
+                  >
+                    Giữ biên lai mẫu
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -477,6 +615,11 @@ function PointOfSaleDemo() {
           </details>
         </section>
       </div>
+      <PosShiftLedger
+        entries={demoPosSessionHistory}
+        activeInvoiceId={invoice.invoice.invoiceId}
+        demoMode
+      />
     </div>
   );
 }
@@ -487,10 +630,18 @@ export default function PointOfSalePage() {
     <PageHeading eyebrow="KHÔNG GIAN ĐIỂM THU" title="Mỗi lượt thu, thật rõ ràng." description="Tạo hóa đơn QR và theo dõi biên lai trong cùng một không gian." icon="store">
       <span className="page-context-tag"><Icon name="store" />Bãi xe campus</span>
     </PageHeading>
-    <div className="workspace-toolbar"><p className="workspace-caption">Đơn giản cho điểm thu. Thuận tiện cho sinh viên.</p><div className="student-mode-switch" role="group" aria-label="Chế độ POS">
-      <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>POS thật</button>
-      <button type="button" className="secondary-btn" aria-pressed={mode === "demo"} onClick={() => setMode("demo")}>Xem bản minh họa</button>
-    </div>
+    <div className="workspace-toolbar">
+      <p className="workspace-caption">Đơn giản cho điểm thu. Thuận tiện cho sinh viên.</p>
+      <div className="mode-switch-wrapper">
+        <span className="mode-switch-kicker">
+          <span className={`mode-status-dot ${mode === "live" ? "dot-live" : "dot-demo"}`} aria-hidden="true" />
+          {mode === "live" ? "Avalanche L1 · Chain 20261" : "Bản minh họa"}
+        </span>
+        <div className="student-mode-switch" role="group" aria-label="Chế độ POS">
+          <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>POS thật</button>
+          <button type="button" className="secondary-btn" aria-pressed={mode === "demo"} onClick={() => setMode("demo")}>Xem bản minh họa</button>
+        </div>
+      </div>
     </div>
     {mode === "live" ? <div className="pos-live-workspace"><InvoiceForm /></div> : <PointOfSaleDemo />}
   </>;

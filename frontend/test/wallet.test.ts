@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Interface, Signature, verifyMessage, Wallet } from 'ethers';
 import { WalletController, WalletTransactionError, selectInjectedWallet, type WalletProvider, type WalletRpc } from '../lib/wallet.ts';
-import { formatWalletBalance, validateWalletConfig, walletChainParameters } from '../lib/chains.ts';
+import { formatWalletBalance, formatWalletBalanceCompact, validateWalletConfig, walletChainParameters } from '../lib/chains.ts';
 
 const A = `0x${'11'.repeat(20)}`, B = `0x${'22'.repeat(20)}`, SBT = `0x${'33'.repeat(20)}`;
 const config = { rpcUrl: 'https://rpc.example', sbtAddress: SBT };
@@ -303,6 +303,12 @@ test('integer formatting preserves one wei and large balances', () => {
   assert.equal(formatWalletBalance(BigInt(0)), '0 CAMPUS');
   assert.equal(formatWalletBalance(BigInt(1)), '0,000000000000000001 CAMPUS');
   assert.equal(formatWalletBalance(BigInt('3000000000000000000001')), '3.000,000000000000000001 CAMPUS');
+  assert.deepEqual(formatWalletBalanceCompact(BigInt('3000000000000000000000')), {
+    display: '3.000 CAMPUS', exact: '3.000 CAMPUS', rounded: false,
+  });
+  assert.deepEqual(formatWalletBalanceCompact(BigInt('9999998908579500000000')), {
+    display: '9.999,99 CAMPUS', exact: '9.999,9989085795 CAMPUS', rounded: true,
+  });
 });
 test('network configuration rejects unsafe or malformed public values', () => {
   for (const rpcUrl of ['http://public.example', 'https://user:secret@rpc.example', 'file:///tmp/x']) assert.throws(() => validateWalletConfig({ rpcUrl }));

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Icon from "./components/Icon";
 import {
   demoErrorScenarios,
   type DemoErrorKind,
@@ -24,92 +25,98 @@ export function DemoControls({
   onError: (value: DemoErrorKind) => void;
 }) {
   return (
-    <aside className="demo-notice" aria-label="Chế độ xem thử">
-      <strong>Bản xem thử · Dữ liệu mẫu</strong>
-      <p>
-        Chưa kết nối ví hoặc blockchain. Các thao tác và biên lai bên dưới chỉ
-        để thử giao diện.
-      </p>
+    <aside className="demo-notice demo-pill-banner" aria-label="Chế độ xem thử">
+      <div className="demo-pill-head">
+        <span className="demo-pill-badge">
+          <span className="mode-status-dot dot-demo" aria-hidden="true" />
+          Bản xem thử · Dữ liệu mẫu
+        </span>
+        <span className="demo-pill-summary">
+          Mô phỏng giao diện · chưa kết nối ví thật
+        </span>
+      </div>
       <details className="demo-toolbar">
         <summary>Thử các trạng thái màn hình</summary>
-        <div className="demo-toolbar-row">
-          <span className="demo-toolbar-label">Trạng thái</span>
-          <div
-            className="segmented-group"
-            role="group"
-            aria-label="Chọn trạng thái màn hình"
-          >
-            {(
-              [
-                ["waiting", "Hóa đơn"],
-                ["loading", "Đang tải"],
-                ["awaiting-signature", "Chờ ký"],
-                ["pending", "Chờ xác nhận"],
-                ["error", "Lỗi"],
-                ["receipt", "Biên lai mẫu"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={state === value ? "seg-btn active" : "seg-btn"}
-                aria-pressed={state === value}
-                onClick={() => onState(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="demo-toolbar-row">
-          <span className="demo-toolbar-label">Tài khoản mẫu</span>
-          <div
-            className="segmented-group"
-            role="group"
-            aria-label="Chọn tài khoản mẫu"
-          >
-            {(
-              [
-                ["sbt", "Có thẻ · Giảm 10%"],
-                ["standard", "Không có thẻ · Giá gốc"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={wallet === value ? "seg-btn active" : "seg-btn"}
-                aria-pressed={wallet === value}
-                onClick={() => onWallet(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {state === "error" && (
+        <div className="demo-toolbar-body">
           <div className="demo-toolbar-row">
-            <span className="demo-toolbar-label">Tình huống lỗi</span>
+            <span className="demo-toolbar-label">Trạng thái</span>
             <div
               className="segmented-group"
               role="group"
-              aria-label="Chọn tình huống lỗi"
+              aria-label="Chọn trạng thái màn hình"
             >
-              {Object.values(demoErrorScenarios).map((scenario) => (
+              {(
+                [
+                  ["waiting", "Hóa đơn"],
+                  ["loading", "Đang tải"],
+                  ["awaiting-signature", "Chờ ký"],
+                  ["pending", "Chờ xác nhận"],
+                  ["error", "Lỗi"],
+                  ["receipt", "Biên lai mẫu"],
+                ] as const
+              ).map(([value, label]) => (
                 <button
-                  key={scenario.kind}
+                  key={value}
                   type="button"
-                  className={
-                    error === scenario.kind ? "seg-btn active" : "seg-btn"
-                  }
-                  aria-pressed={error === scenario.kind}
-                  onClick={() => onError(scenario.kind)}
+                  className={state === value ? "seg-btn active" : "seg-btn"}
+                  aria-pressed={state === value}
+                  onClick={() => onState(value)}
                 >
-                  {scenario.shortTabLabel}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
-        )}
+          <div className="demo-toolbar-row">
+            <span className="demo-toolbar-label">Tài khoản mẫu</span>
+            <div
+              className="segmented-group"
+              role="group"
+              aria-label="Chọn tài khoản mẫu"
+            >
+              {(
+                [
+                  ["sbt", "Có thẻ · Giảm 10%"],
+                  ["standard", "Không có thẻ · Giá gốc"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={wallet === value ? "seg-btn active" : "seg-btn"}
+                  aria-pressed={wallet === value}
+                  onClick={() => onWallet(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {state === "error" && (
+            <div className="demo-toolbar-row">
+              <span className="demo-toolbar-label">Tình huống lỗi</span>
+              <div
+                className="segmented-group"
+                role="group"
+                aria-label="Chọn tình huống lỗi"
+              >
+                {Object.values(demoErrorScenarios).map((scenario) => (
+                  <button
+                    key={scenario.kind}
+                    type="button"
+                    className={
+                      error === scenario.kind ? "seg-btn active" : "seg-btn"
+                    }
+                    aria-pressed={error === scenario.kind}
+                    onClick={() => onError(scenario.kind)}
+                  >
+                    {scenario.shortTabLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </details>
     </aside>
   );
@@ -127,6 +134,11 @@ export function CopyButton({
   const [status, setStatus] = useState<
     "idle" | "copying" | "success" | "error"
   >("idle");
+  useEffect(() => {
+    if (status !== "success") return;
+    const timer = window.setTimeout(() => setStatus("idle"), 1500);
+    return () => window.clearTimeout(timer);
+  }, [status]);
   async function copy() {
     setStatus("copying");
     try {
@@ -140,14 +152,15 @@ export function CopyButton({
     <span className="copy-control">
       <button
         type="button"
-        className={className}
+        className={`${className} ${status === "success" ? "is-copied-btn" : ""}`}
         disabled={status === "copying"}
         onClick={copy}
       >
+        <Icon name={status === "success" ? "check" : "copy"} />
         {status === "success"
-          ? "Đã sao chép"
+          ? "Đã chép"
           : status === "copying"
-            ? "Đang sao chép…"
+            ? "Đang chép…"
             : label}
       </button>
       <span className="copy-feedback" role="status">

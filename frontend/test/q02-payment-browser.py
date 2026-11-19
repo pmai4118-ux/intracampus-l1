@@ -116,7 +116,7 @@ def paste(page, payload):
 
 
 def check_paid(pos, student, invoice, tx, payer, tier):
-    display = "2.700 CAMPUS" if tier else "3.000 CAMPUS"
+    display = "2,7 CAMPUS" if tier else "3 CAMPUS"
     for page in (pos, student):
         panel = page.locator("div.invoice-verified-preview").filter(has_text=tx)
         expect(panel).to_be_visible(timeout=20000)
@@ -132,9 +132,9 @@ def check_paid(pos, student, invoice, tx, payer, tier):
     assert paid["payer"].lower() == payer.lower() and paid["tier"] == tier
     assert paid["contractAddress"].lower() == cfg["registry"].lower()
     assert paid["merchant"].lower() == cfg["manifest"]["merchants"]["parking"]["address"].lower()
-    assert paid["originalAmount"] == str(3000 * 10**18)
-    assert paid["discountAmount"] == str((300 if tier else 0) * 10**18)
-    assert paid["paidAmount"] == str((2700 if tier else 3000) * 10**18)
+    assert paid["originalAmount"] == str(3 * 10**18)
+    assert paid["discountAmount"] == str((3 * 10**17) if tier else 0)
+    assert paid["paidAmount"] == str((27 * 10**17) if tier else (3 * 10**18))
     assert any(log["address"].lower() == cfg["registry"].lower()
                and int(log["logIndex"], 16) == paid["logIndex"]
                and log["topics"][0] == "0x92a65d73263650a30865358a778394e3b70520f6a2064b6a6ee3af7bae30ee2d"
@@ -185,7 +185,7 @@ with sync_playwright() as playwright:
 
         paste(student, payload)
         quote = student.get_by_role("region", name="Hóa đơn đã xác minh")
-        expect(quote.locator(".total-amount")).to_have_text(("2.700" if tier else "3.000") + " CAMPUS")
+        expect(quote.locator(".total-amount")).to_have_text(("2,7" if tier else "3") + " CAMPUS")
         pay = quote.get_by_role("button", name="Thanh toán bằng Core", exact=True)
         if tier == 0:
             student.evaluate("window.q02Wallet.reject = true")
@@ -264,7 +264,7 @@ with sync_playwright() as playwright:
     invoice = issue(pos)
     paste(student, invoice["qrPayload"])
     quote = student.get_by_role("region", name="Hóa đơn đã xác minh")
-    expect(quote.locator(".total-amount")).to_have_text("3.000 CAMPUS")
+    expect(quote.locator(".total-amount")).to_have_text("3 CAMPUS")
     student.evaluate("window.q02Wallet.unknown = true")
     wrong_hash = "0x" + "cd" * 32
     rpc("evm_setAutomine", [False])

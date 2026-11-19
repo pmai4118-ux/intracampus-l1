@@ -4,31 +4,32 @@ import { useEffect, useId, useState } from "react";
 import { requireDeployment } from "@intracampus/network";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
-import { librarySessionMessage, LibrarySessionError, readLibraryStudentAccess, requireLibraryStudentNotHeld,
-  signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
+import { librarySessionMessage, LibrarySessionError, requireLibraryStudentNotHeld } from "../../lib/library-session";
 import { PaymentController, restorePaymentPreview, type InvoicePreview, type PaymentSnapshot } from "../../lib/payment";
 import { createWalletRpc } from "../../lib/wallet";
 import { Receipt } from "../pos/Receipt";
 import { CopyButton } from "../demo-controls";
+import HashChip from "../components/HashChip";
+import TransactionStepper, { type StepState } from "../components/TransactionStepper";
 import { useCampusWallet } from "./WalletPanel";
 
+function paymentStep(status?: PaymentSnapshot["status"]): StepState {
+  if (!status || status === "ready" || status === "quote-changed") return "idle";
+  if (status === "preflight") return "checking";
+  if (status === "signing") return "signing";
+  if (status === "pending" || status === "unknown") return "confirming";
+  if (status === "paid") return "done";
+  return "error";
+}
+
 export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPaid?: (hash: string) => void }) {
-  const { state: wallet, controller: walletController } = useCampusWallet();
+  const { state: wallet, controller: walletController, access, signingIn, signIn, refreshAccess } = useCampusWallet();
   const [controller, setController] = useState<PaymentController | null>(null);
   const [payment, setPayment] = useState<PaymentSnapshot | null>(null);
   useEffect(() => { if (payment?.status === "paid" && payment.receipt) onPaid?.(payment.receipt.txHash); }, [payment?.status, payment?.receipt?.txHash, onPaid]);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [manualHash, setManualHash] = useState("");
-  const [access, setAccess] = useState<LibraryStudentAccess | null>(null);
-  const [signingIn, setSigningIn] = useState(false);
   const id = useId();
-  useEffect(() => {
-    let active = true;
-    setAccess(null);
-    if (!wallet.address) return () => { active = false; };
-    void readLibraryStudentAccess(wallet.address).then((result) => { if (active) setAccess(result); });
-    return () => { active = false; };
-  }, [wallet.address]);
   useEffect(() => {
     if (!wallet.address) return;
     let session: PaymentController;
@@ -72,21 +73,8 @@ export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPai
 
   const quote = payment?.preview.quote ?? preview.quote;
   const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261) || access?.status !== "ready";
-  async function signIn() {
-    if (!wallet.address || signingIn) return;
-    setSigningIn(true);
-    try {
-      const result = await signInLibraryStudent(wallet.address, (account, message) => walletController.signMessage(account, message));
-      setAccess(result);
-    } catch (error) {
-      setAccess({ status: "error", code: error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] });
-    } finally { setSigningIn(false); }
-  }
-  async function refreshAccess() {
-    if (!wallet.address) return;
-    setAccess(await readLibraryStudentAccess(wallet.address));
-  }
   if (payment?.status === "paid" && payment.receipt) return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`}>
+    <TransactionStepper state="done" />
     <h4 id={`${id}-title`}>Thanh toán đã xác minh</h4>
     <p role="status">Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác.</p>
     <Receipt receipt={payment.receipt} />
@@ -94,8 +82,9 @@ export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPai
   return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>
     <h4 id={`${id}-title`}>Thanh toán bằng ví sinh viên</h4>
     <p>Core sẽ yêu cầu xác nhận giao dịch tới payment registry. Gas được tính riêng.</p>
-    <p>Ví trả: <code className="wallet-address">{wallet.address}</code></p>
-    <p>Người nhận CAMPUS: <code className="wallet-address">{preview.envelope.invoice.merchant}</code></p>
+    <TransactionStepper state={paymentStep(payment?.status)} />
+    <p>Ví trả: <HashChip value={wallet.address ?? ""} copyLabel="Sao chép địa chỉ ví trả" /></p>
+    <p>Người nhận CAMPUS: <HashChip value={preview.envelope.invoice.merchant} copyLabel="Sao chép địa chỉ người nhận" /></p>
     <p><strong>Số tiền cần xác nhận: {formatWalletBalance(quote.paidAmount)}</strong></p>
     {payment?.status === "quote-changed" ? <dl className="price-breakdown">
       <div className="price-row"><dt>Giá gốc mới kiểm tra</dt><dd>{formatWalletBalance(quote.originalAmount)}</dd></div>
