@@ -142,7 +142,10 @@ export class LibraryApi {
   }
   async getRequest(id: string) { check(bytes32(id)); const r = parseLibraryRequest(await this.request(`/api/library/requests/${id}`)); check(r.requestId === id); return r; }
   async create(bookId: string, idempotencyKey: string) { return parseLibraryRequest(await this.request('/api/library/requests', { bookId, idempotencyKey })); }
-  async loans() { return list(await this.request('/api/library/loans'), parseLibraryLoan); }
+  async loans(borrowerWallet?: string) {
+    const query = borrowerWallet ? `?borrowerWallet=${encodeURIComponent(borrowerWallet)}` : '';
+    return list(await this.request(`/api/library/loans${query}`), parseLibraryLoan);
+  }
   async settlementIntent(id: string, input: LibrarySettlementIntentRequest) { check(bytes32(id)); const result = parseSettlementIntent(await this.request(`/api/library/loans/${id}/settlement-intents`, input)); check(result.loanId === id && result.outcome === input.outcome); return result; }
   async track(id: string, action: LibraryTransactionAction, txHash: string, settlementIntentId?: string) {
     check(bytes32(id) && bytes32(txHash));

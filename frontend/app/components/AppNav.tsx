@@ -10,6 +10,7 @@ const links: { href: string; label: string; icon: IconName }[] = [
   { href: "/student/canteen", label: "Nhà ăn", icon: "utensils" },
   { href: "/student/library", label: "Thư viện", icon: "book" },
   { href: "/pos", label: "Điểm thu", icon: "store" },
+  { href: "/staff/canteen", label: "Quầy bếp", icon: "bowl" },
   { href: "/staff/library", label: "Thủ thư", icon: "shield" },
 ];
 
@@ -28,7 +29,7 @@ export default function AppNav() {
       {links.map(({ href, label, icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>
         <Icon name={icon} /><span>{label}</span>
       </Link>)}
-      <span className="nav-network">Avalanche L1 <span aria-hidden="true">↗</span></span>
+      <span className="nav-network">Avalanche L1 · Chain 20261</span>
     </nav>
   </header>;
 }

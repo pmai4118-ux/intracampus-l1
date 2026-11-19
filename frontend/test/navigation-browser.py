@@ -13,7 +13,7 @@ args = parser.parse_args()
 origin = args.origin.rstrip('/')
 args.output.mkdir(parents=True, exist_ok=False)
 widths = [320, 390, 576, 577, 600, 640, 692, 768, 832, 1280, 1440]
-routes = ['/', '/student', '/student/canteen', '/student/library', '/staff/library', '/pos']
+routes = ['/', '/student', '/student/canteen', '/student/library', '/pos', '/staff/canteen', '/staff/library']
 checks, failures, errors = [], [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(channel=args.channel, headless=True)
@@ -23,7 +23,7 @@ with sync_playwright() as p:
         for route in routes:
             page.goto(origin + route, wait_until='networkidle')
             nav = page.get_by_role('navigation', name='Điều hướng chính', exact=True)
-            expect(nav.get_by_role('link')).to_have_count(6)
+            expect(nav.get_by_role('link')).to_have_count(7)
             for width in widths:
                 page.set_viewport_size({'width': width, 'height': 844 if width < 800 else 900})
                 layout = nav.evaluate('''nav => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth,

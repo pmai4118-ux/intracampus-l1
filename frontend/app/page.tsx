@@ -66,7 +66,7 @@ export default async function Home() {
         <span className="visual-float float-book"><Icon name="book" /><span>Thêm một trang mới.</span></span>
       </div>
     </section>
-    <section className="home-services" aria-labelledby="services-title"><div className="section-heading"><div><p className="eyebrow">KHÔNG GIAN CỦA BẠN</p><h2 id="services-title">Hôm nay, bạn muốn làm gì?</h2></div><span className="section-caption">Mọi dịch vụ, cùng một kết nối.</span></div>
+    <section className="home-services" aria-labelledby="services-title"><div className="section-heading"><div><p className="eyebrow">KHÔNG GIAN CỦA BẠN</p><h2 id="services-title">Hôm nay, bạn muốn làm gì?</h2></div><div className="home-staff-links"><Link href="/staff/canteen" className="section-caption section-staff-link">Quầy bếp nhà ăn (Cô căn-tin) <Icon name="arrow" /></Link><Link href="/staff/library" className="section-caption section-staff-link">Quản trị thư viện (Thủ thư) <Icon name="arrow" /></Link></div></div>
       <div className="service-cards">{services.map(service => <Link href={service.href} className={`service-card service-${service.color}`} key={service.href}>
         <div className="service-card-top"><span className="service-icon"><Icon name={service.icon} /></span><Icon className="service-arrow" name="arrow" /></div>
         <span className="service-kicker">{service.label}</span><h3>{service.title}</h3><p>{service.description}</p>
