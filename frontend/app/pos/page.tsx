@@ -629,6 +629,7 @@ export default function PointOfSalePage() {
   return <>
     <PageHeading eyebrow="KHÔNG GIAN ĐIỂM THU" title="Mỗi lượt thu, thật rõ ràng." description="Tạo hóa đơn QR và theo dõi biên lai trong cùng một không gian." icon="store">
       <span className="page-context-tag"><Icon name="store" />Bãi xe campus</span>
+      <Link className="secondary-btn" href="/staff/canteen">Quầy bếp nhà ăn →</Link>
     </PageHeading>
     <div className="workspace-toolbar">
       <p className="workspace-caption">Đơn giản cho điểm thu. Thuận tiện cho sinh viên.</p>
