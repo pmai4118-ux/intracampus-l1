@@ -5,7 +5,7 @@ import type { CampusProfile, CampusPayout } from "@intracampus/network";
 import { WalletSession, useCampusWallet } from "../student/WalletPanel";
 import { formatWalletBalance } from "../../lib/chains";
 import { signInLibraryStudent } from "../../lib/library-session";
-import { campusApi, campusLogin, campusMe, campusMessage, campusStatus, validateCampusPayout, type CampusMe } from "../../lib/campus";
+import { campusApi, campusLogin, campusMe, campusMessage, campusStatus, releaseCampusPayout, sendCampusPayout, type CampusMe, type CampusPayoutRecovery } from "../../lib/campus";
 import PageHeading from "./PageHeading";
 import Icon from "./Icon";
 
@@ -31,6 +31,7 @@ function Portal({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [studentCode, setCode] = useState(""), [program, setProgram] = useState(""), [category, setCategory] = useState("MERIT");
   const [payout, setPayout] = useState<CampusPayout | null>(null), [recoveryHash, setRecoveryHash] = useState("");
+  const [recoveries, setRecoveries] = useState<Record<string, CampusPayoutRecovery>>({});
   const active = useRef(true), running = useRef(false);
   async function refresh() {
     if (!wallet.address) return;
@@ -46,7 +47,7 @@ function Portal({ mode }: { mode: Mode }) {
     running.current = true; setBusy(true); setError(""); setNotice("");
     try { await work(); } catch (e) { if (active.current) {
       const code = e instanceof Error ? e.message : "SERVICE_UNAVAILABLE";
-      if (["UNAUTHENTICATED", "WALLET_SESSION_CHANGED"].includes(code)) { setMe(null); setProfiles([]); setPayout(null); }
+      if (["UNAUTHENTICATED", "WALLET_SESSION_CHANGED"].includes(code)) { setMe(null); setProfiles([]); setPayout(null); setRecoveries({}); }
       setError(campusMessage(code));
     } } finally { running.current = false; if (active.current) setBusy(false); }
   }
@@ -73,7 +74,7 @@ function Portal({ mode }: { mode: Mode }) {
   }
   async function logout() {
     await campusApi("auth/logout", {});
-    if (active.current) { setMe(null); setProfiles([]); setPayout(null); }
+    if (active.current) { setMe(null); setProfiles([]); setPayout(null); setRecoveries({}); }
   }
   return <div className="campus-onboarding">
     <PageHeading eyebrow={mode === "school" ? "CỔNG NHÀ TRƯỜNG" : "CHÀO MỪNG ĐẾN INTRACAMPUS"}
@@ -142,14 +143,22 @@ function Portal({ mode }: { mode: Mode }) {
     {payout && mode === "school" && me?.school ? <section className="surface-panel campus-payout-review"><h2>Kiểm tra lượt cấp trước khi ký</h2>
       <dl><dt>Loại</dt><dd>{payout.kind === "WELCOME" ? "Quà chào mừng" : "Học bổng FOOD"}</dd><dt>Số tiền</dt><dd>{formatWalletBalance(BigInt(payout.value))} + gas từ ví cấp</dd><dt>Mạng</dt><dd>IntraCampus L1 · 20261</dd><dt>Ví cấp</dt><dd><code>{payout.from}</code></dd><dt>Sinh viên nhận</dt><dd><code>{payout.wallet}</code></dd><dt>Đích giao dịch</dt><dd><code>{payout.to}</code></dd><dt>Trạng thái</dt><dd>{payout.status === "PENDING" ? "Đang chờ xác minh" : campusStatus[payout.status]}</dd></dl>
       {payout.status === "PREPARED" ? <button className="primary-cta-btn" disabled={busy || !wallet.canProceed || payout.from.toLowerCase() !== wallet.address?.toLowerCase()} onClick={() => void run(async () => {
-        await campusMe(wallet.address!); const tx = validateCampusPayout(payout, wallet.address!);
-        const locked: CampusPayout = await campusApi(`payouts/${payout.id}/begin`, {});
-        if (active.current) setPayout(locked);
-        if (JSON.stringify(validateCampusPayout(locked, wallet.address!)) !== JSON.stringify(tx)) throw Error("INVALID_RESPONSE");
-        const hash = await controller.sendTransaction(wallet.address!, tx);
-        if (active.current) { setRecoveryHash(hash); setPayout({ ...locked, txHash: hash, status: "PENDING" }); }
-        await reconcile(locked, hash);
-      })}>Xác nhận và mở ví cấp</button> : payout.status !== "CONFIRMED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await reconcile(payout, recoveryHash.trim()); }); }}>
+        await campusMe(wallet.address!);
+        const result = await sendCampusPayout(payout, wallet.address!, (account, tx) => controller.sendTransaction(account, tx), {
+          onPayout: value => { if (active.current) setPayout(value); },
+          onRecovery: value => { if (active.current) setRecoveries(current => { const next = { ...current }; if (value) next[payout.id] = value; else delete next[payout.id]; return next; }); },
+        });
+        if (result.hash === null) { if (active.current) setNotice("Ví đã hủy hoặc chưa gửi giao dịch. Lượt cấp đã sẵn sàng để thử lại."); await refresh(); return; }
+        if (active.current) setRecoveryHash(result.hash);
+        await reconcile(result.payout, result.hash);
+      })}>Xác nhận và mở ví cấp</button> : payout.status === "UNKNOWN" && !payout.txHash && recoveries[payout.id] ? <div>
+        <p>Ví đã xác nhận chưa gửi giao dịch. Chưa nhận được xác nhận khôi phục từ máy chủ; bạn có thể thử lại bước khôi phục mà không gửi tiền.</p>
+        <button className="secondary-btn" disabled={busy} onClick={() => void run(async () => {
+          await campusMe(wallet.address!); const restored = await releaseCampusPayout(recoveries[payout.id]);
+          if (active.current) { setPayout(restored); setRecoveries(current => { const next = { ...current }; delete next[payout.id]; return next; }); setNotice("Đã khôi phục lượt chưa gửi. Bạn có thể kiểm tra và mở ví lại."); }
+          await refresh();
+        })}>Khôi phục lượt chưa gửi</button>
+      </div> : payout.status !== "CONFIRMED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await reconcile(payout, recoveryHash.trim()); }); }}>
         <p>Lượt cấp đã khóa để tránh gửi trùng. Nếu mất kết nối hoặc tải lại trang, mở lại lượt cấp này và tra hash từ lịch sử ví. Không tạo lượt cấp mới.</p><label htmlFor="campus-payout-hash">Hash giao dịch đã gửi</label><input id="campus-payout-hash" value={recoveryHash} onChange={e => setRecoveryHash(e.target.value)} required pattern="0x[0-9a-fA-F]{64}" /><button className="secondary-btn" disabled={busy}>Đối chiếu giao dịch</button></form> : <p className="verified-badge">Đã xác minh chuyển tiền thành công.</p>}
       {payout.txHash ? <code className="tx-hash-code">{payout.txHash}</code> : null}
     </section> : null}

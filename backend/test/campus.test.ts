@@ -93,6 +93,39 @@ test("20 CAMPUS is reserved once, simulation precedes durable broadcast lock, pe
     assert.equal((await s.prepare(school.address, student.address, "WELCOME")).id, p.id);
   } finally { r.close(); }
 });
+for (const kind of ["WELCOME", "SCHOLARSHIP"] as const) {
+  test(`${kind}: definite non-send recovery is signer/attempt-bound and cannot release a newer or hashed attempt`, async () => {
+    const { repository: r, service: s, approve, proof } = setup();
+    try {
+      approve();
+      if (kind === "SCHOLARSHIP") { r.requestScholarship(lower(student), "MERIT"); r.review(lower(school), lower(student), "SCHOLARSHIP", true, "VERIFIED"); }
+      const p = await s.prepare(school.address, student.address, kind);
+      const first = await s.begin(p.id, school.address);
+      assert.match(first.attemptToken, /^[0-9a-f]{64}$/);
+      assert.equal(JSON.stringify(r.profile(student.address)).includes(first.attemptToken), false);
+      assert.throws(() => s.release(p.id, student.address, first.attemptToken, "REJECTED"), /SCHOOL_ONLY/);
+      s.schools.add(lower(other));
+      assert.throws(() => s.release(p.id, other.address, first.attemptToken, "REJECTED"), /PAYOUT_LOCKED/);
+      assert.throws(() => s.release(p.id, school.address, "0".repeat(64), "REJECTED"), /PAYOUT_LOCKED/);
+      assert.throws(() => s.release(p.id, school.address, first.attemptToken, "UNKNOWN"), /INVALID_REQUEST/);
+      assert.throws(() => s.release(p.id, school.address, "invalid", "REJECTED"), /INVALID_REQUEST/);
+      assert.equal(r.payout(p.id).status, "UNKNOWN");
+      assert.equal(s.release(p.id, school.address, first.attemptToken, "REJECTED").status, "PREPARED");
+      assert.equal(s.release(p.id, school.address, first.attemptToken, "REJECTED").status, "PREPARED");
+      const second = await s.begin(p.id, school.address);
+      assert.notEqual(second.attemptToken, first.attemptToken);
+      assert.throws(() => s.release(p.id, school.address, first.attemptToken, "REJECTED"), /PAYOUT_LOCKED/);
+      assert.equal(r.payout(p.id).status, "UNKNOWN");
+      assert.equal(s.release(p.id, school.address, second.attemptToken, "NOT_SENT").status, "PREPARED");
+      const third = await s.begin(p.id, school.address);
+      r.attach(p.id, hash);
+      assert.throws(() => s.release(p.id, school.address, third.attemptToken, "NOT_SENT"), /PAYOUT_LOCKED/);
+      assert.equal(r.payout(p.id).status, "PENDING");
+      assert.equal((await s.prepare(school.address, student.address, kind)).id, p.id);
+      if (kind === "WELCOME") { proof(p); await s.reconcile(p.id, hash); assert.throws(() => s.release(p.id, school.address, third.attemptToken, "REJECTED"), /PAYOUT_LOCKED/); }
+    } finally { r.close(); }
+  });
+}
 for (const fault of ["revert", "amount", "payer", "recipient", "calldata", "chain", "old-block", "reorg"]) {
   test(`welcome receipt rejects ${fault} without opening a second grant`, async () => {
     const { repository: r, service: s, state, approve, proof } = setup();
@@ -152,6 +185,18 @@ test("HTTP ownership, school authorization, CSRF and service activation are enfo
   assert.equal((await request("activate", studentCookie, {})).status, 200);
   assert.equal(library.accountForWallet(student.address)?.role, "STUDENT");
   assert.equal((await (await request("me", schoolCookie)).json()).school, true);
+  const payout = await (await request("payouts", schoolCookie, { wallet: student.address, kind: "WELCOME" })).json();
+  const attempt = await (await request(`payouts/${payout.id}/begin`, schoolCookie, {})).json();
+  assert.equal(attempt.payout.status, "UNKNOWN");
+  const release = { attemptToken: attempt.attemptToken, outcome: "REJECTED" };
+  assert.equal((await request(`payouts/${payout.id}/release`, "", release)).status, 401);
+  assert.equal((await request(`payouts/${payout.id}/release`, studentCookie, release)).status, 403);
+  assert.equal((await request(`payouts/${payout.id}/release`, schoolCookie, release, "https://evil.example")).status, 403);
+  assert.equal((await request(`payouts/${payout.id}/release`, schoolCookie, { ...release, outcome: "UNKNOWN" })).status, 400);
+  assert.equal((await request(`payouts/${payout.id}/release`, schoolCookie, { ...release, attemptToken: "0".repeat(64) })).status, 409);
+  assert.equal(r.payout(payout.id).status, "UNKNOWN");
+  assert.equal((await request(`payouts/${payout.id}/release`, schoolCookie, release)).status, 200);
+  assert.equal(r.payout(payout.id).status, "PREPARED");
   assert.equal((await request("auth/logout", studentCookie, {})).status, 204);
   assert.equal((await request("me", studentCookie)).status, 401);
 });

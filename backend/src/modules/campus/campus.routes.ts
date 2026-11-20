@@ -61,6 +61,10 @@ export function createCampusRouter(service?: CampusService, library?: LibraryRep
   router.post("/api/campus/payouts/:id/begin", async (req, res, next) => { try {
     const issuer = school(req); body(req.body, []); res.json(await service!.begin(String(req.params.id), issuer));
   } catch (e) { next(e); } });
+  router.post("/api/campus/payouts/:id/release", (req, res, next) => { try {
+    const issuer = school(req); body(req.body, ["attemptToken", "outcome"]);
+    res.json(service!.release(String(req.params.id), issuer, req.body.attemptToken, req.body.outcome));
+  } catch (e) { next(e); } });
   router.post("/api/campus/payouts/:id/reconcile", async (req, res, next) => { try {
     school(req); body(req.body, ["txHash"]); if (typeof req.body.txHash !== "string") throw new CampusError("INVALID_REQUEST", 400);
     res.json(await service!.reconcile(String(req.params.id), req.body.txHash));

@@ -1,5 +1,6 @@
-import type { CampusProfile, CampusPayout } from "@intracampus/network";
+import type { CampusProfile, CampusPayout, CampusPayoutAttempt } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
+import { WalletTransactionError, type WalletTransaction } from "./wallet.ts";
 export type CampusMe = { wallet: string; school: boolean; profile: CampusProfile };
 export async function campusApi(path: string, body?: unknown) {
   const response = await fetch(`/api/campus/${path}`, { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000),
@@ -27,6 +28,44 @@ export function validateCampusPayout(p: CampusPayout, account: string) {
     || BigInt(p.value) >= BigInt(2) ** BigInt(256)
     || (p.kind === "WELCOME" && (BigInt(p.value) !== BigInt(20) * BigInt(10) ** BigInt(18) || p.to.toLowerCase() !== p.wallet.toLowerCase()))) throw Error("INVALID_RESPONSE");
   return { to: p.to, data: p.data, value: p.value };
+}
+export type CampusPayoutRecovery = { payout: CampusPayout; attemptToken: string; outcome: "REJECTED" | "NOT_SENT" };
+export async function releaseCampusPayout(recovery: CampusPayoutRecovery): Promise<CampusPayout> {
+  const { payout, attemptToken, outcome } = recovery;
+  const restored: CampusPayout = await campusApi(`payouts/${payout.id}/release`, { attemptToken, outcome });
+  if (restored.id !== payout.id || restored.status !== "PREPARED" || restored.txHash !== null
+    || JSON.stringify(validateCampusPayout(restored, payout.from)) !== JSON.stringify(validateCampusPayout(payout, payout.from))) throw Error("INVALID_RESPONSE");
+  return restored;
+}
+/** Release only a definite wallet rejection or a failure before the provider send call. */
+export async function sendCampusPayout(payout: CampusPayout, account: string,
+  send: (account: string, tx: WalletTransaction) => Promise<string>,
+  callbacks: { onPayout?: (payout: CampusPayout) => void; onRecovery?: (recovery: CampusPayoutRecovery | null) => void } = {},
+): Promise<{ payout: CampusPayout; hash: string | null }> {
+  const tx = validateCampusPayout(payout, account);
+  const attempt: CampusPayoutAttempt = await campusApi(`payouts/${payout.id}/begin`, {});
+  const locked = attempt?.payout;
+  if (locked) callbacks.onPayout?.(locked);
+  if (!locked || locked.id !== payout.id || locked.status !== "UNKNOWN" || locked.txHash !== null
+    || typeof attempt.attemptToken !== "string" || !/^[0-9a-f]{64}$/.test(attempt.attemptToken)
+    || JSON.stringify(validateCampusPayout(locked, account)) !== JSON.stringify(tx)) throw Error("INVALID_RESPONSE");
+  let hash: string;
+  try {
+    hash = await send(account, tx);
+  } catch (error) {
+    if (!(error instanceof WalletTransactionError) || !(error.outcome === "not-sent"
+      || (error.outcome === "rejected" && error.code === "SIGNATURE_REJECTED" && error.operation === "transaction"))) throw error;
+    const recovery: CampusPayoutRecovery = { payout: locked, attemptToken: attempt.attemptToken, outcome: error.outcome === "rejected" ? "REJECTED" : "NOT_SENT" };
+    callbacks.onRecovery?.(recovery);
+    // Keep the capability in the current UI if the release response is lost, so it can retry safely.
+    const restored = await releaseCampusPayout(recovery);
+    callbacks.onPayout?.(restored); callbacks.onRecovery?.(null);
+    return { payout: restored, hash: null };
+  }
+  if (!/^0x[0-9a-f]{64}$/i.test(hash) || /^0x0{64}$/i.test(hash)) throw Error("INVALID_RESPONSE");
+  const pending: CampusPayout = { ...locked, txHash: hash, status: "PENDING" };
+  callbacks.onPayout?.(pending);
+  return { payout: pending, hash };
 }
 export const campusStatus = { PENDING: "Chờ nhà trường duyệt", APPROVED: "Đã được duyệt", REJECTED: "Cần bổ sung hồ sơ", PREPARED: "Sẵn sàng cấp", UNKNOWN: "Cần đối chiếu kết quả", FAILED: "Giao dịch thất bại · chưa cấp tiền", CONFIRMED: "Đã xác minh giao dịch" };
 export function campusMessage(code: string) {

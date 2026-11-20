@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { CampusApplication, CampusScholarship, CampusPayout, CampusProfile } from "@intracampus/network";
@@ -25,6 +25,7 @@ export class CampusRepository implements AuthStore {
       CREATE UNIQUE INDEX IF NOT EXISTS campus_verified_identity ON campus_applications(code) WHERE status='APPROVED';
       CREATE TABLE IF NOT EXISTS campus_scholarships(wallet TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS campus_payouts(id TEXT PRIMARY KEY, wallet TEXT NOT NULL, kind TEXT NOT NULL, hash TEXT UNIQUE, data TEXT NOT NULL, UNIQUE(wallet,kind));
+      CREATE TABLE IF NOT EXISTS campus_payout_attempts(payout_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, released INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS campus_audit(id INTEGER PRIMARY KEY, actor TEXT NOT NULL, wallet TEXT NOT NULL, action TEXT NOT NULL, created INTEGER NOT NULL);`);
   }
   close() { this.db.close(); }
@@ -121,8 +122,32 @@ export class CampusRepository implements AuthStore {
     });
   }
   begin(id: string, actor: string) {
-    return this.atomic(() => { const p = this.payout(id); if (p.from.toLowerCase() !== actor.toLowerCase() || p.status !== "PREPARED") throw new CampusError("PAYOUT_LOCKED");
-      p.status = "UNKNOWN"; this.savePayout(p); return p; });
+    return this.atomic(() => {
+      const p = this.payout(id);
+      if (p.from !== actor.toLowerCase() || p.status !== "PREPARED" || p.txHash) throw new CampusError("PAYOUT_LOCKED");
+      // Only this caller receives the capability. It is never included in profile/list responses.
+      const attemptToken = randomBytes(32).toString("hex");
+      this.db.prepare("INSERT INTO campus_payout_attempts VALUES (?,?,0) ON CONFLICT(payout_id) DO UPDATE SET token_hash=excluded.token_hash,released=0")
+        .run(id, createHash("sha256").update(attemptToken).digest("hex"));
+      p.status = "UNKNOWN"; this.savePayout(p);
+      return { payout: p, attemptToken };
+    });
+  }
+  release(id: string, actor: string, attemptToken: string, outcome: "REJECTED" | "NOT_SENT") {
+    return this.atomic(() => {
+      const p = this.payout(id);
+      const attempt = this.db.prepare("SELECT released FROM campus_payout_attempts WHERE payout_id=? AND token_hash=?")
+        .get(id, createHash("sha256").update(attemptToken).digest("hex"));
+      if (p.from !== actor.toLowerCase() || p.txHash || !attempt) throw new CampusError("PAYOUT_LOCKED");
+      // A retry after a lost release response is safe; an old token cannot unlock a later attempt.
+      if (Number(attempt.released) === 1 && p.status === "PREPARED") return p;
+      if (Number(attempt.released) !== 0 || p.status !== "UNKNOWN") throw new CampusError("PAYOUT_LOCKED");
+      p.status = "PREPARED"; this.savePayout(p);
+      this.db.prepare("UPDATE campus_payout_attempts SET released=1 WHERE payout_id=?").run(id);
+      this.db.prepare("INSERT INTO campus_audit(actor,wallet,action,created) VALUES (?,?,?,?)")
+        .run(actor.toLowerCase(), p.wallet, `PAYOUT:${outcome}`, Date.now());
+      return p;
+    });
   }
   private savePayout(p: CampusPayout) { this.db.prepare("UPDATE campus_payouts SET hash=?,data=? WHERE id=?").run(p.txHash, JSON.stringify(p), p.id); }
   attach(id: string, hash: string) {

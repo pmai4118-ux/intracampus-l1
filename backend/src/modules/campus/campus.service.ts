@@ -116,4 +116,9 @@ export class CampusService {
     if (String(current.hash).toLowerCase() !== block.hash) throw new CampusError("STALE_CHAIN_STATE", 503);
     return this.repository.begin(id, actor);
   }
+  release(id: string, actor: string, attemptToken: unknown, outcome: unknown) {
+    this.requireSchool(actor);
+    if (typeof attemptToken !== "string" || !/^[0-9a-f]{64}$/.test(attemptToken) || (outcome !== "REJECTED" && outcome !== "NOT_SENT")) throw new CampusError("INVALID_REQUEST", 400);
+    return this.repository.release(id, actor, attemptToken, outcome);
+  }
 }

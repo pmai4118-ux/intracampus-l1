@@ -46,7 +46,11 @@ MVP giữ một hồ sơ đã duyệt, một quà chào mừng và một học b
 
 SQLite giữ hồ sơ, quyết định và người duyệt, phiên đăng nhập cùng lượt cấp. Mã sinh viên/chương trình chỉ trả cho chủ ví và ví nhà trường; không đưa vào QR, calldata hoặc log. Calldata quà chào mừng chỉ chứa mã lượt cấp ngẫu nhiên. Giữ SQLite và WAL trên volume bền vững, dùng backup SQLite phù hợp; không seed lại/xóa DB khi triển khai vì đó là bằng chứng chống cấp lặp. Chưa hỗ trợ đổi ví sinh viên, thu hồi xác minh hoặc chuyển ví quỹ cho một lượt đã chuẩn bị; cần quy trình quản trị riêng.
 
-Lượt cấp đi qua `PREPARED → UNKNOWN → PENDING → CONFIRMED`; receipt revert khớp giao dịch được lưu `FAILED` và UI nói rõ chưa cấp tiền. Khóa được ghi trên server trước khi gọi ví. Mất mạng, đóng tab, từ chối ở ví hoặc giao dịch revert đều không tự mở lượt thứ hai. Mở lại hồ sơ, chọn lượt cấp cũ và dùng hash từ lịch sử ví để **Đối chiếu giao dịch**. Hash đã lưu chỉ gắn một lượt và không thay bằng hash khác qua API. Nếu chưa có hash hoặc hash không khớp, người vận hành phải đối chiếu lịch sử/nonce/receipt ngoài ứng dụng trước khi quyết định xử lý; MVP cố ý không có nút reset/cấp lại. Giữ DB/backup để điều tra, không sửa tay để bỏ khóa khi chưa xác định kết quả.
+Lượt cấp đi qua `PREPARED → UNKNOWN → PENDING → CONFIRMED`; receipt revert khớp giao dịch được lưu `FAILED` và UI nói rõ chưa cấp tiền. Khóa được ghi trên server trước khi gọi ví. Nếu WalletController xác nhận provider từ chối giao dịch (`4001`) hoặc lỗi xảy ra trước khi gọi gửi, UI khôi phục **cùng lượt cấp** về PREPARED để người dùng chủ động thử lại. Không tạo khoản cấp mới hoặc tự mở lại ví. Nếu mất phản hồi khôi phục, nút **Khôi phục lượt chưa gửi** thử lại đúng thao tác này trong tab hiện tại, không gọi gửi tiền.
+
+`begin` trả `{payout, attemptToken}` cho duy nhất caller. Server lưu hash token trong bảng attempt bổ sung; token không nằm trong payout/profile/list hoặc log. `release` cần phiên đúng ví cấp, token của lần gửi hiện tại, kết quả REJECTED/NOT_SENT và trạng thái UNKNOWN chưa có hash. Việc khôi phục là atomic, idempotent khi nhận lại cùng yêu cầu; begin tiếp theo đổi token nên phản hồi cũ không mở khóa lần gửi mới. Đây là xác nhận từ WalletController của ví cấp đã đăng nhập, không phải bằng chứng từ RPC về việc người dùng bấm từ chối. Không có endpoint reset tùy ý cho người xem hoặc cán bộ khác.
+
+Timeout sau gọi provider, kết quả chưa rõ, hash đã gắn, receipt revert, đóng tab hoặc mất token vẫn giữ khóa. Mở lại hồ sơ, chọn lượt cấp cũ và dùng hash từ lịch sử ví để **Đối chiếu giao dịch**. Hash đã lưu chỉ gắn một lượt và không thay bằng hash khác qua API. Nếu chưa có hash hoặc hash không khớp, người vận hành phải đối chiếu lịch sử/nonce/receipt ngoài ứng dụng trước khi quyết định xử lý. UNKNOWN từ phiên bản cũ không có token cũng không tự được mở. Giữ DB/backup để điều tra, không sửa tay để bỏ khóa khi chưa xác định kết quả.
 
 Receipt cần block sau mốc chuẩn bị, canonical hash kiểm tra lại, from/to/value/calldata/chain khớp và status thành công. Policy hiện tại xác nhận tại một block canonical; không có worker theo dõi reorg hoặc danh sách giao dịch thay thế. Có thể đối chiếu lại hash đã lưu. Đây là giới hạn MVP, không phải cam kết finality bổ sung của mạng.
 
@@ -64,9 +68,10 @@ Tất cả endpoint dưới `/api/campus`, trả `Cache-Control: no-store`. POST
 | `GET /reviews` | Chỉ ví nhà trường; danh sách hồ sơ |
 | `POST /reviews` | Chỉ nhà trường; `{wallet, kind: "STUDENT" | "SCHOLARSHIP", approve, reason}` |
 | `POST /payouts` | Chỉ nhà trường; `{wallet, kind: "WELCOME" | "SCHOLARSHIP"}`; trả lượt cũ nếu đã có |
-| `POST /payouts/:id/begin` | Chỉ đúng ví cấp; `{}`; mô phỏng và khóa một lần |
+| `POST /payouts/:id/begin` | Chỉ đúng ví cấp; `{}`; mô phỏng và khóa một lần; trả `{payout, attemptToken}` |
+| `POST /payouts/:id/release` | Chỉ đúng ví cấp; `{attemptToken, outcome: "REJECTED" | "NOT_SENT"}`; khôi phục cùng lượt chưa gửi, không mở lượt đã có hash |
 | `POST /payouts/:id/reconcile` | Chỉ nhà trường; `{txHash}`; đối chiếu giao dịch cũ |
 
 Lỗi có dạng `{error:{code}}`, gồm 401 chưa đăng nhập, 403 sai quyền/điều kiện, 409 trùng danh tính hoặc lượt cấp đã khóa, 429 rate limit và 503 cấu hình/RPC chưa sẵn sàng. Không có endpoint mint CAMPUS hoặc giữ private key nhà trường.
 
-`backend/test/campus.test.ts` kiểm tra chữ ký/nonce/replay/logout, quyền HTTP/Origin, danh tính duy nhất, xét học bổng riêng, mô phỏng trước khóa, lưu hash khi RPC lỗi, và từ chối receipt sai. `frontend/test/campus.test.ts` kiểm tra preview giao dịch, challenge lỗi và logout 204. Các test dùng ví ngẫu nhiên, SQLite trong bộ nhớ và RPC fixture; không phải bằng chứng giao dịch L1 thật.
+`backend/test/campus.test.ts` kiểm tra chữ ký/nonce/replay/logout, quyền HTTP/Origin, danh tính duy nhất, xét học bổng riêng, mô phỏng trước khóa, lưu hash khi RPC lỗi, từ chối receipt sai và recovery theo ví/attempt. `frontend/test/campus.test.ts` kiểm tra preview, challenge lỗi, logout 204, provider 4001, retry sau hủy, lỗi chưa rõ giữ khóa và retry phản hồi release bị mất. Các test dùng ví ngẫu nhiên, SQLite trong bộ nhớ và RPC fixture; không phải bằng chứng giao dịch L1 thật.
