@@ -61,3 +61,4 @@ export type {
 } from "./library.ts";
 
 export type { CanteenDish, CanteenItem, CanteenOrder } from './canteen.ts';
+export * from "./campus.ts";

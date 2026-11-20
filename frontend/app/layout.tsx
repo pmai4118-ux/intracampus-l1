@@ -4,6 +4,7 @@ import AppNav from "./components/AppNav";
 import Icon from "./components/Icon";
 import "./styles.css";
 import "./campus.css";
+import "./onboarding.css";
 
 export const metadata: Metadata = {
   title: "IntraCampus L1",

@@ -295,6 +295,14 @@ export class LibraryRepository {
     return { wallet: String(row.wallet), role: String(row.role) as "STUDENT" | "LIBRARIAN", enabled: Number(row.enabled) === 1 };
   }
 
+  /** Campus approval is checked by the caller; never re-enables a disabled account. */
+  enrollVerifiedStudent(wallet: string): void {
+    const normalized = canonicalWallet(wallet);
+    this.db.prepare("INSERT OR IGNORE INTO accounts(wallet,role,enabled,created_at) VALUES (?,'STUDENT',1,?)").run(normalized, Math.floor(Date.now() / 1000));
+    const account = this.accountForWallet(normalized);
+    if (!account?.enabled || account.role !== "STUDENT") throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
+  }
+
   createDepositRequest(input: { requestId: string; wallet: string; bookId: string; idempotencyKey: string; createdAt: number;
     chainTime: number; holdAfterSeconds: number }): LibraryRequestRecord {
     const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");

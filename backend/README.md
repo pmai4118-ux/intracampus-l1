@@ -28,6 +28,7 @@ flowchart LR
 | `src/modules/invoices/` | Tạo hóa đơn và chữ ký QR ở POS. Đọc receipt và kiểm tra event để cập nhật cùng vòng đời hóa đơn. Indexer và WebSocket cho biên lai thuộc phần mở rộng. | `B01`, `B02`, `B04`, `X03` |
 | `scripts/` | Chứa lệnh seed cho ví, thẻ và học bổng demo. | `B03`, `B05` |
 | `src/modules/grants/` | Đọc dữ liệu học bổng cho demo. | `B05` |
+| `src/modules/campus/` | Đăng nhập ví, hồ sơ sinh viên, xét học bổng và đối chiếu khoản cấp do ví nhà trường ký. | Phạm vi bổ sung theo yêu cầu người dùng, chưa gắn mã sprint |
 | `src/modules/copilot/` | Tra cứu số dư và chi tiêu từ dữ liệu đã xác minh. Xem trước giao dịch thuộc phần mở rộng. | `B06`, `X02` |
 
 B05 cung cấp `GET /api/grants/:beneficiary[?txHash=...]` và CLI `pnpm --filter @intracampus/backend seed:grants` (mặc định dry-run). [Giao kèo U05 và runbook B05](../docs/b05-grants.md) mô tả chuỗi wei, receipt đã xác minh, seed chống cấp trùng, journal bền vững và bước người giữ issuer thực hiện.

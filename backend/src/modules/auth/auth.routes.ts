@@ -63,7 +63,7 @@ function isPayloadTooLarge(error: unknown): boolean {
   return !!error && typeof error === "object" && "type" in error && error.type === "entity.too.large";
 }
 
-export function createAuthRouter(service?: AuthService, config?: LibraryAuthConfig) {
+export function createAuthRouter(service?: AuthService, config?: LibraryAuthConfig, prefix = "/api/auth") {
   const router = Router();
   const ready = (_req: Request, res: Response, next: (error?: unknown) => void) => {
     res.set("Cache-Control", "no-store");
@@ -82,7 +82,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
   };
   const json = express.json({ limit: LIBRARY_REQUEST_BODY_LIMIT_BYTES });
 
-  router.post("/api/auth/challenge", ready, sameOrigin, json, (req, res) => {
+  router.post(`${prefix}/challenge`, ready, sameOrigin, json, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     if (!req.is("application/json") || !exactBody(req.body, ["wallet"])) return sendFailure(res, "VALIDATION_ERROR", 400, false);
     try {
@@ -95,7 +95,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
     }
   });
 
-  router.post("/api/auth/verify", ready, sameOrigin, json, (req, res) => {
+  router.post(`${prefix}/verify`, ready, sameOrigin, json, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     if (!req.is("application/json") || !exactBody(req.body, ["challengeId", "signature"])) return sendFailure(res, "VALIDATION_ERROR", 400, false);
     try {
@@ -109,7 +109,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
     }
   });
 
-  router.get("/api/auth/session", ready, (req, res) => {
+  router.get(`${prefix}/session`, ready, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     try {
       const session = service.session(readSessionCookie(req, config.cookieName));
@@ -121,7 +121,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
     }
   });
 
-  router.post("/api/auth/logout", ready, sameOrigin, (req, res) => {
+  router.post(`${prefix}/logout`, ready, sameOrigin, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     const token = readSessionCookie(req, config.cookieName);
     try {
@@ -139,7 +139,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
   });
 
   const parserErrors: ErrorRequestHandler = (error, req, res, next) => {
-    if (!req.path.startsWith("/api/auth/")) return next(error);
+    if (!req.path.startsWith(`${prefix}/`)) return next(error);
     if (isPayloadTooLarge(error)) sendFailure(res, "PAYLOAD_TOO_LARGE", 413, false);
     else sendFailure(res, "VALIDATION_ERROR", 400, false);
   };
