@@ -106,7 +106,7 @@ function LibraryWallet() {
           <button type="button" className="secondary-btn" aria-pressed={mode === 'demo'} onClick={() => setMode('demo')}>Xem bản minh họa</button>
         </div>
       </div>
-      <Link href="/student" className="secondary-btn">Về ví sinh viên</Link>
+      <Link href="/student" className="secondary-btn heading-mobile-hide">Về ví sinh viên</Link>
     </PageHeading>
     {mode === 'live' ? <>
       <LibraryWalletSummary />

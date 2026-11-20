@@ -85,6 +85,8 @@ function expiryLabel(value: bigint | null) {
 export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) {
   const { state, controller } = useCampusWallet();
   const [addressCopied, setAddressCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "qr" | "food" | "parking">("all");
+  const [parkingTicketCount, setParkingTicketCount] = useState(0);
   const connected = state.address !== null;
   const busy = state.status === "connecting" || state.status === "loading";
   const correctChain = state.chainId === BigInt(campusNetwork.chainId);
@@ -94,6 +96,32 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
     const timer = window.setTimeout(() => setAddressCopied(false), 1500);
     return () => window.clearTimeout(timer);
   }, [addressCopied]);
+  useEffect(() => {
+    if (!state.address) setParkingTicketCount(0);
+  }, [state.address]);
+  useEffect(() => {
+    const syncHash = () => {
+      const hash = window.location.hash;
+      if (hash === "#payment-gate-title") {
+        setActiveTab((prev) => (prev === "all" || prev === "qr" ? prev : "qr"));
+      } else if (hash === "#grant-title") {
+        setActiveTab((prev) => (prev === "all" || prev === "food" ? prev : "food"));
+      } else if (hash === "#parking-tickets") {
+        setActiveTab((prev) => (prev === "all" || prev === "parking" ? prev : "parking"));
+      }
+      if (hash === "#payment-gate-title" || hash === "#grant-title" || hash === "#parking-tickets") {
+        window.requestAnimationFrame(() => {
+          document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+    };
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+  const showQr = activeTab === "all" || activeTab === "qr";
+  const showFood = activeTab === "all" || activeTab === "food";
+  const showParking = activeTab === "all" || activeTab === "parking";
   return <div className="student-shell live-wallet-view">
     <div className="student-identity-column"><section className="surface-panel student-identity-panel" aria-labelledby="wallet-title" aria-busy={busy}>
       <div className="panel-top-row">
@@ -120,12 +148,31 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
           <span>{state.card.expiresAt !== null && state.card.expiresAt > BigInt(0) ? `HẠN ${expiryLabel(state.card.expiresAt)}` : "INTRACAMPUS L1"}</span>
         </div>
       </div>
-      <p className="wallet-status" role="status">{statusLabels[state.status]}</p>
+      <div className="wallet-balance-hero">
+        <div className="wallet-balance-hero-head">
+          <span className="metric-label">Số dư CAMPUS</span>
+          <span className="wallet-status wallet-status-pill" role="status">{statusLabels[state.status]}</span>
+        </div>
+        <strong
+          className="tabular-value wallet-balance wallet-balance-hero-amount"
+          title={compactBalance ? `Số dư chính xác: ${compactBalance.exact}` : undefined}
+        >
+          {compactBalance === null ? "Chưa đọc được" : compactBalance.display}
+        </strong>
+        {compactBalance?.rounded ? (
+          <details className="exact-balance-disclosure">
+            <summary>Xem số chính xác</summary>
+            <code className="mono-value" translate="no">{compactBalance.exact}</code>
+          </details>
+        ) : (
+          <span className="metric-note">{compactBalance === null ? "Chưa có số dư đã xác minh" : "Số dư đọc từ RPC · chưa trừ gas"}</span>
+        )}
+      </div>
       {state.status === "no-wallet" ? <p>Mở trang trong trình duyệt của ví Core hoặc MetaMask, hoặc cài tiện ích ví trên máy tính, rồi tải lại trang.</p> : null}
       {state.status === "rejected" ? <p>Bạn đã từ chối kết nối. Bấm kết nối khi sẵn sàng.</p> : null}
       {state.status === "wrong-chain" ? <p className="wallet-warning">Ví đang ở sai mạng. Hãy chuyển sang IntraCampus L1 · Chain 20261 trước khi tiếp tục.</p> : null}
       {state.message ? <p className="wallet-warning">{state.message}</p> : null}
-      <div className="wallet-summary-grid">
+      <div className="wallet-summary-grid wallet-summary-compact">
         <div className="metric-block metric-block-wide">
           <span className="metric-label">Tài khoản ví</span>
           {connected && state.address ? (
@@ -151,24 +198,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
             </select></label> : null}
           <span className="metric-note">Đổi tài khoản trong ví để dùng ví demo khác.</span>
         </div>
-        <div className="metric-block">
-          <span className="metric-label">Số dư CAMPUS</span>
-          <strong
-            className="tabular-value wallet-balance"
-            title={compactBalance ? `Số dư chính xác: ${compactBalance.exact}` : undefined}
-          >
-            {compactBalance === null ? "Chưa đọc được" : compactBalance.display}
-          </strong>
-          {compactBalance?.rounded ? (
-            <details className="exact-balance-disclosure">
-              <summary>Xem số chính xác</summary>
-              <code className="mono-value" translate="no">{compactBalance.exact}</code>
-            </details>
-          ) : (
-            <span className="metric-note">{compactBalance === null ? "Chưa có số dư đã xác minh" : "Số dư đọc từ RPC · chưa trừ gas"}</span>
-          )}
-        </div>
-        <div className="metric-block">
+        <div className="metric-block metric-block-wide">
           <span className="metric-label">Mức ưu đãi hiện tại</span>
           <strong>{state.card.tier === 1 ? "Giảm 10% tự động" : state.card.tier === 0 ? "Giá niêm yết (0%)" : "Chưa xác định"}</strong>
           <span className="metric-note">{state.card.tier === 1 ? "Áp dụng cho bãi xe & nhà ăn" : state.card.tier === 0 ? "Cần thẻ SBT còn hạn để giảm 10%" : "Kết nối mạng 20261 để tra cứu"}</span>
@@ -203,13 +233,35 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
         {state.status === "no-wallet" ? <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>Kiểm tra lại ví</button> : null}
       </div>
     </section></div>
-    <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title">
-      <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name="qr" /></span><div><span className="panel-eyebrow">QUÉT & THANH TOÁN</span><h2 id="payment-gate-title">Thanh toán bằng QR</h2></div><span className="step-label">01 / 02</span></div>
-      <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
-      <InvoicePreview wallet={state} />
-    </section>
-    <GrantPanel />
-    <StudentParkingTickets />
+    <div className="student-services-column">
+      <div className="student-tab-bar" role="group" aria-label="Lọc tiện ích sinh viên">
+        {([
+          ["all", "Tất cả"],
+          ["qr", "Quét QR"],
+          ["food", "Học bổng FOOD"],
+          ["parking", parkingTicketCount > 0 ? `Vé gửi xe (${parkingTicketCount})` : "Vé gửi xe"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={`seg-btn ${activeTab === key ? "active" : ""}`}
+            aria-pressed={activeTab === key}
+            onClick={() => setActiveTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title" hidden={!showQr}>
+        <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name="qr" /></span><div><span className="panel-eyebrow">QUÉT & THANH TOÁN</span><h2 id="payment-gate-title">Thanh toán bằng QR</h2></div><span className="step-label">01 / 03</span></div>
+        <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
+        <InvoicePreview wallet={state} />
+      </section>
+      <div className="student-panel-slot" hidden={!showFood}>
+        <GrantPanel />
+      </div>
+      <StudentParkingTickets hidden={!showParking} onCountChange={setParkingTicketCount} />
+    </div>
     <p className="wallet-live-note">Dữ liệu được đọc từ mạng đã cấu hình. Bạn chỉ yêu cầu giao dịch khi bấm thanh toán hoặc chi FOOD và xác nhận trong Core.</p>
   </div>;
 }

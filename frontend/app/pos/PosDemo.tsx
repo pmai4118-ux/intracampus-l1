@@ -508,7 +508,7 @@ export default function PosDemo({
             ) : null}
 
             {uiState === "loading" ? (
-              <div aria-live="polite" aria-busy="true">
+              <div className="invoice-form-loading" aria-live="polite" aria-busy="true">
                 <div className="status-banner banner-loading">
                   <span className="spinner" aria-hidden="true" />
                   <div>
@@ -763,14 +763,41 @@ export default function PosDemo({
           ) : null}
 
           {uiState === "receipt" ? (
-            <div className="invoice-verified-preview">
-              <span className="verified-badge">
-                BIÊN NHẬN MẪU · CHƯA XÁC MINH ON-CHAIN
-              </span>
+            <div className="invoice-verified-preview receipt-ticket">
+              <div className="receipt-hero">
+                <div className="receipt-hero-top">
+                  <span className="receipt-hero-icon" aria-hidden="true">
+                    <Icon name="check" />
+                  </span>
+                  <span className="verified-badge">
+                    BIÊN NHẬN MẪU · CHƯA XÁC MINH ON-CHAIN
+                  </span>
+                </div>
+                <span className="receipt-hero-label">Số tiền đã thanh toán (mẫu)</span>
+                <strong className="receipt-hero-amount tabular-nums">
+                  {formatCampusWei(activePaidWei)}
+                </strong>
+                {BigInt(activeDiscountWei) > BigInt(0) ? (
+                  <div className="receipt-hero-savings tabular-nums">
+                    <s className="receipt-original-strike">
+                      {formatCampusWei(activeEntry.amountWei)}
+                    </s>
+                    <span className="receipt-savings-pill">
+                      Tiết kiệm {formatCampusWei(activeDiscountWei)}
+                      {activeTier === 1 ? " (-10% SBT)" : ""}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="receipt-tear-line" aria-hidden="true" />
+
               <dl className="price-breakdown tabular-nums">
-                <div className="price-row">
+                <div className="price-row invoice-code-row">
                   <dt>Mã hóa đơn</dt>
-                  <dd>{activeEntry.invoiceCode}</dd>
+                  <dd>
+                    <code className="mono-badge invoice-code-badge">{activeEntry.invoiceCode}</code>
+                  </dd>
                 </div>
                 <div className="price-row">
                   <dt>Giá gốc</dt>
@@ -794,28 +821,33 @@ export default function PosDemo({
                   <dt>Gas (riêng)</dt>
                   <dd>{formatCampusWei(baseReceipt.gasFeeWei)}</dd>
                 </div>
-                <div className="price-row">
-                  <dt>Block / log</dt>
-                  <dd>#{baseReceipt.blockNumber} / 0 (Mẫu)</dd>
-                </div>
               </dl>
-              <details>
-                <summary>Chi tiết giao dịch mẫu</summary>
-                <p>Người trả</p>
-                <code className="tx-hash-code">{activePayer}</code>
-                <p>Người nhận</p>
-                <code className="tx-hash-code">{invoice.invoice.merchant}</code>
-                <p>Hợp đồng · chain {campusNetwork.chainId}</p>
-                <code className="tx-hash-code">
-                  {invoice.domain.verifyingContract}
-                </code>
-                <p>Tx hash mẫu</p>
-                <code className="tx-hash-code">{activeTxHash}</code>
-                <CopyButton
-                  key={activeTxHash}
-                  label="Sao chép tx hash mẫu"
-                  value={activeTxHash}
-                />
+
+              <details className="receipt-proof-details">
+                <summary>
+                  Xem bằng chứng mẫu (Block #{baseReceipt.blockNumber})
+                </summary>
+                <div className="receipt-proof-body">
+                  <p>Block / log</p>
+                  <code className="tx-hash-code">
+                    #{baseReceipt.blockNumber} / 0 (Mẫu)
+                  </code>
+                  <p>Người trả</p>
+                  <code className="tx-hash-code">{activePayer}</code>
+                  <p>Người nhận</p>
+                  <code className="tx-hash-code">{invoice.invoice.merchant}</code>
+                  <p>Hợp đồng · chain {campusNetwork.chainId}</p>
+                  <code className="tx-hash-code">
+                    {invoice.domain.verifyingContract}
+                  </code>
+                  <p>Tx hash mẫu</p>
+                  <code className="tx-hash-code">{activeTxHash}</code>
+                  <CopyButton
+                    key={activeTxHash}
+                    label="Sao chép tx hash mẫu"
+                    value={activeTxHash}
+                  />
+                </div>
               </details>
             </div>
           ) : null}
