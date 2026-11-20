@@ -97,6 +97,44 @@ test("20 CAMPUS is reserved once, simulation precedes durable broadcast lock, pe
     assert.equal((await s.prepare(school.address, student.address, "WELCOME")).id, p.id);
   } finally { r.close(); }
 });
+for (const status of ["CONFIRMED", "FAILED"] as const) {
+  test(`retrying reconciliation keeps ${status} until chain evidence verifies a different outcome`, async () => {
+    const { repository, service, state, approve, proof } = setup();
+    try {
+      approve();
+      const payout = await service.prepare(school.address, student.address, "WELCOME");
+      await begin(service, payout.id);
+      proof(payout);
+      state.receipt.status = status === "CONFIRMED" ? "0x1" : "0x0";
+      const verified = await service.reconcile(payout.id, hash);
+      assert.equal(verified.status, status);
+
+      state.unavailable = true;
+      await assert.rejects(service.reconcile(payout.id, hash), /RPC_UNAVAILABLE/);
+      assert.deepEqual(repository.payout(payout.id), verified);
+
+      state.unavailable = false;
+      state.receipt = null;
+      assert.deepEqual(await service.reconcile(payout.id, hash), verified);
+
+      // A reorg can change the outcome if the transaction is included in a different block.
+      proof(payout);
+      state.receipt.status = status === "CONFIRMED" ? "0x0" : "0x1";
+      state.reorg = true;
+      await assert.rejects(service.reconcile(payout.id, hash), /RECEIPT_MISMATCH/);
+      assert.deepEqual(repository.payout(payout.id), verified);
+
+      const canonicalHash = `0x${"ef".repeat(32)}`;
+      state.receipt.blockHash = canonicalHash;
+      state.transaction.blockHash = canonicalHash;
+      const updated = await service.reconcile(payout.id, hash);
+      assert.equal(updated.status, status === "CONFIRMED" ? "FAILED" : "CONFIRMED");
+      assert.equal(updated.txHash, hash);
+      assert.deepEqual(repository.payout(payout.id), updated);
+    } finally { repository.close(); }
+  });
+}
+
 for (const kind of ["WELCOME", "SCHOLARSHIP"] as const) {
   test(`${kind}: definite non-send recovery is signer/attempt-bound and cannot release a newer or hashed attempt`, async () => {
     const { repository: r, service: s, approve, proof } = setup();

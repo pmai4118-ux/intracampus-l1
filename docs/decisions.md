@@ -228,4 +228,6 @@ PR #38 review P1: ví từ chối rõ ràng (`4001`) hoặc WalletController xá
 
 2026-11-21 — P1 mất phản hồi begin: token 256 bit chuyển sang client tạo và giữ trước HTTP; body begin bắt buộc `{attemptToken}`. Retry cùng token cho UNKNOWN chưa hash không tạo attempt mới. Client chưa gọi ví nếu begin không hoàn tất nên khôi phục cùng token; dấu hủy phía server chặn begin tới muộn kể cả release thắng race trước commit. Dấu hủy không bị xóa khi đổi attempt. API, shared type, client và test HTTP được cập nhật cùng nhau; không thay ABI. Capability chỉ giữ trong tab; mất tab/token sau khi đóng hoặc reload vẫn giữ khóa theo chính sách recovery hiện có.
 
+PR #38 review P2: lượt cấp chỉ chuyển sang PENDING khi gắn hash lần đầu. Đối soát lại cùng hash giữ kết quả đã lưu nếu RPC lỗi, biên nhận chưa có hoặc dữ liệu không khớp. Kết quả chỉ thay đổi sau khi backend xác minh biên nhận và block chính tắc.
+
 Trạng thái hồ sơ là phê duyệt trong ứng dụng, không mint SBT và không thay đổi ưu đãi on-chain. Chủ ví đã duyệt có thể chủ động kích hoạt tài khoản STUDENT của dịch vụ hiện có, sau đó ký phiên dịch vụ; không bật lại tài khoản bị vô hiệu hóa hoặc đổi role có sẵn. Giữ DB campus trên volume bền vững để bảo toàn khóa danh tính/lượt cấp. Xem [runbook](student-onboarding.md) cho cấu hình và giới hạn khôi phục.

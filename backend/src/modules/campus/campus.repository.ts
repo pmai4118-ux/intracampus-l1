@@ -160,11 +160,18 @@ export class CampusRepository implements AuthStore {
   }
   private savePayout(p: CampusPayout) { this.db.prepare("UPDATE campus_payouts SET hash=?,data=? WHERE id=?").run(p.txHash, JSON.stringify(p), p.id); }
   attach(id: string, hash: string) {
-    return this.atomic(() => { const p = this.payout(id);
+    return this.atomic(() => {
+      const p = this.payout(id);
       if (p.status === "PREPARED") throw new CampusError("PAYOUT_NOT_STARTED");
-      if (p.txHash && p.txHash !== hash) throw new CampusError("HASH_ALREADY_ATTACHED");
-      const other = this.db.prepare("SELECT id FROM campus_payouts WHERE hash=? AND id<>?").get(hash, id); if (other) throw new CampusError("HASH_ALREADY_USED");
-      p.txHash = hash; p.status = "PENDING"; this.savePayout(p); return p; });
+      if (p.txHash === hash) return p;
+      if (p.txHash) throw new CampusError("HASH_ALREADY_ATTACHED");
+      const other = this.db.prepare("SELECT id FROM campus_payouts WHERE hash=? AND id<>?").get(hash, id);
+      if (other) throw new CampusError("HASH_ALREADY_USED");
+      p.txHash = hash;
+      p.status = "PENDING";
+      this.savePayout(p);
+      return p;
+    });
   }
   finish(id: string, hash: string, status: "CONFIRMED" | "FAILED") { return this.atomic(() => { const p = this.payout(id); if (p.txHash !== hash) throw new CampusError("HASH_MISMATCH"); p.status = status; this.savePayout(p); return p; }); }
 }
