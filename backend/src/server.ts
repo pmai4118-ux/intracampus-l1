@@ -19,16 +19,18 @@ import { readLibraryAuthConfig, type LibraryAuthConfig } from "./modules/auth/au
 import { readLibraryConfig } from "./modules/library/library.config.ts";
 import { LibraryService } from "./modules/library/library.service.ts";
 import { CAMPUS_CHAIN_ID, CLOUD_CAMPUS_CHAIN_ID, selectedDeploymentManifest as libraryManifest } from "@intracampus/network";
+import { CampusRepository } from "./modules/campus/campus.repository.ts";
+import { CampusService } from "./modules/campus/campus.service.ts";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
 
 if (CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID) {
-  const databasePaths = [process.env.INVOICES_DB_PATH, process.env.LIBRARY_DB_PATH, process.env.CANTEEN_DB_PATH]
+  const databasePaths = [process.env.INVOICES_DB_PATH, process.env.LIBRARY_DB_PATH, process.env.CANTEEN_DB_PATH, process.env.CAMPUS_DB_PATH]
     .map((value) => value?.trim() ?? "");
-  if (databasePaths.some((value) => !isAbsolute(value)) || new Set(databasePaths.map((value) => resolve(value))).size !== 3) {
-    throw new Error("Cloud demo requires three distinct absolute database paths");
+  if (databasePaths.some((value) => !isAbsolute(value)) || new Set(databasePaths.map((value) => resolve(value))).size !== 4) {
+    throw new Error("Cloud demo requires four distinct absolute database paths");
   }
 }
 
@@ -70,11 +72,16 @@ if (authService && isAddress(invoiceConfig.merchant)) {
 const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
 canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
+const campusRepository = new CampusRepository(process.env.CAMPUS_DB_PATH?.trim()
+  || fileURLToPath(new URL('../data/campus.sqlite', import.meta.url)));
+let campusService: CampusService | undefined;
+try { campusService = new CampusService(campusRepository, process.env); }
+catch { /* Campus endpoints fail closed until origin and authority configuration are valid. */ }
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService, canteenService, repository, parkingWallet).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService, repository, parkingWallet, campusService, libraryRepository).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => server.close(() => { canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
+  process.once(signal, () => server.close(() => { campusRepository.close(); canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
 }

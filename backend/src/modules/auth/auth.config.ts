@@ -3,6 +3,7 @@ import { parseIpAddressList } from "./client-address.ts";
 
 export type AuthRateLimitConfig = { maxRequests: number; windowSeconds: number };
 export type LibraryAuthConfig = {
+  statement?: string;
   origin: string;
   domain: string;
   chainId: CampusChainId;

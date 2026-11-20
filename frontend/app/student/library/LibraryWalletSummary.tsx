@@ -12,7 +12,7 @@ export default function LibraryWalletSummary() {
   return <section className="surface-panel library-wallet" aria-label="Ví và mạng">
     <div className="library-wallet-summary">
       <div className="library-wallet-account"><span className="library-meta-label">Tài khoản đang dùng</span>
-        <strong className="library-account-value" translate="no">{state.address ? `${state.address.slice(0, 6)}…${state.address.slice(-4)}` : 'Chưa kết nối'}</strong>
+        <strong className={state.address ? 'library-account-value' : 'library-account-empty'} translate={state.address ? 'no' : undefined}>{state.address ? `${state.address.slice(0, 6)}…${state.address.slice(-4)}` : 'Chưa kết nối'}</strong>
         <span className={correctChain ? 'library-network' : 'library-network library-network-warning'}>
           {correctChain ? `IntraCampus L1 · ${CAMPUS_CHAIN_ID}` : state.chainId === null ? 'Chưa xác minh mạng' : `Sai mạng · cần IntraCampus ${CAMPUS_CHAIN_ID}`}
         </span>

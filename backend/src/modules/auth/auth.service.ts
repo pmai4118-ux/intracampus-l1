@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { getAddress, verifyMessage } from "ethers";
 import { maxAuthUnixSeconds, type LibraryAuthConfig } from "./auth.config.ts";
 import { AuthRepository } from "./auth.repository.ts";
+export type AuthStore = Pick<AuthRepository, "isAllowlisted" | "createChallenge" | "getChallenge" | "consumeChallengeAndCreateSession" | "consumeRateLimit" | "session" | "revokeSession">;
 
 export type AuthFailureCode = "VALIDATION_ERROR" | "UNAUTHENTICATED" | "RATE_LIMITED" | "CONFIGURATION_ERROR" | "DATABASE_BUSY" | "INTERNAL_ERROR";
 
@@ -70,18 +71,18 @@ export function buildLibraryChallengeMessage(input: {
 }): string {
   if (!/^[A-Za-z0-9]{8,}$/.test(input.nonce) || input.expiresAt <= input.createdAt) throw new AuthError("INTERNAL_ERROR");
   return `${input.config.domain} wants you to sign in with your Ethereum account:\n${input.wallet}\n\n`
-    + "Sign in to IntraCampus Library.\n\n"
+    + `${input.config.statement ?? "Sign in to IntraCampus Library."}\n\n`
     + `URI: ${input.config.origin}\nVersion: 1\nChain ID: ${input.config.chainId}\nNonce: ${input.nonce}\n`
     + `Issued At: ${iso(input.createdAt)}\nExpiration Time: ${iso(input.expiresAt)}`;
 }
 
 export class AuthService {
-  private readonly repository: AuthRepository;
+  private readonly repository: AuthStore;
   private readonly config: LibraryAuthConfig;
   private readonly now: () => number;
 
   constructor(
-    repository: AuthRepository,
+    repository: AuthStore,
     config: LibraryAuthConfig,
     now: () => number = () => Math.floor(Date.now() / 1000),
   ) {

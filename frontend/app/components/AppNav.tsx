@@ -11,10 +11,12 @@ type NavLink = { href: string; label: string; icon: IconName };
 const studentLinks: NavLink[] = [
   { href: "/", label: "Tổng quan", icon: "grid" },
   { href: "/student", label: "Sinh viên", icon: "wallet" },
+  { href: "/student/verification", label: "Xác minh", icon: "graduation" },
   { href: "/student/canteen", label: "Nhà ăn", icon: "utensils" },
   { href: "/student/library", label: "Thư viện", icon: "book" },
 ];
 const providerLinks: NavLink[] = [
+  { href: "/staff/students", label: "Nhà trường", icon: "graduation" },
   { href: "/pos", label: "Điểm thu", icon: "store" },
   { href: "/staff/parking", label: "Cổng ra", icon: "qr" },
   { href: "/staff/canteen", label: "Quầy bếp", icon: "bowl" },
@@ -64,6 +66,7 @@ export default function AppNav() {
         <span>IntraCampus<span className="brand-l1">L1</span></span>
       </Link>
       <span className="app-tagline">{provider ? "Không gian cung cấp dịch vụ" : "Không gian sinh viên"}</span>
+      <Link className="campus-auth-link" href="/login">Đăng nhập</Link>
       <span className="environment-badge"><span />UniHack 2026 · Demo</span>
     </div>
     <nav className="app-nav" aria-label="Điều hướng chính">
