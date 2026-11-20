@@ -5,6 +5,7 @@ import { LibrarySessionError, readLibraryStudentAccess, signInLibraryStudent, ty
 import { WalletController, selectInjectedWallet, type WalletSnapshot } from "../../lib/wallet";
 import { InvoicePreview } from "./InvoicePreview";
 import GrantPanel from "./GrantPanel";
+import StudentParkingTickets from "./StudentParkingTickets";
 import Icon from "../components/Icon";
 
 const WalletContext = createContext<{
@@ -94,7 +95,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
     return () => window.clearTimeout(timer);
   }, [addressCopied]);
   return <div className="student-shell live-wallet-view">
-    <section className="surface-panel student-identity-panel" aria-labelledby="wallet-title" aria-busy={busy}>
+    <div className="student-identity-column"><section className="surface-panel student-identity-panel" aria-labelledby="wallet-title" aria-busy={busy}>
       <div className="panel-top-row">
         <div><span className="panel-eyebrow">CAMPUS WALLET</span><h2 id="wallet-title" className="screen-title">Ví sinh viên</h2><p className="screen-subtitle">Số dư và quyền ưu đãi của bạn</p></div>
         <span className={`network-pill ${state.status === "wrong-chain" ? "pill-danger" : correctChain ? "pill-ok" : ""}`}>
@@ -201,13 +202,14 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
           <button type="button" className="secondary-btn" onClick={() => controller.disconnect()}>Ngắt kết nối</button></> : null}
         {state.status === "no-wallet" ? <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>Kiểm tra lại ví</button> : null}
       </div>
-    </section>
+    </section></div>
     <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title">
       <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name="qr" /></span><div><span className="panel-eyebrow">QUÉT & THANH TOÁN</span><h2 id="payment-gate-title">Thanh toán bằng QR</h2></div><span className="step-label">01 / 02</span></div>
       <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
       <InvoicePreview wallet={state} />
     </section>
     <GrantPanel />
+    <StudentParkingTickets />
     <p className="wallet-live-note">Dữ liệu được đọc từ mạng đã cấu hình. Bạn chỉ yêu cầu giao dịch khi bấm thanh toán hoặc chi FOOD và xác nhận trong Core.</p>
   </div>;
 }

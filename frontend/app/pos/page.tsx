@@ -14,7 +14,7 @@ export default function PointOfSalePage() {
       <PageHeading
         eyebrow="KHÔNG GIAN ĐIỂM THU"
         title="Mỗi lượt thu, thật rõ ràng."
-        description="Tạo hóa đơn QR và theo dõi biên lai trong cùng một không gian."
+        description="Tạo QR vào bãi xe, theo dõi thanh toán và xác nhận lượt ra."
         icon="store"
       >
         <span className="page-context-tag">
@@ -23,6 +23,9 @@ export default function PointOfSalePage() {
         </span>
         <Link className="secondary-btn" href="/staff/canteen">
           Quầy bếp nhà ăn →
+        </Link>
+        <Link className="secondary-btn" href="/staff/parking">
+          Mở cổng ra →
         </Link>
       </PageHeading>
       <div className="workspace-toolbar">

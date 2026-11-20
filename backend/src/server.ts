@@ -51,7 +51,7 @@ const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.tri
 canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService, canteenService).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService, repository).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 

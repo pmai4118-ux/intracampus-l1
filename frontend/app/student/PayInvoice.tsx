@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { requireDeployment } from "@intracampus/network";
+import { isParkingInvoice, requireDeployment } from "@intracampus/network";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { librarySessionMessage, LibrarySessionError, requireLibraryStudentNotHeld } from "../../lib/library-session";
@@ -73,10 +73,12 @@ export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPai
 
   const quote = payment?.preview.quote ?? preview.quote;
   const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261) || access?.status !== "ready";
+  const parking = isParkingInvoice(preview.envelope);
   if (payment?.status === "paid" && payment.receipt) return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`}>
     <TransactionStepper state="done" />
     <h4 id={`${id}-title`}>Thanh toán đã xác minh</h4>
-    <p role="status">Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác.</p>
+    <p role="status">{parking ? "Đã check-in bãi xe. Khi ra, mở vé trong ví để bảo vệ quét QR." : "Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác."}</p>
+    {parking ? <a className="secondary-btn" href="#parking-tickets">Xem QR vé gửi xe</a> : null}
     <Receipt receipt={payment.receipt} />
   </section>;
   return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>

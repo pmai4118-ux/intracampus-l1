@@ -14,6 +14,7 @@ export type {
 export type { DeployedManifest, PublicContract } from "./deployment.ts";
 
 export type { SignedInvoiceEnvelope, InvoiceTransaction, VerifiedInvoiceReceipt, InvoiceApiError, InvoiceLookupResponse } from "./invoices.ts";
+export { isParkingInvoice, type OpenParkingTicket, type ParkingCheckout } from "./invoices.ts";
 export { LIBRARY_REQUEST_BODY_LIMIT_BYTES } from "./library.ts";
 
 export type NetworkProbe = {

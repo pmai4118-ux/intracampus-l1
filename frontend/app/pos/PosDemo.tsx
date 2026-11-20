@@ -1,8 +1,8 @@
 "use client";
 
-import QRCode from "qrcode";
 import { campusNetwork } from "@intracampus/network";
 import { useEffect, useState, type FormEvent } from "react";
+import { renderInvoiceQr, type InvoiceQrImage } from "../../lib/invoice-qr";
 import HashChip from "../components/HashChip";
 import Icon from "../components/Icon";
 import { CopyButton, DemoControls } from "../demo-controls";
@@ -81,7 +81,7 @@ export default function PosDemo({
   const [demoLastPaid, setDemoLastPaid] = useState<LastPaidDemoSummary | null>(
     null,
   );
-  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  const [qrImage, setQrImage] = useState<InvoiceQrImage | null>(null);
   const [copiedPayload, setCopiedPayload] = useState(false);
   const [lookupId, setLookupId] = useState(
     sharedParkingInvoiceEnvelope.invoice.invoiceId,
@@ -158,13 +158,10 @@ export default function PosDemo({
 
   useEffect(() => {
     let active = true;
-    void QRCode.toDataURL(activeQrPayload, {
-      errorCorrectionLevel: "Q",
-      margin: 2,
-      width: 320,
-    })
-      .then((url) => {
-        if (active) setQrSrc(url);
+    setQrImage(null);
+    void renderInvoiceQr(activeQrPayload)
+      .then((image) => {
+        if (active) setQrImage(image);
       })
       .catch(() => {});
     return () => {
@@ -542,12 +539,13 @@ export default function PosDemo({
                     </span>
                   ) : null}
                   <div className="qr-image-wrap demo-qr-wrap">
-                    {qrSrc ? (
+                    {qrImage ? (
                       <img
-                        src={qrSrc}
+                        src={qrImage.src}
                         alt={`Mã QR mẫu cho hóa đơn ${activeEntry.invoiceCode}`}
-                        width={320}
-                        height={320}
+                        width={qrImage.displayWidth}
+                        height={qrImage.displayWidth}
+                        style={{ maxWidth: qrImage.displayWidth }}
                       />
                     ) : (
                       <div

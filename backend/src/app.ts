@@ -12,6 +12,8 @@ import type { AuthService } from "./modules/auth/auth.service.ts";
 import type { LibraryAuthConfig } from "./modules/auth/auth.config.ts";
 import { createLibraryRouter } from "./modules/library/library.routes.ts";
 import type { LibraryService } from "./modules/library/library.service.ts";
+import type { SqliteInvoiceRepository } from "./modules/invoices/invoices.repository.ts";
+import { createParkingRouter } from "./modules/parking/parking.routes.ts";
 
 export function createApp(
   rpcUrl?: string,
@@ -22,6 +24,7 @@ export function createApp(
   authConfig?: LibraryAuthConfig,
   libraryService?: LibraryService,
   canteenService?: CanteenService,
+  parkingRepository?: SqliteInvoiceRepository,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -32,6 +35,7 @@ export function createApp(
 
   app.use(createNetworkRouter(rpcUrl));
   app.use(createInvoicesRouter(receiptService, creationService));
+  app.use(createParkingRouter(parkingRepository, authService, authConfig));
   app.use(createGrantsRouter(grantsService, authService, authConfig, libraryService));
   app.use(createLibraryRouter(libraryService, authService, authConfig));
   app.use(createCanteenRouter(canteenService, authService, authConfig, libraryService));

@@ -1,4 +1,4 @@
-"""Check the shared navigation against a running IntraCampus UI."""
+"""Check student and provider navigation against a running IntraCampus UI."""
 import argparse
 import json
 from pathlib import Path
@@ -13,7 +13,8 @@ args = parser.parse_args()
 origin = args.origin.rstrip('/')
 args.output.mkdir(parents=True, exist_ok=False)
 widths = [320, 390, 576, 577, 600, 640, 692, 768, 832, 1280, 1440]
-routes = ['/', '/student', '/student/canteen', '/student/library', '/pos', '/staff/canteen', '/staff/library']
+routes = ['/', '/student', '/student/canteen', '/student/library', '/pos', '/staff/parking', '/staff/canteen', '/staff/library']
+student_routes, provider_routes = routes[:4], routes[4:]
 checks, failures, errors = [], [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(channel=args.channel, headless=True)
@@ -23,7 +24,8 @@ with sync_playwright() as p:
         for route in routes:
             page.goto(origin + route, wait_until='networkidle')
             nav = page.get_by_role('navigation', name='Điều hướng chính', exact=True)
-            expect(nav.get_by_role('link')).to_have_count(7)
+            portal_routes = student_routes if route in student_routes else provider_routes
+            expect(nav.get_by_role('link')).to_have_count(len(portal_routes))
             for width in widths:
                 page.set_viewport_size({'width': width, 'height': 844 if width < 800 else 900})
                 layout = nav.evaluate('''nav => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth,
@@ -38,6 +40,8 @@ with sync_playwright() as p:
                     issues.append('horizontal overflow')
                 if layout['active'] != [route]:
                     issues.append('active navigation mismatch')
+                if [link['href'] for link in layout['links']] != portal_routes:
+                    issues.append('links from a different portal')
                 for link in layout['links']:
                     if link['left'] < 0 or link['right'] > width + 1 or link['bottom'] <= link['top']:
                         issues.append('link outside viewport: ' + link['href'])
@@ -53,13 +57,27 @@ with sync_playwright() as p:
             page.set_viewport_size({'width': 640, 'height': 900})
             nav.get_by_role('link').first.focus()
             page.keyboard.press('Tab')
-            assert page.evaluate('document.activeElement.getAttribute("href")') == '/student'
+            assert page.evaluate('document.activeElement.getAttribute("href")') == portal_routes[1]
             assert page.evaluate('getComputedStyle(document.activeElement).outlineStyle') != 'none'
-            destination = '/' if route == '/student' else '/student'
+            destination = next(path for path in portal_routes if path != route)
             nav.locator(f'a[href="{destination}"]').click()
             page.wait_for_url(origin + destination)
             page.go_back(wait_until='networkidle')
             assert urlparse(page.url).path == route
+        page.goto(origin + '/')
+        page.set_viewport_size({'width': 390, 'height': 720})
+        header = page.locator('.app-header')
+        page.mouse.wheel(0, 540)
+        expect(header).to_have_attribute('data-scroll-hidden', '')
+        page.mouse.wheel(0, -24)
+        expect(header).not_to_have_attribute('data-scroll-hidden', '')
+        assert page.evaluate('window.scrollY') > 200
+        page.mouse.wheel(0, 100)
+        expect(header).to_have_attribute('data-scroll-hidden', '')
+        page.keyboard.press('Tab')
+        page.keyboard.press('Tab')
+        expect(header.get_by_role('link').first).to_be_focused()
+        assert header.evaluate('header => header.getBoundingClientRect().top >= 0')
     finally:
         browser.close()
         (args.output / 'report.json').write_text(json.dumps({'routes': routes, 'widths': widths, 'checks': checks,

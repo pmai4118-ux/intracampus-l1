@@ -43,7 +43,6 @@ export default async function Home() {
     { href: "/student", title: "Ví sinh viên", description: "Thanh toán QR, xem thẻ số và sử dụng voucher học bổng FOOD.", icon: "wallet", color: "green", label: "DÀNH CHO SINH VIÊN" },
     { href: "/student/canteen", title: "Nhà ăn campus", description: "Chọn món yêu thích, đặt bữa trưa và thanh toán bằng CAMPUS hoặc FOOD.", icon: "utensils", color: "peach", label: "NẠP NĂNG LƯỢNG" },
     { href: "/student/library", title: "Thư viện campus", description: "Tìm cuốn sách tiếp theo. Theo dõi lượt mượn và quản lý tiền cọc.", icon: "book", color: "gold", label: "HỌC TẬP MỖI NGÀY" },
-    { href: "/pos", title: "Điểm thu & dịch vụ", description: "Tạo hóa đơn, hiển thị mã QR và theo dõi biên lai thanh toán.", icon: "store", color: "blue", label: "DÀNH CHO ĐIỂM THU" },
   ];
   return <div className="home-page">
     <section className="home-hero" aria-labelledby="home-title">
@@ -66,7 +65,7 @@ export default async function Home() {
         <span className="visual-float float-book"><Icon name="book" /><span>Thêm một trang mới.</span></span>
       </div>
     </section>
-    <section className="home-services" aria-labelledby="services-title"><div className="section-heading"><div><p className="eyebrow">KHÔNG GIAN CỦA BẠN</p><h2 id="services-title">Hôm nay, bạn muốn làm gì?</h2></div><div className="home-staff-links"><Link href="/staff/canteen" className="section-caption section-staff-link">Quầy bếp nhà ăn (Cô căn-tin) <Icon name="arrow" /></Link><Link href="/staff/library" className="section-caption section-staff-link">Quản trị thư viện (Thủ thư) <Icon name="arrow" /></Link></div></div>
+    <section className="home-services" aria-labelledby="services-title"><div className="section-heading"><div><p className="eyebrow">KHÔNG GIAN CỦA BẠN</p><h2 id="services-title">Hôm nay, bạn muốn làm gì?</h2></div></div>
       <div className="service-cards">{services.map(service => <Link href={service.href} className={`service-card service-${service.color}`} key={service.href}>
         <div className="service-card-top"><span className="service-icon"><Icon name={service.icon} /></span><Icon className="service-arrow" name="arrow" /></div>
         <span className="service-kicker">{service.label}</span><h3>{service.title}</h3><p>{service.description}</p>

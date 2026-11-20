@@ -1,8 +1,9 @@
 "use client";
 
 import { campusNetwork } from "@intracampus/network";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ClipboardEvent, type FormEvent } from "react";
 import { parseGrantAmount } from "../../lib/grants";
+import { decodeQrImage, pastedQrImage } from "../../lib/qr-image";
 import HashChip from "../components/HashChip";
 import Icon from "../components/Icon";
 import TransactionStepper, { type StepState } from "../components/TransactionStepper";
@@ -64,6 +65,8 @@ export default function StudentDemo({
   const [walletKind, setWalletKind] = useState<DemoWalletKind>("sbt");
   const [errorKind, setErrorKind] = useState<DemoErrorKind>("expired");
   const [pastedQr, setPastedQr] = useState(sharedQrPayloadString);
+  const [readingQr, setReadingQr] = useState(false);
+  const [qrStatus, setQrStatus] = useState("");
   const [previewVerified, setPreviewVerified] = useState(true);
   const [addressCopied, setAddressCopied] = useState(false);
 
@@ -101,6 +104,28 @@ export default function StudentDemo({
     setPastedQr(sharedQrPayloadString);
     setPreviewVerified(true);
     setUiState("waiting");
+    setQrStatus("");
+  }
+
+  async function pasteQrImage(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const image = pastedQrImage(event.clipboardData);
+    if (!image) return;
+    event.preventDefault();
+    if (readingQr) return;
+    setReadingQr(true);
+    setQrStatus("Đang đọc mã QR…");
+    try {
+      const code = await decodeQrImage(image);
+      if (!code) { setQrStatus("Không tìm thấy mã QR trong ảnh. Hãy thử ảnh rõ hơn, có đủ bốn góc mã."); return; }
+      setPastedQr(code);
+      setPreviewVerified(matchesSharedDemoPayload(code));
+      setUiState("waiting");
+      setQrStatus("Đã đọc mã QR từ ảnh.");
+    } catch {
+      setQrStatus("Không đọc được ảnh QR. Hãy thử ảnh PNG hoặc JPEG.");
+    } finally {
+      setReadingQr(false);
+    }
   }
 
   function startGrantSpend(event: FormEvent) {
@@ -359,6 +384,7 @@ export default function StudentDemo({
                 <button
                   type="button"
                   className="text-action-btn pos-bridge-btn"
+                  disabled={readingQr}
                   onClick={resetPreview}
                 >
                   Dùng phiếu mẫu POS
@@ -367,10 +393,12 @@ export default function StudentDemo({
                   <button
                     type="button"
                     className="text-action-btn"
+                    disabled={readingQr}
                     onClick={() => {
                       setPastedQr("");
                       setPreviewVerified(false);
                       setUiState("waiting");
+                      setQrStatus("");
                     }}
                   >
                     Xóa
@@ -384,13 +412,18 @@ export default function StudentDemo({
               className="invoice-payload"
               rows={3}
               value={pastedQr}
-              placeholder="Dán nội dung phiếu mẫu từ trang Điểm thu (/pos) vào đây…"
-              aria-describedby="payload-feedback"
+              placeholder="Dán ảnh hoặc nội dung QR của phiếu mẫu POS…"
+              aria-describedby="demo-qr-help payload-feedback"
+              readOnly={readingQr}
+              onPaste={(event) => void pasteQrImage(event)}
               onChange={(e) => {
                 setPastedQr(e.target.value);
                 setPreviewVerified(matchesSharedDemoPayload(e.target.value));
+                setQrStatus("");
               }}
             />
+            <p id="demo-qr-help" className="metric-note">Bấm vào ô rồi dán ảnh QR của bản minh họa POS.</p>
+            <p className="metric-note" role="status" hidden={!qrStatus}>{qrStatus}</p>
             <p id="payload-feedback" className="metric-note" role="status">
               {payloadMatches
                 ? "Nội dung khớp phiếu mẫu dùng chung với POS. Chưa xác minh chữ ký thật."
@@ -401,6 +434,7 @@ export default function StudentDemo({
               <button
                 type="button"
                 className="secondary-btn"
+                disabled={readingQr}
                 onClick={resetPreview}
               >
                 Lấy lại phiếu mẫu
@@ -409,6 +443,7 @@ export default function StudentDemo({
                 type="button"
                 className="primary-cta-btn"
                 disabled={
+                  readingQr ||
                   !payloadMatches ||
                   uiState === "loading" ||
                   uiState === "awaiting-signature" ||

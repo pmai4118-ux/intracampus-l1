@@ -119,8 +119,74 @@ h3 {
 }
 
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: #fff;
   border-bottom: 1px solid var(--border-hairline);
+  transition: transform 180ms var(--ease-out);
+}
+
+.app-header[data-scroll-hidden]:not(:has(:focus-visible)) {
+  transform: translateY(-100%);
+}
+
+.app-header:has(:focus-visible) {
+  transition: none;
+}
+
+.parking-checkout-panel {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.parking-checkout-panel > div {
+  flex: 1 1 18rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.parking-checkout-panel img {
+  max-width: 100%;
+  height: auto;
+}
+
+#parking-tickets {
+  grid-column: 1 / -1;
+  scroll-margin-top: 9rem;
+}
+
+.parking-ticket-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.parking-ticket {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: .75rem;
+}
+
+.parking-ticket img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: .5rem 0;
+}
+
+.parking-gate-input {
+  display: grid;
+  gap: .75rem;
 }
 
 .app-topbar {
@@ -655,7 +721,7 @@ h3 {
 
 .service-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -1107,9 +1173,19 @@ h3 {
   align-items: start;
 }
 
-.live-wallet-view>.student-identity-panel {
+.live-wallet-view>.student-identity-panel,
+.live-wallet-view>.student-identity-column {
   grid-column: 1;
   grid-row: 1 / span 2;
+}
+
+.student-identity-column {
+  align-self: stretch;
+  min-width: 0;
+}
+
+.live-wallet-view>.student-identity-panel,
+.student-identity-column>.student-identity-panel {
   position: sticky;
   top: 1.25rem;
 }
@@ -2325,21 +2401,6 @@ h3 {
 }
 
 @media (min-width: 52.0625rem) {
-  .app-nav>a[href="/pos"] {
-    margin-left: .2rem;
-    padding-left: 1.2rem;
-  }
-
-  .app-nav>a[href="/pos"]::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: .85rem;
-    bottom: .85rem;
-    width: 1px;
-    background: var(--border-hairline);
-  }
-
   .student-shell:not(.live-wallet-view) {
     padding-bottom: 2rem;
   }
@@ -2478,11 +2539,13 @@ h3 {
     max-width: 36rem;
   }
 
-  .live-wallet-view>.student-identity-panel {
+  .live-wallet-view>.student-identity-panel,
+  .student-identity-column>.student-identity-panel {
     position: static;
   }
 
-  .live-wallet-view>section {
+  .live-wallet-view>section,
+  .live-wallet-view>.student-identity-column {
     width: 100%;
   }
 

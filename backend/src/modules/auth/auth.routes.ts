@@ -39,7 +39,7 @@ function exactBody(value: unknown, keys: readonly string[]): value is Record<str
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
-function cookieValue(req: Request, name: string): string | undefined {
+export function readSessionCookie(req: Request, name: string): string | undefined {
   const header = req.headers.cookie;
   if (!header) return undefined;
   const matches = header.split(";").map((part) => part.trim()).filter((part) => part.startsWith(`${name}=`));
@@ -112,7 +112,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
   router.get("/api/auth/session", ready, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
     try {
-      const session = service.session(cookieValue(req, config.cookieName));
+      const session = service.session(readSessionCookie(req, config.cookieName));
       if (!session) return sendFailure(res, "UNAUTHENTICATED", 401, false);
       res.json(session);
     } catch (error) {
@@ -123,7 +123,7 @@ export function createAuthRouter(service?: AuthService, config?: LibraryAuthConf
 
   router.post("/api/auth/logout", ready, sameOrigin, (req, res) => {
     if (!service || !config) return sendFailure(res, "CONFIGURATION_ERROR", 503, false);
-    const token = cookieValue(req, config.cookieName);
+    const token = readSessionCookie(req, config.cookieName);
     try {
       if (!service.session(token)) {
         clearSessionCookie(res, config);

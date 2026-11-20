@@ -13,7 +13,7 @@ export default function StudentPage() {
       <Link className="button-quiet" href="/student/library"><Icon name="book" />Ghé thư viện<Icon name="arrow" /></Link>
     </PageHeading>
     <div className="workspace-toolbar">
-      <nav className="student-service-nav" aria-label="Chọn dịch vụ sinh viên"><a href="#payment-gate-title"><Icon name="qr" />Thanh toán QR</a><a href="#grant-title"><Icon name="sparkle" />Học bổng FOOD</a><Link href="/student/canteen"><Icon name="utensils" />Nhà ăn · đặt món</Link></nav>
+      <nav className="student-service-nav" aria-label="Chọn dịch vụ sinh viên"><a href="#payment-gate-title"><Icon name="qr" />Thanh toán QR</a>{mode === "live" ? <a href="#parking-tickets"><Icon name="store" />Vé gửi xe</a> : null}<a href="#grant-title"><Icon name="sparkle" />Học bổng FOOD</a><Link href="/student/canteen"><Icon name="utensils" />Nhà ăn · đặt món</Link></nav>
       <div className="mode-switch-wrapper">
         <span className="mode-switch-kicker">
           <span className={`mode-status-dot ${mode === "live" ? "dot-live" : "dot-demo"}`} aria-hidden="true" />

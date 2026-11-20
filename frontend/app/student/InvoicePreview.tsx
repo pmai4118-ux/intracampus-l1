@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
+import { useRouter } from "next/navigation";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { POS_ACTIVE_PAYLOAD_KEY } from "../../lib/invoice-status";
+import { scannedParkingCheckoutPath } from "../../lib/parking";
+import { decodeQrImage, pastedQrImage, readQrClipboard } from "../../lib/qr-image";
 import { createWalletRpc, type WalletSnapshot } from "../../lib/wallet";
 import HashChip from "../components/HashChip";
 import { PayInvoice, PaymentRecovery } from "./PayInvoice";
@@ -30,9 +33,11 @@ const messages: Record<string, string> = {
 };
 
 export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
+  const router = useRouter();
   const [payload, setPayload] = useState("");
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof verifyInvoicePreview>> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [readingQr, setReadingQr] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<string | null>(null);
@@ -40,6 +45,8 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
   const video = useRef<HTMLVideoElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
+  const checkoutLink = payload && typeof window !== "undefined"
+    ? scannedParkingCheckoutPath(payload, window.location.origin) : null;
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -73,7 +80,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     if (!cameraActive) return;
     const Detector = (window as CameraWindow).BarcodeDetector;
     if (!Detector) {
-      setCameraStatus("Trình duyệt này chưa hỗ trợ quét QR trực tiếp. Hãy dán payload từ POS.");
+      setCameraStatus("Trình duyệt này chưa hỗ trợ quét qua camera. Hãy dán ảnh hoặc chọn tệp QR.");
       setCameraActive(false);
       return;
     }
@@ -91,12 +98,14 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
       if (video.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         try {
           const hits = await detector.detect(video.current);
-          if (hits[0]?.rawValue) {
+          if (!stopped && hits[0]?.rawValue) {
+            const checkout = scannedParkingCheckoutPath(hits[0].rawValue, window.location.origin);
+            setCameraActive(false);
+            if (checkout) { router.push(checkout); return; }
             setPayload(hits[0].rawValue);
             setPreview(null);
             setError(null);
             setCameraStatus("Đã đọc QR. Bấm kiểm tra để xác minh hóa đơn và giá.");
-            setCameraActive(false);
             return;
           }
         } catch {
@@ -124,7 +133,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
       stream?.getTracks().forEach((track) => track.stop());
       if (video.current) video.current.srcObject = null;
     };
-  }, [cameraActive]);
+  }, [cameraActive, router]);
 
   const clearPreview = useCallback(() => {
     abort.current?.abort();
@@ -134,6 +143,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
 
   async function checkInvoice() {
     clearPreview();
+    if (checkoutLink) { router.push(checkoutLink); return; }
     if (!wallet.address || !wallet.canProceed || wallet.chainId !== BigInt(20261)) {
       setError(messages.WALLET_REQUIRED);
       return;
@@ -157,49 +167,49 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     }
   }
 
-  async function pasteFromClipboard() {
-    setCameraStatus(null);
+  async function readQrInput(read: () => Promise<Blob | string>) {
+    if (busy || readingQr) return;
+    setReadingQr(true);
+    setCameraActive(false);
+    setCameraStatus("Đang đọc mã QR…");
+    let input: Blob | string | undefined;
     try {
-      const text = await navigator.clipboard.readText();
-      if (text.trim()) {
-        setPayload(text.trim());
+      input = await read();
+      if (typeof input === "string") {
+        const text = input.trim();
+        if (!text) { setCameraStatus("Clipboard chưa có ảnh hoặc nội dung QR."); return; }
+        setPayload(text);
         clearPreview();
-        setCameraStatus("Đã dán payload từ clipboard. Bấm kiểm tra để xác minh hóa đơn.");
-      } else {
-        setCameraStatus("Clipboard đang trống. Hãy sao chép payload từ POS trước.");
+        setCameraStatus("Đã dán nội dung QR từ clipboard.");
+        return;
       }
+      const code = await decodeQrImage(input);
+      if (!code) { setCameraStatus("Không tìm thấy mã QR trong ảnh. Hãy thử ảnh rõ hơn, có đủ bốn góc mã."); return; }
+      const checkout = scannedParkingCheckoutPath(code, window.location.origin);
+      if (checkout) { router.push(checkout); return; }
+      setPayload(code);
+      clearPreview();
+      setCameraStatus("Đã đọc mã QR từ ảnh. Bấm kiểm tra để xác minh hóa đơn và giá.");
     } catch {
-      setCameraStatus("Trình duyệt chặn đọc clipboard tự động. Hãy dán thủ công vào ô bên dưới.");
+      setCameraStatus(input === undefined
+        ? "Không đọc được clipboard. Bấm vào ô QR rồi nhấn Ctrl+V hoặc dùng Chọn ảnh QR."
+        : "Không đọc được ảnh QR. Hãy thử ảnh PNG hoặc JPEG.");
+    } finally {
+      setReadingQr(false);
     }
   }
 
-  async function scanQrFile(event: ChangeEvent<HTMLInputElement>) {
+  function pasteQrImage(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const image = pastedQrImage(event.clipboardData);
+    if (!image) return;
+    event.preventDefault();
+    void readQrInput(async () => image);
+  }
+
+  function scanQrFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    setCameraStatus(null);
-    const Detector = (window as CameraWindow).BarcodeDetector;
-    if (!Detector || typeof createImageBitmap !== "function") {
-      setCameraStatus("Trình duyệt này chưa hỗ trợ giải mã ảnh QR trực tiếp. Hãy dùng nút lấy từ POS hoặc dán payload.");
-      return;
-    }
-    try {
-      const bitmap = await createImageBitmap(file);
-      try {
-        const hits = await new Detector({ formats: ["qr_code"] }).detect(bitmap);
-        if (hits[0]?.rawValue) {
-          setPayload(hits[0].rawValue);
-          clearPreview();
-          setCameraStatus("Đã đọc mã QR từ ảnh. Bấm kiểm tra để xác minh hóa đơn và giá.");
-        } else {
-          setCameraStatus("Không tìm thấy mã QR trong ảnh đã chọn.");
-        }
-      } finally {
-        bitmap.close?.();
-      }
-    } catch {
-      setCameraStatus("Không đọc được ảnh QR. Hãy thử ảnh rõ nét hơn hoặc dán payload.");
-    }
+    if (file) void readQrInput(async () => file);
   }
 
   return <div className="invoice-student-preview" aria-labelledby="invoice-preview-title" aria-busy={busy}>
@@ -209,35 +219,36 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     <div className="qr-source-header">
       <label htmlFor="student-invoice-payload">Payload QR</label>
       <div className="qr-paste-actions">
-        {posPayload ? <button type="button" className="text-action-btn pos-bridge-btn" disabled={busy} onClick={() => {
+        {posPayload ? <button type="button" className="text-action-btn pos-bridge-btn" disabled={busy || readingQr} onClick={() => {
           setPayload(posPayload);
           clearPreview();
           setCameraStatus("Đã lấy hóa đơn đang mở từ tab POS trên trình duyệt này.");
         }}>
           Dùng hóa đơn POS đang mở
         </button> : null}
-        <button type="button" className="text-action-btn" disabled={busy} onClick={() => void pasteFromClipboard()}>
+        <button type="button" className="text-action-btn" disabled={busy || readingQr} onClick={() => void readQrInput(readQrClipboard)}>
           Dán từ clipboard
         </button>
-        <button type="button" className="text-action-btn" disabled={busy} onClick={() => fileInput.current?.click()}>
+        <button type="button" className="text-action-btn" disabled={busy || readingQr} onClick={() => fileInput.current?.click()}>
           Chọn ảnh QR
         </button>
-        <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => void scanQrFile(e)} />
-        {payload ? <button type="button" className="text-action-btn" disabled={busy} onClick={() => { setPayload(""); clearPreview(); setCameraStatus(null); }}>
+        <input ref={fileInput} type="file" accept="image/*" hidden onChange={scanQrFile} />
+        {payload ? <button type="button" className="text-action-btn" disabled={busy || readingQr} onClick={() => { setPayload(""); clearPreview(); setCameraStatus(null); }}>
           Xóa
         </button> : null}
       </div>
     </div>
-    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={4} placeholder="Dán nội dung mã QR từ điểm thu vào đây…"
+    <textarea id="student-invoice-payload" className="invoice-payload" value={payload} rows={4} placeholder="Dán ảnh hoặc nội dung QR từ điểm thu vào đây…"
       aria-describedby={error ? "student-invoice-help student-invoice-error" : "student-invoice-help"} aria-invalid={Boolean(error)}
+      readOnly={readingQr} onPaste={pasteQrImage}
       onChange={(event) => { setPayload(event.target.value); clearPreview(); }} />
-    <p id="student-invoice-help" className="metric-note">Bạn có thể dùng camera hoặc dán payload đã sao chép từ POS.</p>
+    <p id="student-invoice-help" className="metric-note">Bạn có thể quét QR thanh toán, dán ảnh hoặc chọn tệp QR do Điểm thu cung cấp.</p>
     <div className="inline-actions invoice-preview-actions">
-      <button type="button" className="secondary-btn" disabled={busy || cameraActive} onClick={() => { setCameraStatus(null); setCameraActive(true); }}>
+      <button type="button" className="secondary-btn" disabled={busy || readingQr || cameraActive} onClick={() => { setCameraStatus(null); setCameraActive(true); }}>
         Quét bằng camera
       </button>
-      <button type="button" className="primary-cta-btn" disabled={busy || !payload.trim() || !wallet.canProceed || !wallet.address} onClick={() => void checkInvoice()}>
-        {busy ? "Đang xác minh…" : "Kiểm tra hóa đơn"}
+      <button type="button" className="primary-cta-btn" disabled={busy || readingQr || !payload.trim() || (!checkoutLink && (!wallet.canProceed || !wallet.address))} onClick={() => void checkInvoice()}>
+        {busy ? "Đang xác minh…" : checkoutLink ? "Mở checkout bãi xe" : "Kiểm tra hóa đơn"}
       </button>
     </div>
     {cameraActive ? <div className="invoice-camera-panel">

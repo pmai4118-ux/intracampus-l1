@@ -15,6 +15,13 @@ export type InvoiceTransaction = {
   status: "unverified" | "reverted" | "event-mismatch" | "confirmed";
 };
 
+export type ParkingCheckout = { invoiceCode: string; checkedOutAt: number | null };
+export type OpenParkingTicket = { invoiceId: string; invoiceCode: string; checkedInAt: number };
+
+export function isParkingInvoice({ meta }: SignedInvoiceEnvelope): boolean {
+  return meta.merchantId === "parking-demo" && meta.serviceId === "parking-single" && meta.categoryCode === "PARKING";
+}
+
 export type VerifiedInvoiceReceipt = {
   invoiceId: string; invoiceCode: string; chainId: number; contractAddress: string;
   txHash: string; blockNumber: number; logIndex: number; payer: string; merchant: string;
