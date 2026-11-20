@@ -217,3 +217,11 @@ NetworkProbe bổ sung latestBlock.number/timestamp và headAgeSeconds khi đọ
 Receipt gửi xe đã xác minh là mốc check-in. `GET /api/parking/tickets` liệt kê vé chưa checkout của phiên STUDENT khớp ví đang chọn. Mỗi vé hiện QR trong Ví sinh viên. QR chỉ chứa đường dẫn tới `/staff/parking/checkout/:invoiceId`. Bảo vệ quét, kiểm tra vé và xác nhận ở cổng ra.
 
 `GET /api/parking/:invoiceId` trả mã vé và thời điểm ra (Unix giây hoặc `null`). `POST` yêu cầu Origin của frontend và phiên nhân viên demo dùng vai trò LIBRARIAN hiện có. Checkout lưu một dòng cho mỗi hóa đơn trong SQLite hóa đơn, dùng lại thời điểm cũ nếu gửi lại. Đây là xác nhận lượt ra ngoài chain và không thu thêm CAMPUS.
+
+## Xác minh sinh viên và xét học bổng · 2026-11-20
+
+Cổng `/login` chứng minh quyền sở hữu ví qua challenge dùng một lần và cookie HttpOnly riêng. Phiên này chưa chứng minh tư cách sinh viên và không cấp quyền LIBRARIAN. Quyền duyệt hồ sơ lấy từ `CAMPUS_SCHOOL_WALLETS` phía server; mở `/staff/students` không tự cấp quyền. Nhà trường đối chiếu mã sinh viên và quyền sở hữu ví ngoài hệ thống trước khi duyệt. Một mã sinh viên chỉ được duyệt cho một ví; một ví đã duyệt không tự đổi danh tính.
+
+Sinh viên đã duyệt đủ điều kiện nhận một lượt 20 CAMPUS từ ví quỹ nhà trường. Không mint hoặc cộng số dư giả. Học bổng được xét riêng, cấp một lần vào FOOD qua `grant()` của PurposeBoundGrantVault chuẩn L06 bằng ví grantIssuer. Cả hai đường hiển thị số tiền/đích/mạng rồi yêu cầu ví của người cấp ký. API lưu lượt cấp trước khi mở ví, khóa trước ranh giới gửi, và chỉ xác nhận sau receipt/transaction/canonical block khớp; học bổng cần thêm event GrantIssued khớp. Lỗi hoặc kết quả chưa rõ giữ khóa để đối chiếu hash cũ. Không thêm ABI hoặc khóa ký server.
+
+Trạng thái hồ sơ là phê duyệt trong ứng dụng, không mint SBT và không thay đổi ưu đãi on-chain. Chủ ví đã duyệt có thể chủ động kích hoạt tài khoản STUDENT của dịch vụ hiện có, sau đó ký phiên dịch vụ; không bật lại tài khoản bị vô hiệu hóa hoặc đổi role có sẵn. Giữ DB campus trên volume bền vững để bảo toàn khóa danh tính/lượt cấp. Xem [runbook](student-onboarding.md) cho cấu hình và giới hạn khôi phục.

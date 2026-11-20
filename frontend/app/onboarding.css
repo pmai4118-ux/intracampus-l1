@@ -1,0 +1,41 @@
+.campus-onboarding { max-width: 76rem; margin: auto; }
+.campus-portal-links { display: flex; gap: .7rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.campus-portal-links a { padding: .6rem .9rem; border: 1px solid var(--border-hairline); border-radius: .6rem; text-decoration: none; background: white; font-size: .85rem; }
+.campus-onboarding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: stretch; margin-bottom: 1.5rem; }
+.campus-welcome-card { background: #173c2c; color: #e2ebd6; border-radius: 1.2rem; padding: clamp(1.5rem,3vw,2.5rem); }
+.campus-welcome-card > svg { width: 3rem; height: 3rem; color: #edce7b; margin-bottom: 1.4rem; }
+.campus-welcome-card h2 { color: #fff4cf; font-size: clamp(1.8rem,3.2vw,2.6rem); line-height: 1.3; margin: .6rem 0 1.5rem; }
+.campus-welcome-card .eyebrow { color: #c1d3ae; }
+.campus-welcome-card ol { display: grid; gap: 1.1rem; padding: 0; list-style: none; margin: 0; }
+.campus-welcome-card li { display: grid; gap: .4rem; }
+.campus-welcome-card li span, .campus-welcome-card > p:last-child { font-size: .85rem; line-height: 1.8; color: #d0dcc5; }
+.campus-welcome-card > p:last-child { margin-top: 1.5rem; border-top: 1px solid #ffffff30; padding-top: 1rem; }
+.campus-login-card { display: flex; flex-direction: column; justify-content: center; padding: clamp(1.5rem,3vw,2.5rem); gap: 1rem; }
+.campus-login-card h2 { font-size: 1.5rem; }
+.campus-login-card > p { color: var(--ink-muted); font-size: .9rem; line-height: 1.8; }
+.campus-wallet-address { background: var(--bg-subtle); padding: .85rem; border-radius: .5rem; overflow-wrap: anywhere; }
+.campus-login-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.campus-login-actions .primary-cta-btn { text-decoration: none; }
+.campus-session-bar { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; }
+.campus-session-bar > div { min-width: 0; }
+.campus-session-address { display: block; overflow-wrap: anywhere; font-size: .85rem; margin-block: .65rem; }
+.campus-application-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1.2rem; margin-block: 1.5rem; align-items: start; }
+.campus-onboarding h2 { margin-bottom: 1rem; }
+.campus-onboarding section > p { margin-block: .6rem; }
+.campus-onboarding form, .campus-review-controls { display: grid; gap: .75rem; margin-top: 1rem; }
+.campus-onboarding label { font-size: .85rem; font-weight: 600; }
+.campus-onboarding input:not([type=checkbox]), .campus-onboarding select { width: 100%; min-width: 0; min-height: 2.85rem; font: inherit; font-size: 1rem; padding: .7rem; border: 1px solid var(--border-strong); background: #fff; color: var(--ink-primary); border-radius: .5rem; }
+.campus-onboarding .primary-cta-btn, .campus-onboarding .secondary-btn { margin-block: .3rem; }
+.campus-review-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.3rem; margin-top: 1.5rem; }
+.campus-review-item { padding: 1.25rem; border: 1px solid var(--border-hairline); border-radius: .75rem; min-width: 0; }
+.campus-review-item > div { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-hairline); }
+.campus-onboarding .campus-checkbox { display: flex; align-items: flex-start; gap: .65rem; font-weight: 400; line-height: 1.7; }
+.campus-checkbox input { margin-top: .35rem; width: 1.15rem; height: 1.15rem; flex-shrink: 0; }
+.campus-payout-review { border: 2px solid var(--accent-emerald); margin-block: 1.5rem; }
+.campus-payout-review dl { display: grid; grid-template-columns: minmax(8rem,.3fr) minmax(0,1fr); gap: .7rem 1rem; }
+.campus-payout-review dd { margin: 0; overflow-wrap: anywhere; }
+.campus-auth-link { text-decoration: none; font-size: .8rem; margin-left: auto; padding: .65rem; border: 1px solid var(--border-hairline); border-radius: .5rem; white-space: nowrap; flex-shrink: 0; }
+@media(max-width:55rem) { .campus-application-grid { grid-template-columns: 1fr; } .campus-onboarding-grid { grid-template-columns: 1fr; } .campus-review-list { grid-template-columns: 1fr; } .campus-session-bar { align-items: stretch; flex-direction: column; gap: .75rem; } .campus-login-card { grid-row: 1; } }
+@media(max-width:44rem) { .app-nav { grid-template-columns: repeat(5,minmax(0,1fr)); } }
+@media(max-width:36rem) { .campus-welcome-card { padding: 1.5rem; } .campus-payout-review dl { grid-template-columns: 1fr; gap: .35rem; } .campus-payout-review dd { margin-bottom: .7rem; } .campus-onboarding-grid { gap: 1rem; } .campus-auth-link { font-size: .7rem; } }
+@media(max-width:26rem) { .app-topbar .environment-badge { display: none; } }

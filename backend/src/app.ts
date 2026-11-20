@@ -14,6 +14,9 @@ import { createLibraryRouter } from "./modules/library/library.routes.ts";
 import type { LibraryService } from "./modules/library/library.service.ts";
 import type { SqliteInvoiceRepository } from "./modules/invoices/invoices.repository.ts";
 import { createParkingRouter } from "./modules/parking/parking.routes.ts";
+import { createCampusRouter } from "./modules/campus/campus.routes.ts";
+import type { CampusService } from "./modules/campus/campus.service.ts";
+import type { LibraryRepository } from "./modules/library/library.repository.ts";
 
 export function createApp(
   rpcUrl?: string,
@@ -25,6 +28,8 @@ export function createApp(
   libraryService?: LibraryService,
   canteenService?: CanteenService,
   parkingRepository?: SqliteInvoiceRepository,
+  campusService?: CampusService,
+  libraryRepository?: LibraryRepository,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -40,6 +45,7 @@ export function createApp(
   app.use(createLibraryRouter(libraryService, authService, authConfig));
   app.use(createCanteenRouter(canteenService, authService, authConfig, libraryService));
   app.use(createAuthRouter(authService, authConfig));
+  app.use(createCampusRouter(campusService, libraryRepository));
 
   return app;
 }

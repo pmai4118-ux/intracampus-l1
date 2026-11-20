@@ -22,6 +22,8 @@ pnpm dev
 ```
 
 - Ví và dịch vụ sinh viên: <http://127.0.0.1:3000/student>.
+- Đăng nhập ví: <http://127.0.0.1:3000/login>; [quy trình xác minh sinh viên và học bổng](docs/student-onboarding.md).
+- Hồ sơ sinh viên: <http://127.0.0.1:3000/student/verification>; nhà trường duyệt tại <http://127.0.0.1:3000/staff/students>.
 - Điểm thu và công cụ vận hành: <http://127.0.0.1:3000/pos>.
 - API: <http://127.0.0.1:4000/healthz> và <http://127.0.0.1:4000/api/network>.
 

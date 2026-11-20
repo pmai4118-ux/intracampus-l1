@@ -17,6 +17,8 @@ import { readLibraryAuthConfig, type LibraryAuthConfig } from "./modules/auth/au
 import { readLibraryConfig } from "./modules/library/library.config.ts";
 import { LibraryService } from "./modules/library/library.service.ts";
 import libraryManifest from "../../deployments/intracampus.json" with { type: "json" };
+import { CampusRepository } from "./modules/campus/campus.repository.ts";
+import { CampusService } from "./modules/campus/campus.service.ts";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4000);
@@ -50,11 +52,16 @@ try {
 const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
 canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
+const campusRepository = new CampusRepository(process.env.CAMPUS_DB_PATH?.trim()
+  || fileURLToPath(new URL('../data/campus.sqlite', import.meta.url)));
+let campusService: CampusService | undefined;
+try { campusService = new CampusService(campusRepository, process.env); }
+catch { /* Campus endpoints fail closed until origin and authority configuration are valid. */ }
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService, canteenService, repository).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService, repository, campusService, libraryRepository).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => server.close(() => { canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
+  process.once(signal, () => server.close(() => { campusRepository.close(); canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
 }
