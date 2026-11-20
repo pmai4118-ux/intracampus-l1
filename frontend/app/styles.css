@@ -54,6 +54,7 @@
 .library-wallet-account, .library-wallet-balance { display: grid; gap: .4rem; min-width: 0; }
 .library-meta-label, .library-wallet-note { font-size: .875rem; color: var(--ink-muted); line-height: 1.5; }
 .library-account-value { font-family: ui-monospace, Consolas, monospace; font-size: 1rem; font-weight: 600; }
+.library-account-empty { font-family: inherit; font-size: 1rem; font-weight: 600; }
 .library-balance-value { font-size: 1.2rem; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .library-network { color: var(--verified-ink); font-size: .875rem; }
 .library-network-warning { color: var(--warning-ink); }

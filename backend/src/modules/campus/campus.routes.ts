@@ -59,7 +59,7 @@ export function createCampusRouter(service?: CampusService, library?: LibraryRep
     res.json(await service!.prepare(issuer, walletAddress(req.body.wallet), req.body.kind));
   } catch (e) { next(e); } });
   router.post("/api/campus/payouts/:id/begin", async (req, res, next) => { try {
-    const issuer = school(req); body(req.body, []); res.json(await service!.begin(String(req.params.id), issuer));
+    const issuer = school(req); body(req.body, ["attemptToken"]); res.json(await service!.begin(String(req.params.id), issuer, req.body.attemptToken));
   } catch (e) { next(e); } });
   router.post("/api/campus/payouts/:id/release", (req, res, next) => { try {
     const issuer = school(req); body(req.body, ["attemptToken", "outcome"]);

@@ -9,5 +9,5 @@ export type CampusPayout = {
   from: string; to: string; data: string; value: string; afterBlock: number; txHash: string | null;
 };
 export type CampusProfile = { application: CampusApplication | null; scholarship: CampusScholarship | null; payouts: CampusPayout[] };
-/** Returned only to the /begin caller; the token is not part of a public payout/profile. */
+/** Client creates and retains this capability before /begin. Never part of a public profile. */
 export type CampusPayoutAttempt = { payout: CampusPayout; attemptToken: string };

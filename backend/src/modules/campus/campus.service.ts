@@ -105,16 +105,17 @@ export class CampusService {
     if (hex(finalBlock.number) !== hex(receipt.blockNumber) || String(finalBlock.hash).toLowerCase() !== String(receipt.blockHash).toLowerCase()) throw new CampusError("STALE_CHAIN_STATE", 503);
     return this.repository.finish(id, hash, receipt.status === "0x1" ? "CONFIRMED" : "FAILED");
   }
-  async begin(id: string, actor: string) {
+  async begin(id: string, actor: string, attemptToken: unknown) {
     this.requireSchool(actor);
+    if (typeof attemptToken !== "string" || !/^[0-9a-f]{64}$/.test(attemptToken)) throw new CampusError("INVALID_REQUEST", 400);
     const p = this.repository.payout(id);
-    if (p.status !== "PREPARED" || p.from !== actor.toLowerCase()) throw new CampusError("PAYOUT_LOCKED");
+    if (!["PREPARED", "UNKNOWN"].includes(p.status) || p.from !== actor.toLowerCase() || p.txHash) throw new CampusError("PAYOUT_LOCKED");
     const block = await this.freshBlock();
     const gas = hex(await this.rpc.call("eth_estimateGas", [{ from: p.from, to: p.to, data: p.data, value: p.value }]));
     if (gas === 0n) throw new CampusError("RPC_UNAVAILABLE", 503);
     const current = object(await this.rpc.call("eth_getBlockByNumber", [block.tag, false]));
     if (String(current.hash).toLowerCase() !== block.hash) throw new CampusError("STALE_CHAIN_STATE", 503);
-    return this.repository.begin(id, actor);
+    return this.repository.begin(id, actor, attemptToken);
   }
   release(id: string, actor: string, attemptToken: unknown, outcome: unknown) {
     this.requireSchool(actor);

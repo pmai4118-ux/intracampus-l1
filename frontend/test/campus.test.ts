@@ -30,7 +30,7 @@ test("malformed and expired challenges never open the signing prompt", async t =
 
 test("EIP-1193 4001 from the transaction prompt restores the same payout and allows a successful retry", async t => {
   let rejected = true, sends = 0, begins = 0;
-  const requests: string[] = [], updates: CampusPayout[] = [];
+  const requests: string[] = [], updates: CampusPayout[] = [], tokens: string[] = [];
   const provider = { on() {}, removeListener() {}, async request({ method }: { method: string }) {
     if (method === "eth_accounts") return [from];
     if (method === "eth_chainId") return "0x4f25";
@@ -48,9 +48,9 @@ test("EIP-1193 4001 from the transaction prompt restores the same payout and all
   await controller.start(); t.after(() => controller.dispose());
   t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
     requests.push(path); const body = JSON.parse(String(init.body));
-    if (path.endsWith("/begin")) return Response.json({ payout: { ...p, status: "UNKNOWN" }, attemptToken: (++begins).toString(16).padStart(64, "0") });
+    if (path.endsWith("/begin")) { begins++; tokens.push(body.attemptToken); return Response.json({ payout: { ...p, status: "UNKNOWN" }, attemptToken: body.attemptToken }); }
     assert.equal(path, `/api/campus/payouts/${p.id}/release`);
-    assert.deepEqual(body, { attemptToken: "1".padStart(64,"0"), outcome: "REJECTED" });
+    assert.deepEqual(body, { attemptToken: tokens[0], outcome: "REJECTED" });
     return Response.json(p);
   });
   const send = (account: string, tx: Parameters<WalletController["sendTransaction"]>[1]) => controller.sendTransaction(account,tx);
@@ -61,26 +61,71 @@ test("EIP-1193 4001 from the transaction prompt restores the same payout and all
   const sent = await sendCampusPayout(cancelled.payout,from,send);
   assert.match(sent.hash!,/^0x[0-9a-f]{64}$/); assert.equal(sent.payout.status,"PENDING");
   assert.equal(sends,2); assert.equal(begins,2); assert.equal(requests.filter(path=>path.endsWith("/release")).length,1);
+  assert.notEqual(tokens[0], tokens[1]);
 });
 
 for (const error of [new WalletTransactionError("SEND_OUTCOME_UNKNOWN","unknown"), Error("RPC timeout"), { code:4001 }]) {
   test(`ambiguous/unclassified send error ${error instanceof Error ? error.message : "raw provider error"} stays locked`, async t => {
     const paths: string[] = [];
-    t.mock.method(globalThis,"fetch",async (path:string) => { paths.push(path); return Response.json({ payout:{...p,status:"UNKNOWN"},attemptToken:"a".repeat(64) }); });
-    let recoveries = 0;
-    await assert.rejects(sendCampusPayout(p,from,async()=>{throw error;},{onRecovery:()=>recoveries++}));
-    assert.deepEqual(paths,[`/api/campus/payouts/${p.id}/begin`]); assert.equal(recoveries,0);
+    t.mock.method(globalThis,"fetch",async (path:string,init:RequestInit) => { paths.push(path); return Response.json({ payout:{...p,status:"UNKNOWN"},attemptToken:JSON.parse(String(init.body)).attemptToken }); });
+    let recovery: CampusPayoutRecovery | null = null;
+    await assert.rejects(sendCampusPayout(p,from,async()=>{throw error;},{onRecovery:value=>{recovery=value;}}));
+    assert.deepEqual(paths,[`/api/campus/payouts/${p.id}/begin`]); assert.equal(recovery,null);
   });
 }
 
 test("a definite pre-send failure releases only its attempt; lost release response can retry without sending again", async t => {
-  let recovery: CampusPayoutRecovery | null = null, releaseCalls = 0, sends = 0;
+  let recovery: CampusPayoutRecovery | null = null, releaseCalls = 0, sends = 0, attemptToken = "";
   t.mock.method(globalThis,"fetch",async (path:string,init:RequestInit) => {
-    if (path.endsWith("/begin")) return Response.json({ payout:{...p,status:"UNKNOWN"},attemptToken:"b".repeat(64) });
-    const body = JSON.parse(String(init.body)); assert.equal(body.attemptToken,"b".repeat(64)); assert.equal(body.outcome,"NOT_SENT");
+    if (path.endsWith("/begin")) { attemptToken = JSON.parse(String(init.body)).attemptToken; return Response.json({ payout:{...p,status:"UNKNOWN"},attemptToken }); }
+    const body = JSON.parse(String(init.body)); assert.equal(body.attemptToken,attemptToken); assert.equal(body.outcome,"NOT_SENT");
     releaseCalls++; if(releaseCalls===1) throw Error("Response lost"); return Response.json(p);
   });
   await assert.rejects(sendCampusPayout(p,from,async()=>{sends++;throw new WalletTransactionError("WRONG_CHAIN","not-sent");},{onRecovery:value=>{recovery=value;}}),/Response lost/);
   assert.ok(recovery);
   assert.equal((await releaseCampusPayout(recovery)).status,"PREPARED"); assert.equal(sends,1); assert.equal(releaseCalls,2);
+});
+
+test("client retains the capability before begin; a committed but lost response restores without calling the wallet", async t => {
+  const retained: CampusPayoutRecovery[] = [];
+  let lost = true, committedToken = "", walletCalls = 0, firstToken = "", beginCalls = 0;
+  t.mock.method(globalThis,"fetch",async (path:string,init:RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    if (path.endsWith("/begin")) {
+      beginCalls++; assert.equal(retained.at(-1)?.attemptToken,body.attemptToken); assert.match(body.attemptToken,/^[0-9a-f]{64}$/);
+      committedToken = body.attemptToken;
+      if(lost) { firstToken = committedToken; throw Error("Response lost after server commit"); }
+      return Response.json({ payout:{...p,status:"UNKNOWN"},attemptToken:committedToken });
+    }
+    assert.equal(body.attemptToken,committedToken); assert.equal(body.outcome,"NOT_SENT"); committedToken = "";
+    return Response.json(p);
+  });
+  const send = async()=>{walletCalls++;return `0x${"cd".repeat(32)}`;};
+  const callbacks = {onRecovery:(value:CampusPayoutRecovery|null)=>{if(value)retained.push(value);}};
+  const recovered = await sendCampusPayout(p,from,send,callbacks);
+  assert.equal(recovered.payout.status,"PREPARED"); assert.equal(recovered.hash,null); assert.equal(walletCalls,0); assert.equal(beginCalls,1);
+  lost = false;
+  const sent = await sendCampusPayout(recovered.payout,from,send,callbacks);
+  assert.equal(walletCalls,1); assert.equal(sent.payout.status,"PENDING"); assert.notEqual(committedToken,firstToken);
+});
+
+test("lost begin and release responses retain a recovery-only retry without ever opening the wallet", async t => {
+  let recovery: CampusPayoutRecovery | null = null, releaseCalls = 0, walletCalls = 0, token = "";
+  t.mock.method(globalThis,"fetch",async (path:string,init:RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    if(path.endsWith("/begin")) { token=body.attemptToken; throw Error("Begin response lost"); }
+    assert.equal(body.attemptToken,token); assert.equal(body.outcome,"NOT_SENT");
+    if(++releaseCalls===1) throw Error("Release response lost");
+    return Response.json(p);
+  });
+  await assert.rejects(sendCampusPayout(p,from,async()=>{walletCalls++;return "0x";},{onRecovery:value=>{recovery=value;}}),/Release response lost/);
+  assert.ok(recovery);
+  assert.equal((await releaseCampusPayout(recovery)).status,"PREPARED"); assert.equal(walletCalls,0); assert.equal(releaseCalls,2);
+});
+
+test("a begin owned by another attempt clears local recovery proof and never releases that attempt", async t => {
+  const paths:string[]=[]; let recovery:CampusPayoutRecovery|null=null;
+  t.mock.method(globalThis,"fetch",async (path:string)=>{paths.push(path);return Response.json({error:{code:"PAYOUT_LOCKED"}},{status:409});});
+  await assert.rejects(sendCampusPayout(p,from,async()=>{assert.fail("wallet must not open");},{onRecovery:value=>{recovery=value;}}),/PAYOUT_LOCKED/);
+  assert.deepEqual(paths,[`/api/campus/payouts/${p.id}/begin`]); assert.equal(recovery,null);
 });

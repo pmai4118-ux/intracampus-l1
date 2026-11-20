@@ -39,3 +39,15 @@ Sửa trường hợp provider trả EIP-1193 `4001` khiến lượt cấp chưa
 - Edge headless với ví/RPC giả lập: hủy 4001 trả cùng lượt về PREPARED; hủy lần nữa kèm lỗi mạng ở release hiển thị nút khôi phục; thử lại release không gọi ví; sau đó gửi thành công đúng một lần và xác nhận receipt.
 - Một lượt cấp khác gặp lỗi provider chưa rõ kết quả vẫn UNKNOWN sau reload, chỉ có khôi phục bằng hash, không có nút gửi lại hoặc mở khóa. Tổng fixture có 4 lần gọi provider: 2 từ chối, 1 thành công, 1 kết quả chưa rõ; không lỗi JavaScript.
 - Không thực hiện giao dịch L1 thật. UNKNOWN cũ không có capability hoặc đã mất token không được tự mở.
+
+## P1 mất phản hồi begin và font tiếng Việt · 2026-11-21
+
+Client tạo và giữ token trước request; begin nhận `{attemptToken}` và trả cùng attempt khi lặp lại token đang khóa. Release trước commit ghi dấu hủy để request begin bị chậm không khóa lại lượt cấp. Đã thêm kiểm tra release thắng race trong lúc mô phỏng gas, token đã hủy không tái sử dụng sau nhiều lần thử, và HTTP thật bị mất cả response begin/release sau commit.
+
+- Typecheck và build qua; `pnpm test` có 629 test qua, 0 lỗi, 2 test local EVM có sẵn bỏ qua. Campus có 18 test backend và 11 frontend.
+- Browser local dùng API/SQLite trong bộ nhớ và ví/RPC giả lập: ngắt JSON begin sau commit, ngắt JSON release sau commit; UI hiện nút khôi phục. Sau khôi phục, report là PREPARED, chưa hash, `walletCalls: 0`. Người dùng chủ động mở lại lượt cấp rồi thử lại: report CONFIRMED và `walletCalls: 1`. Không gửi tiền L1 thật.
+- Font trạng thái “Chưa kết nối” ở Library đã tách khỏi font monospace của địa chỉ ví. Đã kiểm tra trên Browser: `font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif`, weight 600. Trạng thái chưa kết nối ở login cũng dùng chữ giao diện; địa chỉ ví giữ font mã.
+
+![UI khôi phục khi phản hồi begin và release bị mất; dữ liệu giả lập local](begin-lost-recovery.jpg)
+
+![Font tiếng Việt của trạng thái chưa kết nối sau khi sửa](vietnamese-wallet-font.jpg)

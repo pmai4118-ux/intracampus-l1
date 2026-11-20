@@ -92,7 +92,7 @@ function Portal({ mode }: { mode: Mode }) {
       <section className="surface-panel campus-login-card" aria-busy={busy}>
         <span className="panel-eyebrow">{me ? "PHIÊN ĐĂNG NHẬP" : "KẾT NỐI & XÁC NHẬN"}</span><h2>{me ? "Đã đăng nhập bằng ví" : "Đăng nhập IntraCampus"}</h2>
         <p>{wallet.status === "no-wallet" ? "Mở bằng Core/MetaMask hoặc cài tiện ích ví trong trình duyệt, sau đó tải lại trang." : "Kết nối ví và ký thông điệp để đăng nhập an toàn."}</p>
-        <code className="campus-wallet-address">{wallet.address ?? "Chưa kết nối ví"}</code>
+        {wallet.address ? <code className="campus-wallet-address">{wallet.address}</code> : <span className="campus-wallet-address">Chưa kết nối ví</span>}
         <span className="network-pill">{wallet.chainId === BigInt(20261) ? "IntraCampus L1 · 20261" : "Cần mạng IntraCampus L1 · 20261"}</span>
         <div className="campus-login-actions">
           {!wallet.address ? <button className="primary-cta-btn" disabled={busy || wallet.status === "no-wallet"} onClick={() => void run(() => controller.connect())}>Kết nối ví</button> : wallet.chainId !== BigInt(20261) ? <button className="primary-cta-btn" disabled={busy} onClick={() => void run(() => controller.switchNetwork())}>Chuyển sang IntraCampus L1</button> : null}
@@ -152,7 +152,7 @@ function Portal({ mode }: { mode: Mode }) {
         if (active.current) setRecoveryHash(result.hash);
         await reconcile(result.payout, result.hash);
       })}>Xác nhận và mở ví cấp</button> : payout.status === "UNKNOWN" && !payout.txHash && recoveries[payout.id] ? <div>
-        <p>Ví đã xác nhận chưa gửi giao dịch. Chưa nhận được xác nhận khôi phục từ máy chủ; bạn có thể thử lại bước khôi phục mà không gửi tiền.</p>
+        <p>Chưa gọi gửi giao dịch hoặc ví đã xác nhận hủy. Chưa nhận được xác nhận khôi phục từ máy chủ; bạn có thể thử lại bước khôi phục mà không gửi tiền.</p>
         <button className="secondary-btn" disabled={busy} onClick={() => void run(async () => {
           await campusMe(wallet.address!); const restored = await releaseCampusPayout(recoveries[payout.id]);
           if (active.current) { setPayout(restored); setRecoveries(current => { const next = { ...current }; delete next[payout.id]; return next; }); setNotice("Đã khôi phục lượt chưa gửi. Bạn có thể kiểm tra và mở ví lại."); }

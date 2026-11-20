@@ -2,21 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import express from "express";
 import { Wallet, Interface, keccak256 } from "ethers";
 import { CampusRepository } from "../src/modules/campus/campus.repository.ts";
 import { CampusService, welcomeWei } from "../src/modules/campus/campus.service.ts";
 import { createCampusRouter } from "../src/modules/campus/campus.routes.ts";
 import { LibraryRepository } from "../src/modules/library/library.repository.ts";
+import { campusApi, releaseCampusPayout, sendCampusPayout, type CampusPayoutRecovery } from "../../frontend/lib/campus.ts";
 
 const school = Wallet.createRandom(), student = Wallet.createRandom(), other = Wallet.createRandom();
 const lower = (wallet: {address: string}) => wallet.address.toLowerCase();
 const hash = `0x${"ab".repeat(32)}`, blockHash = `0x${"cd".repeat(32)}`;
 const env = { CAMPUS_AUTH_ORIGIN: "http://localhost:3000", LIBRARY_ALLOW_INSECURE_LOCALHOST: "true",
   CAMPUS_SCHOOL_WALLETS: school.address, CAMPUS_TREASURY_ADDRESS: school.address };
+const token = () => randomBytes(32).toString("hex");
+const begin = (service: CampusService, id: string, actor = school.address, attemptToken = token()) => service.begin(id, actor, attemptToken);
 function setup() {
   const repository = new CampusRepository(":memory:");
-  const state: { receipt: any; transaction: any; chain: string; unavailable: boolean; stale: boolean; reorg: boolean; estimateFails: boolean } =
+  const state: { receipt: any; transaction: any; chain: string; unavailable: boolean; stale: boolean; reorg: boolean; estimateFails: boolean; beforeEstimate?: () => Promise<void> } =
     { receipt: null, transaction: null, chain: "0x4f25", unavailable: false, stale: false, reorg: false, estimateFails: false };
   const manifest = JSON.parse(readFileSync(new URL("../../docs/fixtures/b03-l05-l06-local.json", import.meta.url), "utf8")).manifest;
   manifest.environment = "avalanche-l1"; manifest.roles.grantIssuer = school.address;
@@ -28,7 +32,7 @@ function setup() {
       timestamp: `0x${(Math.floor(Date.now() / 1000) - (state.stale ? 1000 : 0)).toString(16)}` };
     if (method === "eth_getCode") return params[0] === lower(school) ? "0x" : "0x6000";
     if (method === "eth_call") return `0x${school.address.slice(2).toLowerCase().padStart(64, "0")}`;
-    if (method === "eth_estimateGas") { if (state.estimateFails) throw Error("simulation failed"); return "0x5208"; }
+    if (method === "eth_estimateGas") { await state.beforeEstimate?.(); if (state.estimateFails) throw Error("simulation failed"); return "0x5208"; }
     if (method === "eth_getTransactionReceipt") return state.receipt;
     if (method === "eth_getTransactionByHash") return state.transaction;
     throw Error(method);
@@ -83,9 +87,9 @@ test("20 CAMPUS is reserved once, simulation precedes durable broadcast lock, pe
     const p = await s.prepare(school.address, student.address, "WELCOME");
     assert.equal(BigInt(p.value), welcomeWei); assert.equal(p.to, lower(student));
     assert.equal((await s.prepare(school.address, student.address, "WELCOME")).id, p.id);
-    state.estimateFails = true; await assert.rejects(s.begin(p.id, school.address)); assert.equal(r.payout(p.id).status, "PREPARED");
-    state.estimateFails = false; await s.begin(p.id, school.address);
-    await assert.rejects(s.begin(p.id, school.address), /PAYOUT_LOCKED/);
+    state.estimateFails = true; await assert.rejects(begin(s, p.id)); assert.equal(r.payout(p.id).status, "PREPARED");
+    state.estimateFails = false; await begin(s, p.id);
+    await assert.rejects(begin(s, p.id), /PAYOUT_LOCKED/);
     state.unavailable = true; await assert.rejects(s.reconcile(p.id, hash));
     assert.equal(r.payout(p.id).txHash, hash); assert.equal(r.payout(p.id).status, "PENDING");
     state.unavailable = false; proof(p);
@@ -100,7 +104,8 @@ for (const kind of ["WELCOME", "SCHOLARSHIP"] as const) {
       approve();
       if (kind === "SCHOLARSHIP") { r.requestScholarship(lower(student), "MERIT"); r.review(lower(school), lower(student), "SCHOLARSHIP", true, "VERIFIED"); }
       const p = await s.prepare(school.address, student.address, kind);
-      const first = await s.begin(p.id, school.address);
+      const first = await begin(s, p.id);
+      assert.deepEqual(await begin(s, p.id, school.address, first.attemptToken), first);
       assert.match(first.attemptToken, /^[0-9a-f]{64}$/);
       assert.equal(JSON.stringify(r.profile(student.address)).includes(first.attemptToken), false);
       assert.throws(() => s.release(p.id, student.address, first.attemptToken, "REJECTED"), /SCHOOL_ONLY/);
@@ -112,12 +117,14 @@ for (const kind of ["WELCOME", "SCHOLARSHIP"] as const) {
       assert.equal(r.payout(p.id).status, "UNKNOWN");
       assert.equal(s.release(p.id, school.address, first.attemptToken, "REJECTED").status, "PREPARED");
       assert.equal(s.release(p.id, school.address, first.attemptToken, "REJECTED").status, "PREPARED");
-      const second = await s.begin(p.id, school.address);
+      await assert.rejects(begin(s, p.id, school.address, first.attemptToken), /PAYOUT_ATTEMPT_RELEASED/);
+      const second = await begin(s, p.id);
       assert.notEqual(second.attemptToken, first.attemptToken);
       assert.throws(() => s.release(p.id, school.address, first.attemptToken, "REJECTED"), /PAYOUT_LOCKED/);
       assert.equal(r.payout(p.id).status, "UNKNOWN");
       assert.equal(s.release(p.id, school.address, second.attemptToken, "NOT_SENT").status, "PREPARED");
-      const third = await s.begin(p.id, school.address);
+      await assert.rejects(begin(s, p.id, school.address, first.attemptToken), /PAYOUT_ATTEMPT_RELEASED/);
+      const third = await begin(s, p.id);
       r.attach(p.id, hash);
       assert.throws(() => s.release(p.id, school.address, third.attemptToken, "NOT_SENT"), /PAYOUT_LOCKED/);
       assert.equal(r.payout(p.id).status, "PENDING");
@@ -126,11 +133,46 @@ for (const kind of ["WELCOME", "SCHOLARSHIP"] as const) {
     } finally { r.close(); }
   });
 }
+test("a committed begin can be retried after losing its response with the client-held capability", async () => {
+  const { repository: r, service: s, approve } = setup();
+  try {
+    approve(); const p = await s.prepare(school.address, student.address, "WELCOME"); const attemptToken = token();
+    await begin(s, p.id, school.address, attemptToken); // commit; pretend the response never reached the caller
+    assert.equal(r.payout(p.id).status, "UNKNOWN");
+    const recovered = await begin(s, p.id, school.address, attemptToken);
+    assert.equal(recovered.attemptToken, attemptToken); assert.equal(recovered.payout.id, p.id);
+    await assert.rejects(begin(s, p.id, school.address, token()), /PAYOUT_LOCKED/);
+    assert.equal(s.release(p.id, school.address, attemptToken, "NOT_SENT").status, "PREPARED");
+    assert.equal((await s.prepare(school.address, student.address, "WELCOME")).id, p.id);
+  } finally { r.close(); }
+});
+
+test("release fences an in-flight begin before commit and old requests cannot relock after newer cancellations", async () => {
+  const { repository: r, service: s, approve, state } = setup();
+  try {
+    approve(); const p = await s.prepare(school.address, student.address, "WELCOME"); const attemptToken = token();
+    const arrived = Promise.withResolvers<void>(), finish = Promise.withResolvers<void>();
+    state.beforeEstimate = async () => { arrived.resolve(); await finish.promise; };
+    const delayed = begin(s, p.id, school.address, attemptToken);
+    await arrived.promise;
+    assert.equal(s.release(p.id, school.address, attemptToken, "NOT_SENT").status, "PREPARED");
+    finish.resolve();
+    await assert.rejects(delayed, /PAYOUT_ATTEMPT_RELEASED/);
+    assert.equal(r.payout(p.id).status, "PREPARED");
+    state.beforeEstimate = undefined;
+    const newer = await begin(s, p.id);
+    assert.throws(() => s.release(p.id, school.address, attemptToken, "NOT_SENT"), /PAYOUT_LOCKED/);
+    s.release(p.id, school.address, newer.attemptToken, "REJECTED");
+    await assert.rejects(begin(s, p.id, school.address, attemptToken), /PAYOUT_ATTEMPT_RELEASED/);
+    assert.equal(r.payout(p.id).status, "PREPARED");
+  } finally { r.close(); }
+});
+
 for (const fault of ["revert", "amount", "payer", "recipient", "calldata", "chain", "old-block", "reorg"]) {
   test(`welcome receipt rejects ${fault} without opening a second grant`, async () => {
     const { repository: r, service: s, state, approve, proof } = setup();
     try {
-      approve(); const p = await s.prepare(school.address, student.address, "WELCOME"); await s.begin(p.id, school.address); proof(p);
+      approve(); const p = await s.prepare(school.address, student.address, "WELCOME"); await begin(s, p.id); proof(p);
       if (fault === "revert") state.receipt.status = "0x0";
       if (fault === "amount") state.transaction.value = "0x1";
       if (fault === "payer") state.transaction.from = other.address;
@@ -141,7 +183,7 @@ for (const fault of ["revert", "amount", "payer", "recipient", "calldata", "chai
       if (fault === "reorg") state.reorg = true;
       if (fault === "revert") assert.equal((await s.reconcile(p.id, hash)).status, "FAILED");
       else { await assert.rejects(s.reconcile(p.id, hash)); assert.equal(r.payout(p.id).status, "PENDING"); }
-      await assert.rejects(s.begin(p.id, school.address), /PAYOUT_LOCKED/);
+      await assert.rejects(begin(s, p.id), /PAYOUT_LOCKED/);
     } finally { r.close(); }
   });
 }
@@ -152,7 +194,7 @@ test("wrong/stale RPC blocks payouts; scholarship requires its own approval and 
     state.chain = "0x4f25"; state.stale = true; await assert.rejects(s.prepare(school.address, student.address, "WELCOME"), /STALE_CHAIN_STATE/);
     state.stale = false; await assert.rejects(s.prepare(school.address, student.address, "SCHOLARSHIP"), /SCHOLARSHIP_NOT_APPROVED/);
     r.requestScholarship(lower(student), "MERIT"); r.review(lower(school), lower(student), "SCHOLARSHIP", true, "VERIFIED");
-    const p = await s.prepare(school.address, student.address, "SCHOLARSHIP"); await s.begin(p.id, school.address); proof(p);
+    const p = await s.prepare(school.address, student.address, "SCHOLARSHIP"); await begin(s, p.id); proof(p);
     await assert.rejects(s.reconcile(p.id, hash), /RECEIPT_MISMATCH/);
     const abi = new Interface(["function grant(address,bytes32) payable", "event GrantIssued(address indexed beneficiary,bytes32 indexed category,address indexed issuer,uint256 amount,uint256 balance)"]);
     const [, category] = abi.decodeFunctionData("grant", p.data);
@@ -186,7 +228,10 @@ test("HTTP ownership, school authorization, CSRF and service activation are enfo
   assert.equal(library.accountForWallet(student.address)?.role, "STUDENT");
   assert.equal((await (await request("me", schoolCookie)).json()).school, true);
   const payout = await (await request("payouts", schoolCookie, { wallet: student.address, kind: "WELCOME" })).json();
-  const attempt = await (await request(`payouts/${payout.id}/begin`, schoolCookie, {})).json();
+  const beginBody = { attemptToken: token() };
+  assert.equal((await request(`payouts/${payout.id}/begin`, schoolCookie, {})).status, 400);
+  const attempt = await (await request(`payouts/${payout.id}/begin`, schoolCookie, beginBody)).json();
+  assert.deepEqual(await (await request(`payouts/${payout.id}/begin`, schoolCookie, beginBody)).json(), attempt);
   assert.equal(attempt.payout.status, "UNKNOWN");
   const release = { attemptToken: attempt.attemptToken, outcome: "REJECTED" };
   assert.equal((await request(`payouts/${payout.id}/release`, "", release)).status, 401);
@@ -199,4 +244,43 @@ test("HTTP ownership, school authorization, CSRF and service activation are enfo
   assert.equal(r.payout(payout.id).status, "PREPARED");
   assert.equal((await request("auth/logout", studentCookie, {})).status, 204);
   assert.equal((await request("me", studentCookie)).status, 401);
+});
+
+test("real HTTP commit with lost begin/release responses remains recoverable and a user retry sends only once", async t => {
+  const { repository: r, service: s, approve, proof } = setup();
+  const app = express(); app.use(createCampusRouter(s));
+  const server = app.listen(0, "127.0.0.1"); await once(server, "listening");
+  t.after(() => { server.closeAllConnections(); server.close(); r.close(); });
+  const base = `http://127.0.0.1:${(server.address() as {port:number}).port}`, nativeFetch = globalThis.fetch;
+  const auth = s.auth.createChallenge({ wallet: school.address, remoteAddress: "127.0.0.1" });
+  const verified = s.auth.verifyChallenge({ challengeId: auth.challengeId, signature: await school.signMessage(auth.message), remoteAddress: "127.0.0.1" });
+  const cookie = `${s.authConfig.cookieName}=${verified.token}`;
+  approve(); const p = await s.prepare(school.address, student.address, "WELCOME");
+  let loseBegin = true, loseRelease = true, walletCalls = 0;
+  const capabilities: CampusPayoutRecovery[] = [];
+  t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
+    const response = await nativeFetch(`${base}${path}`, { ...init, headers: { ...init.headers, origin: env.CAMPUS_AUTH_ORIGIN, cookie } });
+    if (path.endsWith("/begin") && loseBegin) {
+      loseBegin = false;
+      assert.equal(r.payout(p.id).status, "UNKNOWN");
+      assert.equal(capabilities[0].attemptToken, JSON.parse(String(init.body)).attemptToken);
+      await response.body?.cancel(); throw new TypeError("Begin response lost after commit");
+    }
+    if (path.endsWith("/release") && loseRelease) {
+      loseRelease = false;
+      assert.equal(r.payout(p.id).status, "PREPARED");
+      await response.body?.cancel(); throw new TypeError("Release response lost after commit");
+    }
+    return response;
+  });
+  const send = async () => { walletCalls++; return hash; };
+  await assert.rejects(sendCampusPayout(p, school.address, send, { onRecovery: recovery => { if (recovery) capabilities.push(recovery); } }), /Release response lost/);
+  assert.equal(walletCalls, 0);
+  const recovered = await releaseCampusPayout(capabilities.at(-1)!);
+  assert.equal(recovered.status, "PREPARED");
+  const sent = await sendCampusPayout(recovered, school.address, send);
+  assert.equal(walletCalls, 1); assert.equal(sent.hash, hash);
+  proof(p);
+  const confirmed = await campusApi(`payouts/${p.id}/reconcile`, { txHash: sent.hash });
+  assert.equal(confirmed.status, "CONFIRMED"); assert.equal(r.profile(student.address).payouts.length, 1);
 });
