@@ -104,7 +104,7 @@ function Canteen() {
         <Link className="secondary-btn" href="/staff/canteen">
           Quầy cô nhà ăn
         </Link>
-        <Link className="secondary-btn" href="/student">
+        <Link className="secondary-btn heading-mobile-hide" href="/student">
           Về ví sinh viên
         </Link>
       </PageHeading>

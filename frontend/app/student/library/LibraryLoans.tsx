@@ -50,7 +50,7 @@ function StudentSettlementBreakdown({ settlement }: { settlement: LibrarySettlem
           <dd className="tabular-value">{formatWalletBalance(BigInt(settlement.totalRetainedWei))}</dd>
         </div>
         <div className="summary-refund-box">
-          <dt>Hoàn về ví mượn</dt>
+          <dt>Hoàn về ví sinh viên</dt>
           <dd className="tabular-value">{formatWalletBalance(BigInt(settlement.refundWei))}</dd>
         </div>
         {settlement.outcome === 'LOST' ? (
@@ -212,7 +212,7 @@ export default function LibraryLoans({
               <div className="staff-section-top">
                 <div>
                   <h3 className="layer-heading">Lịch sử nhận cọc & tất toán ({settledLoans.length})</h3>
-                  <p className="muted-line">Đối soát số CAMPUS hoàn về ví mượn và các khoản phí trễ / sửa chữa đã khấu trừ.</p>
+                  <p className="muted-line">Đối soát số CAMPUS hoàn về ví sinh viên và các khoản phí trễ / sửa chữa đã khấu trừ.</p>
                 </div>
                 <div className="ledger-toolbar-controls">
                   {settledLoans.length > 1 ? (

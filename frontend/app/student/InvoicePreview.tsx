@@ -6,15 +6,12 @@ import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { POS_ACTIVE_PAYLOAD_KEY } from "../../lib/invoice-status";
 import { scannedParkingCheckoutPath } from "../../lib/parking";
+import { cameraErrorMessage, startQrCameraScanner, type CameraFacingMode } from "../../lib/qr-camera";
 import { decodeQrImage, pastedQrImage, readQrClipboard } from "../../lib/qr-image";
 import { createWalletRpc, type WalletSnapshot } from "../../lib/wallet";
 import HashChip from "../components/HashChip";
+import Icon from "../components/Icon";
 import { PayInvoice, PaymentRecovery } from "./PayInvoice";
-
-type BarcodeHit = { rawValue: string };
-type BarcodeDetectorLike = { detect(source: ImageBitmapSource): Promise<BarcodeHit[]> };
-type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
-type CameraWindow = Window & { BarcodeDetector?: BarcodeDetectorConstructor };
 
 const messages: Record<string, string> = {
   INVALID_QR_PAYLOAD: "Payload QR sai định dạng hoặc khác hóa đơn đã được backend phát hành.",
@@ -40,6 +37,8 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
   const [readingQr, setReadingQr] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [facingMode, setFacingMode] = useState<CameraFacingMode>("environment");
   const [cameraStatus, setCameraStatus] = useState<string | null>(null);
   const [posPayload, setPosPayload] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -78,62 +77,41 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
 
   useEffect(() => {
     if (!cameraActive) return;
-    const Detector = (window as CameraWindow).BarcodeDetector;
-    if (!Detector) {
-      setCameraStatus("Trình duyệt này chưa hỗ trợ quét qua camera. Hãy dán ảnh hoặc chọn tệp QR.");
+    const previewVideo = video.current;
+    if (!previewVideo) {
+      setCameraStatus("Chưa khởi tạo được khung camera. Hãy thử lại hoặc dán payload từ POS.");
       setCameraActive(false);
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraStatus("Không truy cập được camera. Hãy dán payload từ POS.");
-      setCameraActive(false);
-      return;
-    }
-    let stopped = false;
-    let frame = 0;
-    let stream: MediaStream | null = null;
-    const detector = new Detector({ formats: ["qr_code"] });
-    const scan = async () => {
-      if (stopped || !video.current) return;
-      if (video.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        try {
-          const hits = await detector.detect(video.current);
-          if (!stopped && hits[0]?.rawValue) {
-            const checkout = scannedParkingCheckoutPath(hits[0].rawValue, window.location.origin);
-            setCameraActive(false);
-            if (checkout) { router.push(checkout); return; }
-            setPayload(hits[0].rawValue);
-            setPreview(null);
-            setError(null);
-            setCameraStatus("Đã đọc QR. Bấm kiểm tra để xác minh hóa đơn và giá.");
-            return;
-          }
-        } catch {
-          setCameraStatus("Chưa đọc được mã. Giữ QR trong khung hoặc dán payload.");
-        }
-      }
-      if (!stopped) frame = window.requestAnimationFrame(() => void scan());
-    };
-    void navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
-      .then(async (media) => {
-        stream = media;
-        if (stopped || !video.current) { media.getTracks().forEach((track) => track.stop()); return; }
-        video.current.srcObject = media;
-        await video.current.play();
+    setCameraReady(false);
+    return startQrCameraScanner({
+      video: previewVideo,
+      facingMode,
+      onReady: () => {
+        setCameraReady(true);
         setCameraStatus("Đưa mã QR của POS vào khung hình.");
-        frame = window.requestAnimationFrame(() => void scan());
-      })
-      .catch(() => {
-        setCameraStatus("Không được cấp quyền camera. Bạn vẫn có thể dán payload từ POS.");
+      },
+      onDetect: (rawValue) => {
+        const checkout = scannedParkingCheckoutPath(rawValue, window.location.origin);
         setCameraActive(false);
-      });
-    return () => {
-      stopped = true;
-      window.cancelAnimationFrame(frame);
-      stream?.getTracks().forEach((track) => track.stop());
-      if (video.current) video.current.srcObject = null;
-    };
-  }, [cameraActive, router]);
+        setCameraReady(false);
+        if (checkout) {
+          router.push(checkout);
+          return true;
+        }
+        setPayload(rawValue);
+        setPreview(null);
+        setError(null);
+        setCameraStatus("Đã đọc QR. Bấm kiểm tra để xác minh hóa đơn và giá.");
+        return true;
+      },
+      onError: (code) => {
+        setCameraStatus(cameraErrorMessage(code));
+        setCameraActive(false);
+        setCameraReady(false);
+      },
+    });
+  }, [cameraActive, facingMode, router]);
 
   const clearPreview = useCallback(() => {
     abort.current?.abort();
@@ -252,23 +230,49 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
       </button>
     </div>
     {cameraActive ? <div className="invoice-camera-panel">
-      <video ref={video} playsInline muted aria-label="Khung camera để quét mã QR" />
-      <button type="button" className="secondary-btn" onClick={() => setCameraActive(false)}>Đóng camera</button>
+      <div className="gate-camera-frame student-camera-frame">
+        <video ref={video} autoPlay playsInline muted aria-label="Khung camera để quét mã QR" />
+        <div className="scanner-overlay" aria-hidden="true">
+          <div className="scanner-reticle">
+            <span className="scanner-beam" />
+          </div>
+        </div>
+        <span className="camera-live-pill">
+          <span className="mode-status-dot dot-live" aria-hidden="true" />
+          {cameraReady ? "Đang quét QR…" : "Đang mở camera…"}
+        </span>
+      </div>
+      <div className="inline-actions gate-camera-controls">
+        <button type="button" className="secondary-btn" onClick={() => setFacingMode((prev) => (prev === "environment" ? "user" : "environment"))}>
+          Đổi camera ({facingMode === "environment" ? "Sau" : "Trước"})
+        </button>
+        <button type="button" className="secondary-btn" onClick={() => { setCameraActive(false); setCameraReady(false); }}>
+          <Icon name="qr" />
+          Đóng camera
+        </button>
+      </div>
     </div> : null}
     {cameraStatus ? <p className="wallet-status" role="status">{cameraStatus}</p> : null}
     {error ? <p id="student-invoice-error" className="invoice-feedback error-panel" role="alert">{error}</p> : null}
-    {preview ? <section className="invoice-verified-preview" aria-live="polite" aria-label="Hóa đơn đã xác minh">
-      <span className="verified-badge tabular-nums">ĐÃ XÁC MINH · Chain 20261 · block {BigInt(preview.quote.blockNumber).toString()}</span>
-      <h4>{preview.envelope.meta.serviceName}</h4>
-      <p>{preview.envelope.meta.merchantName} · người nhận <HashChip value={preview.envelope.invoice.merchant} copyLabel="Sao chép địa chỉ merchant" /></p>
-      <h5>{preview.quote.tier === 1 ? "Đủ điều kiện giảm giá SBT" : "Không áp dụng giảm giá SBT"}</h5>
+    {preview ? <section className="invoice-verified-preview invoice-checkout-sheet" aria-live="polite" aria-label="Hóa đơn đã xác minh">
+      <div className="invoice-checkout-head">
+        <span className="verified-badge tabular-nums">ĐÃ XÁC MINH · Chain 20261 · block {BigInt(preview.quote.blockNumber).toString()}</span>
+        <h4>{preview.envelope.meta.serviceName}</h4>
+        <p className="invoice-merchant-line">
+          <span>{preview.envelope.meta.merchantName} · người nhận</span>{" "}
+          <HashChip value={preview.envelope.invoice.merchant} copyLabel="Sao chép địa chỉ merchant" />
+        </p>
+      </div>
+      <h5 className={preview.quote.tier === 1 ? "sbt-status-heading is-eligible" : "sbt-status-heading"}>
+        {preview.quote.tier === 1 ? "Đủ điều kiện giảm giá SBT (-10%)" : "Không áp dụng giảm giá SBT"}
+      </h5>
       <dl className="price-breakdown tabular-nums">
         <div className="price-row"><dt>Giá gốc</dt><dd className="tabular-nums">{formatWalletBalance(preview.quote.originalAmount)}</dd></div>
-        <div className="price-row"><dt>Giảm giá</dt><dd className="tabular-nums">{formatWalletBalance(preview.quote.discountAmount)}</dd></div>
+        <div className="price-row discount-row"><dt>Giảm giá</dt><dd className="tabular-nums">{preview.quote.discountAmount > BigInt(0) ? `-${formatWalletBalance(preview.quote.discountAmount)}` : formatWalletBalance(preview.quote.discountAmount)}</dd></div>
         <div className="price-row total-row"><dt>Số CAMPUS cần trả</dt><dd className="total-amount tabular-nums">{formatWalletBalance(preview.quote.paidAmount)}</dd></div>
       </dl>
       <p className="invoice-direction-note">Hạn, paid flag, verifier/signer, giá và mô phỏng sẽ được kiểm tra lại ngay trước khi mở Core xác nhận.</p>
-      <PayInvoice preview={preview} />
+      <PayInvoice preview={preview} compact />
     </section> : null}
   </div>;
 }

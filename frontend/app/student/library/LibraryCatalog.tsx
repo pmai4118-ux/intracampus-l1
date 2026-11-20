@@ -168,10 +168,11 @@ export default function LibraryCatalog({
             <button
               type="button"
               className="primary-cta-btn"
+              aria-label={book.copiesAvailable === 0 ? 'Hiện hết bản' : `Tạo yêu cầu: ${book.title}`}
               disabled={blocked || busy || loading || book.copiesAvailable === 0}
               onClick={() => onCreate(book)}
             >
-              {book.copiesAvailable === 0 ? 'Hiện hết bản' : `Tạo yêu cầu: ${book.title}`}
+              {book.copiesAvailable === 0 ? 'Hiện hết bản' : 'Tạo yêu cầu mượn'}
             </button>
             <p className="metric-note">Chưa giữ bản khi tạo yêu cầu. Chỉ gán bản sau khi cọc đã được xác minh.</p>
           </li>

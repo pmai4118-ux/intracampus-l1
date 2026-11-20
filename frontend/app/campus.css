@@ -144,7 +144,7 @@ h3 {
   gap: 1rem;
 }
 
-.parking-checkout-panel > div {
+.parking-checkout-panel>div {
   flex: 1 1 18rem;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -156,7 +156,6 @@ h3 {
 }
 
 #parking-tickets {
-  grid-column: 1 / -1;
   scroll-margin-top: 9rem;
 }
 
@@ -1101,6 +1100,11 @@ h3 {
   color: #8d7034;
 }
 
+.icon-blue {
+  background: #eaf1f4;
+  color: #3e6378;
+}
+
 .step-label {
   margin-left: auto;
   color: var(--ink-muted);
@@ -1118,6 +1122,7 @@ h3 {
   border-radius: .55rem;
   font-size: .82rem;
   font-weight: 650;
+  text-decoration: none;
 }
 
 .secondary-btn {
@@ -1176,7 +1181,7 @@ h3 {
 .live-wallet-view>.student-identity-panel,
 .live-wallet-view>.student-identity-column {
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
 }
 
 .student-identity-column {
@@ -1190,9 +1195,26 @@ h3 {
   top: 1.25rem;
 }
 
+.live-wallet-view>.student-services-column,
 .live-wallet-view>.wallet-payment-gate,
 .live-wallet-view>.grant-panel {
   grid-column: 2;
+  min-width: 0;
+}
+
+.student-services-column {
+  display: grid;
+  gap: 1.25rem;
+  align-content: start;
+}
+
+.student-services-column>[hidden],
+.student-panel-slot[hidden] {
+  display: none !important;
+}
+
+.student-panel-slot {
+  min-width: 0;
 }
 
 .wallet-live-note {
@@ -1213,6 +1235,30 @@ h3 {
   box-shadow: 0 18px 28px -18px #1231257a, inset 0 0 0 1px #ffffff1f;
   display: grid;
   gap: .95rem;
+}
+
+.campus-live-pass::before {
+  content: "";
+  position: absolute;
+  inset: -40% -25%;
+  background: linear-gradient(115deg,
+      transparent 38%,
+      rgba(237, 206, 123, 0.08) 46%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(237, 206, 123, 0.06) 54%,
+      transparent 62%);
+  transform: translateX(-65%) rotate(8deg);
+  transition: transform 650ms var(--ease-out), opacity 300ms ease;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .campus-live-pass:hover::before {
+    transform: translateX(65%) rotate(8deg);
+    opacity: 1;
+  }
 }
 
 .campus-live-pass::after {
@@ -1377,7 +1423,8 @@ h3 {
 }
 
 .wallet-payment-gate>p,
-.grant-panel>p {
+.grant-panel>p,
+.student-parking-tickets>p {
   font-size: .78rem;
   line-height: 1.8;
   color: var(--ink-muted);
@@ -1589,6 +1636,23 @@ h3 {
 
 .invoice-form-result {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.invoice-form-loading {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 68rem) {
+  .invoice-form-result {
+    grid-template-columns: minmax(13.5rem, 0.82fr) minmax(0, 1.18fr);
+    gap: 1.35rem;
+    align-items: start;
+  }
+
+  .invoice-form-result>.invoice-qr-card {
+    max-width: none;
+    justify-self: stretch;
+  }
 }
 
 .invoice-qr-card {
@@ -2545,7 +2609,8 @@ h3 {
   }
 
   .live-wallet-view>section,
-  .live-wallet-view>.student-identity-column {
+  .live-wallet-view>.student-identity-column,
+  .live-wallet-view>.student-services-column {
     width: 100%;
   }
 
@@ -2946,7 +3011,8 @@ h3 {
   .page-description,
   .student-identity-panel>p:not([class]),
   .wallet-payment-gate>p,
-  .grant-panel>p {
+  .grant-panel>p,
+  .student-parking-tickets>p {
     font-size: .82rem;
   }
 
@@ -3252,6 +3318,7 @@ h3 {
 }
 
 .pos-gate-pass {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3638,8 +3705,8 @@ h3 {
 .loan-timeline-grid {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-  gap: .55rem;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: .5rem;
 }
 
 .loan-timeline-grid>div {
@@ -4809,8 +4876,8 @@ h3 {
   min-height: 2.05rem;
   padding: .25rem .7rem;
   border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-bg);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
   color: var(--ink-secondary);
   font-size: .74rem;
   cursor: pointer;
@@ -5624,6 +5691,1241 @@ details[open]>*:not(summary) {
 
   .book-card-header {
     gap: .65rem;
+  }
+}
+
+/* ==========================================================================
+   Fintech UI/UX Upgrade:
+   1. E-Wallet Receipt Ticket (.receipt-ticket)
+   2. Student Hero Header, Balance Hero & Right-Column Filter Tabs
+   3. Flattened Checkout Sheet, Payment Recovery & Digital Parking Ticket Cards
+   ========================================================================== */
+
+.student-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: .65rem .85rem;
+  min-width: 0;
+}
+
+.student-heading-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .45rem;
+}
+
+.student-heading-links .secondary-btn {
+  min-height: 2.55rem;
+  padding: .35rem .72rem;
+  font-size: .74rem;
+}
+
+.student-heading-links .secondary-btn svg {
+  width: .95rem;
+  height: .95rem;
+}
+
+/* Student Balance Hero right under IntraCampus Pass */
+.wallet-balance-hero {
+  margin-top: .85rem;
+  padding: .95rem 1.05rem;
+  border-radius: .75rem;
+  background: linear-gradient(180deg, #f9fbf7 0%, #eef4eb 100%);
+  border: 1px solid #d5e2d0;
+  display: grid;
+  gap: .3rem;
+  min-width: 0;
+}
+
+.wallet-balance-hero-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .35rem .6rem;
+}
+
+.wallet-balance-hero-head .metric-label {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.wallet-status.wallet-status-pill {
+  margin: 0;
+  font-size: .68rem;
+  font-weight: 650;
+  color: var(--accent-emerald);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(39, 99, 75, 0.16);
+  border-radius: 999px;
+  padding: .12rem .55rem;
+  line-height: 1.5;
+}
+
+.wallet-balance-hero-amount {
+  font-size: clamp(1.55rem, 2.8vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.15;
+  color: var(--campus-dark);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wallet-summary-compact {
+  margin-top: .7rem;
+  gap: .5rem;
+}
+
+.wallet-summary-compact .metric-block {
+  padding: .72rem .85rem;
+}
+
+/* Student Right-Column Tab Filter Bar */
+.student-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .32rem;
+  padding: .3rem;
+  border-radius: .7rem;
+  background: #eaf0e7;
+  border: 1px solid var(--border-hairline);
+}
+
+.student-tab-bar .seg-btn {
+  min-height: 2.45rem;
+  padding: .35rem .8rem;
+  border-radius: .5rem;
+  font-size: .78rem;
+  font-weight: 650;
+  flex: 0 1 auto;
+}
+
+.student-tab-bar .seg-btn.active {
+  background: var(--campus-dark);
+  color: #ffffff;
+  box-shadow: 0 2px 6px -1px rgba(23, 60, 44, 0.24);
+}
+
+/* E-Wallet Receipt Ticket (.receipt-ticket) */
+.invoice-verified-preview.receipt-ticket {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--verified-border);
+  border-top: 3px solid var(--accent-emerald);
+  border-radius: .95rem;
+  padding: 1.2rem;
+  gap: .9rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 6px rgba(23, 60, 44, 0.04),
+    0 14px 28px -12px rgba(23, 60, 44, 0.14);
+}
+
+.receipt-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: .35rem;
+  padding: .2rem .25rem .15rem;
+}
+
+.receipt-hero-top {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  margin-bottom: .15rem;
+}
+
+.receipt-hero-icon {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(39, 99, 75, 0.12);
+}
+
+.receipt-hero-icon svg {
+  width: .95rem;
+  height: .95rem;
+  stroke-width: 2.5;
+}
+
+.receipt-hero-label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: .02em;
+}
+
+.receipt-hero-amount {
+  font-size: clamp(1.8rem, 4vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.12;
+  color: var(--campus-dark);
+  overflow-wrap: anywhere;
+}
+
+.receipt-hero-savings {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  margin-top: .15rem;
+}
+
+.receipt-original-strike {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-decoration-thickness: 1.5px;
+}
+
+.receipt-savings-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: .18rem .6rem;
+  border-radius: 999px;
+  background: var(--verified-bg);
+  border: 1px solid var(--verified-border);
+  color: var(--verified-ink);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.receipt-tear-line {
+  position: relative;
+  height: 1px;
+  border-top: 1.5px dashed rgba(23, 60, 44, 0.22);
+  margin-block: .1rem;
+}
+
+.receipt-tear-line::before,
+.receipt-tear-line::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--bg-canvas);
+  border: 1px solid rgba(23, 60, 44, 0.14);
+  transform: translateY(-50%);
+}
+
+.receipt-tear-line::before {
+  left: -1.55rem;
+}
+
+.receipt-tear-line::after {
+  right: -1.55rem;
+}
+
+.receipt-ticket .price-breakdown {
+  background: #f8faf7;
+  border: 1px solid rgba(23, 60, 44, 0.08);
+  border-radius: .7rem;
+  padding: .8rem .95rem;
+}
+
+.receipt-proof-details {
+  border-top: 1px solid var(--border-hairline);
+  padding-top: .7rem;
+}
+
+.receipt-proof-details>summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 2.35rem;
+  padding: .35rem .6rem;
+  border-radius: .5rem;
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
+  font-size: .76rem;
+  font-weight: 650;
+  list-style: none;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.receipt-proof-details>summary::-webkit-details-marker {
+  display: none;
+}
+
+.receipt-proof-details>summary::after {
+  content: "▾";
+  font-size: .8rem;
+  color: var(--ink-muted);
+  transition: transform 180ms var(--ease-out);
+}
+
+.receipt-proof-details[open]>summary::after {
+  transform: rotate(180deg);
+}
+
+.receipt-proof-details>summary:hover {
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+}
+
+.receipt-proof-body {
+  margin-top: .7rem;
+  display: grid;
+  gap: .32rem;
+  padding: .75rem .85rem;
+  border-radius: .6rem;
+  background: #f8faf7;
+  border: 1px solid var(--border-hairline);
+  min-width: 0;
+}
+
+.receipt-proof-body>p {
+  margin: .35rem 0 0;
+  font-size: .68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-muted);
+}
+
+.receipt-proof-body>p:first-child {
+  margin-top: 0;
+}
+
+.receipt-proof-body .tx-hash-code {
+  font-size: .7rem;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.receipt-proof-body .copy-control {
+  margin-top: .45rem;
+}
+
+/* Flattened Invoice Checkout Sheet & Compact PayInvoice */
+.invoice-verified-preview.invoice-checkout-sheet {
+  background: #ffffff;
+  border: 1px solid var(--verified-border);
+  border-top: 3px solid var(--accent-emerald);
+  border-radius: .9rem;
+  padding: 1.1rem;
+  gap: .75rem;
+}
+
+.invoice-checkout-head {
+  display: grid;
+  gap: .35rem;
+}
+
+.invoice-merchant-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .45rem;
+  font-size: .8rem;
+  color: var(--ink-secondary);
+}
+
+.sbt-status-heading {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--ink-secondary);
+}
+
+.sbt-status-heading.is-eligible {
+  color: var(--verified-ink);
+}
+
+.invoice-payment-panel.invoice-payment-compact {
+  margin-top: .15rem;
+  padding-top: .75rem;
+  border-top: 1px dashed rgba(23, 60, 44, 0.18);
+  gap: .55rem;
+}
+
+.payment-meta-summary {
+  display: grid;
+  gap: .4rem;
+  padding: .6rem .75rem;
+  border-radius: .6rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+}
+
+.payment-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .35rem .6rem;
+  font-size: .76rem;
+  color: var(--ink-secondary);
+}
+
+.payment-meta-amount {
+  padding-top: .35rem;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.payment-meta-amount strong {
+  font-size: .95rem;
+  font-weight: 800;
+  color: var(--accent-emerald);
+}
+
+/* Payment Recovery Header & Dismissed Bar */
+.recovery-panel {
+  border: 1px solid rgba(39, 99, 75, 0.22);
+  background: #fbfcf9;
+  padding: 1rem;
+  display: grid;
+  gap: .65rem;
+}
+
+.recovery-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+}
+
+.recovery-header-meta {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+}
+
+.recovery-header-meta h3 {
+  margin: 0;
+  font-size: .88rem;
+}
+
+.recovery-id-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+}
+
+.recovery-header-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+
+.recovery-dismissed-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .6rem .85rem;
+  border-radius: .65rem;
+  background: var(--verified-bg);
+  border: 1px solid var(--verified-border);
+  font-size: .76rem;
+  color: var(--verified-ink);
+}
+
+/* Digital Parking Ticket Card */
+.student-parking-tickets {
+  border-color: rgba(62, 99, 120, 0.18);
+  background: #fdfefe;
+}
+
+.parking-ticket.parking-ticket-card {
+  background: #ffffff;
+  border: 1px solid rgba(62, 99, 120, 0.2);
+  border-top: 3px solid #3e6378;
+  border-radius: .9rem;
+  padding: 1.05rem;
+  display: grid;
+  gap: .75rem;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 10px 22px -12px rgba(62, 99, 120, 0.18);
+  overflow: hidden;
+}
+
+.parking-ticket-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .4rem .75rem;
+}
+
+.parking-ticket-title-group {
+  display: grid;
+  gap: .25rem;
+}
+
+.parking-ticket-title-group h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 750;
+  color: var(--ink-primary);
+}
+
+.parking-ticket-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  width: fit-content;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  background: #eaf1f4;
+  color: #3e6378;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+
+.parking-ticket-time {
+  font-size: .74rem;
+  color: var(--ink-muted);
+}
+
+.parking-ticket-tear::before {
+  left: -1.4rem;
+}
+
+.parking-ticket-tear::after {
+  right: -1.4rem;
+}
+
+.parking-ticket-qr-wrap {
+  display: grid;
+  justify-items: center;
+  gap: .75rem;
+  padding: .85rem;
+  border-radius: .75rem;
+  background: #f6f9fb;
+  border: 1px solid rgba(62, 99, 120, 0.14);
+}
+
+.parking-ticket-qr-wrap img {
+  margin: 0;
+  border-radius: .5rem;
+  background: #ffffff;
+  padding: .35rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 52rem) {
+  .student-heading-actions {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .student-heading-actions .mode-switch-wrapper {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 36rem) {
+  .student-heading-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .student-heading-actions .student-mode-switch {
+    margin-left: 0;
+    width: fit-content;
+  }
+
+  .student-tab-bar .seg-btn {
+    padding: .32rem .62rem;
+    font-size: .74rem;
+  }
+
+  .invoice-verified-preview.receipt-ticket {
+    padding: 1rem .9rem;
+  }
+
+  .receipt-tear-line::before {
+    left: -1.25rem;
+  }
+
+  .receipt-tear-line::after {
+    right: -1.25rem;
+  }
+}
+
+/* ==========================================================================
+   Parking Exit Gate UI (/staff/parking & /staff/parking/checkout/[invoiceId])
+   + Shared Camera QR Viewfinder Frame
+   ========================================================================== */
+
+.parking-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+}
+
+.parking-page-actions .secondary-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.parking-gate-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(17rem, .9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.parking-scanner-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.parking-scanner-card .panel-heading-with-icon .network-pill {
+  margin-left: auto;
+}
+
+.parking-scanner-desc {
+  margin: 0;
+  font-size: .8rem;
+  line-height: 1.7;
+  color: var(--ink-muted);
+}
+
+.gate-scanner-stage {
+  border-radius: .9rem;
+  border: 1.5px dashed rgba(62, 99, 120, 0.3);
+  background: linear-gradient(180deg, #f8fbfc 0%, #f1f6f8 100%);
+  padding: 1.5rem 1.25rem;
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.gate-scanner-stage.is-drag-active {
+  border-color: var(--accent-emerald);
+  background: var(--verified-bg);
+  box-shadow: 0 0 0 3px rgba(39, 99, 75, 0.12);
+}
+
+.gate-scanner-stage.is-live {
+  border-style: solid;
+  border-color: rgba(23, 60, 44, 0.22);
+  background: #0d1d17;
+  padding: .95rem;
+}
+
+.gate-scanner-idle {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: .65rem;
+  padding-block: .65rem;
+}
+
+.gate-scanner-emblem {
+  width: 4.1rem;
+  height: 4.1rem;
+  border-radius: 1rem;
+  display: grid;
+  place-items: center;
+  background: #eaf1f4;
+  color: #3e6378;
+  border: 1px solid rgba(62, 99, 120, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.gate-scanner-emblem svg {
+  width: 2.15rem;
+  height: 2.15rem;
+  stroke-width: 1.4;
+}
+
+.gate-scanner-idle h3 {
+  margin: .15rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.gate-scanner-idle p {
+  margin: 0;
+  max-width: 28rem;
+  font-size: .8rem;
+  line-height: 1.65;
+  color: var(--ink-muted);
+}
+
+.gate-primary-actions {
+  margin-top: .35rem;
+  justify-content: center;
+}
+
+.gate-primary-actions .primary-cta-btn {
+  width: auto;
+  padding-inline: 1.25rem;
+}
+
+.gate-camera-shell {
+  display: grid;
+  gap: .85rem;
+}
+
+.gate-camera-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 26rem;
+  border-radius: .75rem;
+  overflow: hidden;
+  background: #08130f;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.student-camera-frame {
+  max-width: 28rem;
+  aspect-ratio: 4 / 3;
+}
+
+.gate-camera-frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+  max-height: none;
+}
+
+.scanner-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at center, transparent 34%, rgba(8, 19, 15, 0.42) 100%);
+  pointer-events: none;
+}
+
+.scanner-reticle {
+  position: relative;
+  width: min(64%, 14.5rem);
+  aspect-ratio: 1;
+  border-radius: .85rem;
+  box-shadow: inset 0 0 0 2px rgba(237, 206, 123, 0.78);
+  overflow: hidden;
+}
+
+@keyframes scannerBeamSweep {
+
+  0%,
+  100% {
+    transform: translateY(8%);
+    opacity: .65;
+  }
+
+  50% {
+    transform: translateY(88%);
+    opacity: 1;
+  }
+}
+
+.scanner-beam {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #edce7b 25%, #34d399 50%, #edce7b 75%, transparent);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.75);
+  animation: scannerBeamSweep 2.1s ease-in-out infinite;
+}
+
+.camera-live-pill {
+  position: absolute;
+  left: 50%;
+  bottom: .75rem;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  max-width: calc(100% - 1.5rem);
+  padding: .3rem .75rem;
+  border-radius: 999px;
+  background: rgba(11, 27, 21, 0.84);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f4f7f2;
+  font-size: .73rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gate-camera-controls {
+  justify-content: flex-end;
+}
+
+.gate-scanner-stage.is-live .gate-camera-controls .secondary-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f4f7f2;
+}
+
+.gate-scanner-stage.is-live .gate-camera-controls .secondary-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.gate-manual-entry {
+  display: grid;
+  gap: .45rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.gate-manual-entry label {
+  font-size: .74rem;
+  font-weight: 650;
+  color: var(--ink-secondary);
+}
+
+.gate-manual-row {
+  display: flex;
+  gap: .55rem;
+  align-items: stretch;
+}
+
+.gate-manual-row .invoice-payload {
+  min-height: 2.8rem;
+  height: 2.8rem;
+  flex: 1;
+  min-width: 0;
+  padding: .55rem .75rem;
+}
+
+.gate-open-btn {
+  flex-shrink: 0;
+  padding-inline: 1.1rem;
+}
+
+.parking-gate-guide {
+  display: grid;
+  gap: 1rem;
+}
+
+.gate-steps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .85rem;
+}
+
+.gate-steps-list li {
+  display: grid;
+  grid-template-columns: 1.85rem minmax(0, 1fr);
+  gap: .7rem;
+  align-items: start;
+}
+
+.gate-step-num {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: .55rem;
+  display: grid;
+  place-items: center;
+  background: #eaf1f4;
+  color: #3e6378;
+  font-size: .78rem;
+  font-weight: 750;
+  border: 1px solid rgba(62, 99, 120, 0.18);
+}
+
+.gate-steps-list li>div>strong {
+  display: block;
+  font-size: .84rem;
+  font-weight: 650;
+  color: var(--ink-primary);
+  margin-bottom: .15rem;
+}
+
+.gate-steps-list p {
+  margin: 0;
+  font-size: .76rem;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.gate-guide-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  padding: .75rem .85rem;
+  border-radius: .65rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  font-size: .74rem;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+
+.gate-guide-note svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--accent-emerald);
+  margin-top: .1rem;
+}
+
+/* Parking Checkout Pass (/staff/parking/checkout/[invoiceId]) */
+.parking-checkout-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(17rem, .9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.parking-checkout-panel.gate-pass-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  justify-items: stretch;
+  align-items: start;
+  grid-column: auto;
+  gap: 1rem;
+  padding: 1.35rem;
+  border-top: 4px solid #3e6378;
+}
+
+.gate-pass-card.is-ready {
+  border-top-color: var(--accent-emerald);
+}
+
+.gate-pass-card.is-checked-out {
+  border-top-color: var(--campus-dark);
+  background: linear-gradient(180deg, #f9fcf9 0%, #ffffff 38%);
+}
+
+.gate-pass-card.is-error {
+  border-top-color: var(--danger-ink);
+}
+
+.gate-pass-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: .45rem;
+}
+
+.gate-pass-badge-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+}
+
+.gate-pass-badge-row .verified-badge {
+  margin: 0;
+}
+
+.gate-status-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.gate-status-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.gate-status-icon.is-ready {
+  background: #eaf1f4;
+  color: #3e6378;
+}
+
+.gate-status-icon.is-error {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+.gate-ready-pill {
+  background: var(--verified-bg);
+  color: var(--verified-ink);
+  border: 1px solid var(--verified-border);
+}
+
+.gate-pass-code {
+  margin: .15rem 0 0;
+  font-size: clamp(1.5rem, 3.2vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--campus-dark);
+}
+
+.gate-pass-subtitle {
+  margin: 0;
+  max-width: 30rem;
+  font-size: .82rem;
+  line-height: 1.65;
+  color: var(--ink-secondary);
+}
+
+.gate-pass-tear::before {
+  left: -1.7rem;
+}
+
+.gate-pass-tear::after {
+  right: -1.7rem;
+}
+
+.gate-checkout-actions {
+  padding-top: .25rem;
+}
+
+.gate-confirm-btn {
+  flex: 1 1 14rem;
+  min-height: 3.1rem;
+  font-size: .9rem;
+}
+
+.gate-operator-card {
+  display: grid;
+  gap: .9rem;
+}
+
+@media (max-width: 56rem) {
+
+  .parking-gate-workspace,
+  .parking-checkout-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 36rem) {
+  .gate-primary-actions {
+    width: 100%;
+  }
+
+  .gate-primary-actions > .primary-cta-btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .gate-primary-actions > .secondary-btn {
+    flex: 1 1 8rem;
+  }
+
+  .gate-manual-row {
+    flex-direction: column;
+  }
+
+  .gate-open-btn {
+    width: 100%;
+  }
+
+  .gate-scanner-stage {
+    padding: 1.1rem .9rem;
+  }
+
+  .gate-scanner-stage.is-live {
+    padding: .65rem;
+  }
+
+  .parking-checkout-panel.gate-pass-card {
+    padding: 1.05rem;
+  }
+
+  .gate-pass-tear::before {
+    left: -1.4rem;
+  }
+
+  .gate-pass-tear::after {
+    right: -1.4rem;
+  }
+}
+
+/* ==========================================================================
+   Mobile Polish Pack (iPhone 390px / 430px & narrow screens 320px)
+   ========================================================================== */
+
+.price-row.invoice-code-row {
+  align-items: flex-start;
+}
+
+.invoice-code-badge {
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-all;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.grant-details-disclosure {
+  margin-block: .65rem;
+}
+
+.grant-details-disclosure > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 2.35rem;
+  padding: .35rem .65rem;
+  border-radius: .5rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  color: var(--ink-secondary);
+  font-size: .75rem;
+  font-weight: 650;
+  list-style: none;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.grant-details-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.grant-details-disclosure > summary::after {
+  content: "▾";
+  font-size: .8rem;
+  color: var(--ink-muted);
+  transition: transform 180ms var(--ease-out);
+}
+
+.grant-details-disclosure[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.grant-details-disclosure > summary:hover {
+  background: var(--bg-elevated);
+  color: var(--ink-primary);
+}
+
+.grant-details-disclosure .transaction-context {
+  margin-top: .55rem;
+}
+
+@media (max-width: 52rem) {
+  .heading-mobile-hide,
+  .student-heading-links {
+    display: none;
+  }
+
+  .page-heading .mode-switch-wrapper {
+    align-items: flex-start;
+  }
+
+  .page-heading .student-mode-switch {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 44rem) {
+  .pos-live-workspace > *,
+  .staff-section-top,
+  .staff-section-top > *,
+  .ledger-toolbar-controls {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .ledger-toolbar-controls {
+    width: 100%;
+  }
+
+  .student-tab-bar,
+  .library-filter-bar,
+  .ledger-toolbar-controls .segmented-row {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .student-tab-bar::-webkit-scrollbar,
+  .library-filter-bar::-webkit-scrollbar,
+  .ledger-toolbar-controls .segmented-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .student-tab-bar .seg-btn,
+  .library-filter-bar .seg-btn,
+  .ledger-toolbar-controls .segmented-row .seg-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 36rem) {
+  .price-row.invoice-code-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .3rem;
+  }
+
+  .price-row.invoice-code-row dd {
+    width: 100%;
+    text-align: left;
+  }
+
+  .wallet-payment-gate .invoice-preview-actions > button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .qr-paste-actions {
+    width: 100%;
+  }
+
+  .qr-paste-actions .text-action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .grant-panel .wallet-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .library-actions > .network-pill {
+    margin-right: auto;
+    flex-basis: 100%;
+    width: fit-content;
+  }
+}
+
+@media (max-width: 23.5rem) {
+  .grant-panel .wallet-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
