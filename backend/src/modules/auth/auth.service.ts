@@ -108,7 +108,7 @@ export class AuthService {
   }
 
   verifyChallenge(input: { challengeId: unknown; signature: unknown; remoteAddress: string }): {
-    token: string; account: { wallet: string; role: "STUDENT" | "LIBRARIAN" }; expiresAt: number;
+    token: string; account: { wallet: string; role: CampusAuthRole }; expiresAt: number;
   } {
     const now = unixSeconds(this.now());
     this.enforceRateLimit("verify", input.remoteAddress, now);
@@ -141,7 +141,7 @@ export class AuthService {
     } catch (error) { throw this.normalizeError(error); }
   }
 
-  session(token: unknown): { account: { wallet: string; role: "STUDENT" | "LIBRARIAN" }; expiresAt: number } | undefined {
+  session(token: unknown): { account: { wallet: string; role: CampusAuthRole }; expiresAt: number } | undefined {
     if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token) || Buffer.from(token, "base64url").length !== 32) return undefined;
     try {
       const session = this.repository.session(hash(token), unixSeconds(this.now()));
@@ -174,3 +174,4 @@ export class AuthService {
     return new AuthError(isDatabaseBusy(error) ? "DATABASE_BUSY" : "INTERNAL_ERROR");
   }
 }
+import type { CampusAuthRole } from "@intracampus/network";

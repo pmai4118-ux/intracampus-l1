@@ -52,7 +52,7 @@ node infra/rpc-gateway.mjs
 
 Chỉ tiếp tục khi chain ID là `0x4f25` và gateway in `verified chain 20261`. `RPC_UPSTREAM` phải là HTTP loopback đúng đường `/ext/bc/<blockchain-id>/rpc`; gateway kiểm tra chain khi khởi động rồi giữ nguyên đích này. Không có fallback âm thầm sang C-Chain/Fuji hoặc đích truyền từ request.
 
-`RPC_ALLOWED_ORIGINS` ở ví dụ chỉ cho web dev local. Khi có frontend HTTPS, thêm origin thật của nó vào danh sách phân cách bằng dấu phẩy và khởi động lại gateway. Trang `/check` trên cùng hostname tunnel dùng origin của chính nó; thêm hai origin tunnel vào danh sách sau khi lấy URL ở bước 3 để trang kiểm tra gọi `/rpc` được.
+`RPC_ALLOWED_ORIGINS` ở ví dụ chỉ cho web dev local. Khi có frontend HTTPS, thêm origin thật của nó vào danh sách phân cách bằng dấu phẩy và khởi động lại gateway. Trang `/check` trên cùng hostname tunnel dùng origin của chính nó; thêm origin tunnel nếu muốn trang kiểm tra gọi `/rpc` được. Ví Core dạng extension cũng gọi RPC trực tiếp từ trình duyệt; nếu dùng Core, thêm đúng origin `chrome-extension://<extension-id>` của extension vào allowlist. Gateway chỉ chấp nhận origin HTTPS/HTTP chính xác hoặc origin Chrome extension có ID định dạng Chrome; không dùng wildcard.
 
 Gateway mặc định chỉ nghe `127.0.0.1:8787`; có thể đặt `RPC_GATEWAY_PORT` nếu trùng cổng. Node/tunnel ở Windows và gateway ở WSL phải thực sự truy cập được cùng loopback; cách dễ nhất là chạy cả gateway và `cloudflared` trong distro đang chạy L01.
 

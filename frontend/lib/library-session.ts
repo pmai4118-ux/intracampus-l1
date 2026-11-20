@@ -1,4 +1,5 @@
-import type { LibraryAccountStatus, LibraryRole } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+import type { CampusAuthRole, LibraryAccountStatus } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
 
 export type LibraryStudentSession = { account: { wallet: string; role: "STUDENT" | "LIBRARIAN" }; expiresAt: number };
@@ -20,13 +21,17 @@ function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new LibrarySessionError("INVALID_RESPONSE");
   return value as Record<string, unknown>;
 }
-function parseSession(value: unknown): LibraryStudentSession {
+type CampusSession = Omit<LibraryStudentSession, "account"> & {
+  account: { wallet: string; role: CampusAuthRole };
+};
+
+function parseSession(value: unknown): CampusSession {
   const body = object(value), account = object(body.account);
-  if (!isWalletAddress(account.wallet) || !["STUDENT", "LIBRARIAN"].includes(String(account.role))
+  if (!isWalletAddress(account.wallet) || !["STUDENT", "LIBRARIAN", "PARKING"].includes(String(account.role))
     || typeof body.expiresAt !== "number" || !Number.isSafeInteger(body.expiresAt) || body.expiresAt < 0) {
     throw new LibrarySessionError("INVALID_RESPONSE");
   }
-  return { account: { wallet: account.wallet, role: account.role as LibraryStudentSession["account"]["role"] }, expiresAt: body.expiresAt };
+  return { account: { wallet: account.wallet, role: account.role as CampusAuthRole }, expiresAt: body.expiresAt };
 }
 export function parseAccountStatus(value: unknown): LibraryAccountStatus {
   const body = object(value);
@@ -43,7 +48,7 @@ async function errorCode(response: Response): Promise<string> {
 function request(fetcher: typeof fetch, path: string, init: RequestInit = {}) {
   return fetcher(path, { ...init, cache: "no-store", credentials: "same-origin" });
 }
-async function currentSession(fetcher: typeof fetch): Promise<LibraryStudentSession | null> {
+async function currentSession(fetcher: typeof fetch): Promise<CampusSession | null> {
   const response = await request(fetcher, "/api/auth/session");
   if (response.status === 401) return null;
   if (!response.ok) throw new LibrarySessionError(await errorCode(response), Number(response.headers.get("retry-after")) || undefined);
@@ -53,7 +58,7 @@ async function currentSession(fetcher: typeof fetch): Promise<LibraryStudentSess
 
 export async function readLibraryStudentAccess(wallet: string, fetcher: typeof fetch = fetch): Promise<LibraryStudentAccess> {
   if (!isWalletAddress(wallet)) return { status: "error", code: "WALLET_REQUIRED", blockingLoanIds: [] };
-  let session: LibraryStudentSession | null;
+  let session: CampusSession | null;
   try { session = await currentSession(fetcher); }
   catch (error) { return { status: "error", code: error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] }; }
   if (!session || session.account.wallet.toLowerCase() !== wallet.toLowerCase()) return { status: "sign-in-required", blockingLoanIds: [] };
@@ -63,13 +68,15 @@ export async function readLibraryStudentAccess(wallet: string, fetcher: typeof f
     if (response.status === 401) return { status: "sign-in-required", blockingLoanIds: [] };
     if (!response.ok) return { status: "error", code: await errorCode(response), blockingLoanIds: [] };
     const accountStatus = parseAccountStatus(await response.json());
-    return accountStatus.held ? { status: "held", session, accountStatus } : { status: "ready", session, accountStatus };
+    const studentSession: LibraryStudentSession = { ...session, account: { ...session.account, role: "STUDENT" } };
+    return accountStatus.held ? { status: "held", session: studentSession, accountStatus }
+      : { status: "ready", session: studentSession, accountStatus };
   } catch (error) {
     return { status: "error", code: error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE", blockingLoanIds: [] };
   }
 }
 
-export async function signInLibraryWallet(wallet: string, role: LibraryRole,
+export async function signInLibraryWallet(wallet: string, role: CampusAuthRole,
   signMessage: (account: string, message: string) => Promise<string>, fetcher: typeof fetch = fetch): Promise<void> {
   if (!isWalletAddress(wallet)) throw new LibrarySessionError("WALLET_REQUIRED");
   const existing = await currentSession(fetcher);
@@ -91,7 +98,7 @@ export async function signInLibraryWallet(wallet: string, role: LibraryRole,
   const verifyResponse = await request(fetcher, "/api/auth/verify", { method: "POST",
     headers: { "content-type": "application/json" }, body: JSON.stringify({ challengeId: challenge.challengeId, signature }) });
   if (!verifyResponse.ok) throw new LibrarySessionError(await errorCode(verifyResponse), Number(verifyResponse.headers.get("retry-after")) || undefined);
-  let verified: LibraryStudentSession;
+  let verified: CampusSession;
   try { verified = parseSession(await verifyResponse.json()); }
   catch { throw new LibrarySessionError("INVALID_RESPONSE"); }
   if (verified.account.wallet.toLowerCase() !== wallet.toLowerCase() || verified.account.role !== role) {
@@ -131,6 +138,6 @@ export function librarySessionMessage(code: string): string {
     INVALID_RESPONSE: "Backend trả dữ liệu session không hợp lệ. Chưa mở giao dịch.",
     WALLET_UNAVAILABLE: "Chưa nhận được chữ ký từ Core. Mở Core, kiểm tra yêu cầu đăng nhập rồi thử lại.",
     INVALID_SIGNATURE: "Core trả chữ ký không đúng định dạng Ethereum. Chưa tạo phiên đăng nhập.",
-    WRONG_CHAIN: "Chuyển Core về IntraCampus L1 (20261), rồi ký đăng nhập lại.",
+    WRONG_CHAIN: `Chuyển Core về IntraCampus L1 (${CAMPUS_CHAIN_ID}), rồi ký đăng nhập lại.`,
   } as Record<string, string>)[code] ?? "Chưa xác minh được quyền Library. Thử lại trước khi giao dịch.";
 }

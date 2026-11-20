@@ -1,10 +1,11 @@
+import { type CampusChainId, CAMPUS_CHAIN_ID } from "@intracampus/network";
 import { parseIpAddressList } from "./client-address.ts";
 
 export type AuthRateLimitConfig = { maxRequests: number; windowSeconds: number };
 export type LibraryAuthConfig = {
   origin: string;
   domain: string;
-  chainId: 20261;
+  chainId: CampusChainId;
   challengeTtlSeconds: number;
   sessionTtlSeconds: number;
   challengeRateLimit: AuthRateLimitConfig;
@@ -51,7 +52,7 @@ export function readLibraryAuthConfig(env: Record<string, string | undefined>, n
     return {
       origin: url.origin,
       domain: url.host,
-      chainId: 20261,
+      chainId: CAMPUS_CHAIN_ID,
       challengeTtlSeconds: positiveInteger(env, "LIBRARY_CHALLENGE_TTL_SECONDS", maxTtlSeconds),
       sessionTtlSeconds: positiveInteger(env, "LIBRARY_SESSION_TTL_SECONDS", maxTtlSeconds),
       challengeRateLimit: rateLimit(env, "LIBRARY_CHALLENGE_RATE_LIMIT"),

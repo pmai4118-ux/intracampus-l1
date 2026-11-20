@@ -57,6 +57,7 @@ export function createLibraryRouter(service?: LibraryService, authService?: Auth
     try { session = authService.session(cookieValue(req, authConfig.cookieName)); }
     catch (error) { throw error instanceof AuthError ? error : new LibraryServiceError("DATABASE_BUSY", 503, true, 1); }
     if (!session) throw new LibraryServiceError("UNAUTHENTICATED", 401);
+    if (session.account.role === "PARKING") throw new LibraryServiceError("FORBIDDEN", 403);
     return { wallet: session.account.wallet as `0x${string}`, role: session.account.role } satisfies LibraryAccount;
   };
   const sameOrigin = (req: Request) => {

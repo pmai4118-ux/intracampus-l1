@@ -7,7 +7,7 @@ export class AuthRepository {
 
   constructor(library: LibraryRepository) { this.library = library; }
 
-  isAllowlisted(wallet: string): { wallet: string; role: "STUDENT" | "LIBRARIAN" } | undefined {
+  isAllowlisted(wallet: string): { wallet: string; role: CampusAuthRole } | undefined {
     const account = this.library.accountForWallet(wallet);
     if (!account?.enabled) return undefined;
     return { wallet: account.wallet, role: account.role };
@@ -38,3 +38,4 @@ export class AuthRepository {
     return this.library.revokeSession(tokenHash, now);
   }
 }
+import type { CampusAuthRole } from "@intracampus/network";

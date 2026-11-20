@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Interface, type InterfaceAbi } from "ethers";
 import {
-  campusNetwork, requireLibraryDeployment, type DeployedLibraryDeployment, type LibraryAccount,
+  CAMPUS_CHAIN_ID, campusNetwork, requireLibraryDeployment, type DeployedLibraryDeployment, type LibraryAccount,
   type LibraryApiErrorCode, type LibraryBook, type LibraryDepositIntent, type LibraryLoan,
   type LibraryRequest, type LibrarySettlement, type LibrarySettlementIntent, type LibrarySettlementIntentRequest,
   type LibraryTransaction, type LibraryTransactionAction, type LibraryUnmatchedDeposit, type LibraryEventProof,
@@ -160,7 +160,7 @@ export class LibraryService {
   private publicUnmatched(item: ReturnType<LibraryRepository["unmatchedDeposits"]>[number], chainTime: number): LibraryUnmatchedDeposit {
     const deployment = this.deploymentOrThrow();
     const proof = (event: typeof item.deposit | NonNullable<typeof item.refund>): LibraryEventProof => ({
-      chainId: 20261, contractAddress: event.contractAddress as `0x${string}`, txHash: event.txHash as `0x${string}`,
+      chainId: CAMPUS_CHAIN_ID, contractAddress: event.contractAddress as `0x${string}`, txHash: event.txHash as `0x${string}`,
       blockNumber: event.blockNumber, blockHash: event.blockHash as `0x${string}`, logIndex: event.logIndex,
       eventName: event.eventName, requestId: event.requestId as `0x${string}`, borrower: event.borrower as `0x${string}`,
     });
@@ -168,7 +168,7 @@ export class LibraryService {
       borrower: item.borrower as `0x${string}`, amountWei: item.deposit.amountWei, approvalDeadline: item.deposit.approvalDeadline,
       latestEvent: item.latestEvent, depositProof: proof(item.deposit), refundProof: item.refund ? proof(item.refund) : null,
       refundIntent: item.latestEvent === "DepositReceived" && chainTime >= item.deposit.approvalDeadline ? {
-        chainId: 20261, to: deployment.escrow.address as `0x${string}`,
+        chainId: CAMPUS_CHAIN_ID, to: deployment.escrow.address as `0x${string}`,
         data: new Interface(deployment.escrow.abi as InterfaceAbi).encodeFunctionData("claimExpiredRefund", [item.requestId]) as `0x${string}`,
         valueWei: "0", requestId: item.requestId as `0x${string}`, bookId: item.deposit.bookId as `0x${string}`,
       } : null,
@@ -273,7 +273,7 @@ export class LibraryService {
       }
     } catch (error) { throw serviceFailure(error); }
     return { intentId, requestId: loan.requestId as `0x${string}`, loanId: loan.loanId as `0x${string}`,
-      borrower: loan.borrower as `0x${string}`, chainId: 20261, escrow: deployment.escrow.address as `0x${string}`,
+      borrower: loan.borrower as `0x${string}`, chainId: CAMPUS_CHAIN_ID, escrow: deployment.escrow.address as `0x${string}`,
       treasury: deployment.treasury as `0x${string}`, walletCall: { to: deployment.escrow.address as `0x${string}`,
         data, valueWei: "0" }, preview: outcome, outcome: input.outcome, chainTime: chain.chainTime } as LibrarySettlementIntent;
   }
@@ -534,7 +534,7 @@ export class LibraryService {
       status: item.status,
       submittedAt: item.submittedAt,
       proof: item.status === "CONFIRMED" && item.eventName ? {
-        chainId: 20261, contractAddress: deployment.escrow.address as `0x${string}`,
+        chainId: CAMPUS_CHAIN_ID, contractAddress: deployment.escrow.address as `0x${string}`,
         txHash: item.txHash as `0x${string}`, blockNumber: item.blockNumber!, blockHash: item.blockHash as `0x${string}`,
         logIndex: item.logIndex!, eventName: item.eventName as NonNullable<LibraryTransaction["proof"]>["eventName"],
         requestId: record.requestId as `0x${string}`, borrower: record.wallet as `0x${string}`,
@@ -551,7 +551,7 @@ export class LibraryService {
   private publicTransaction(item: NonNullable<ReturnType<LibraryRepository["getTransaction"]>>, record: LibraryRequestRecord): LibraryTransaction {
     const deployment = this.deploymentOrThrow();
     return { action: item.action, txHash: item.txHash as `0x${string}`, status: item.status, submittedAt: item.submittedAt,
-      proof: item.status === "CONFIRMED" && item.eventName ? { chainId: 20261,
+      proof: item.status === "CONFIRMED" && item.eventName ? { chainId: CAMPUS_CHAIN_ID,
         contractAddress: deployment.escrow.address as `0x${string}`, txHash: item.txHash as `0x${string}`,
         blockNumber: item.blockNumber!, blockHash: item.blockHash as `0x${string}`, logIndex: item.logIndex!,
         eventName: item.eventName as NonNullable<LibraryTransaction["proof"]>["eventName"],

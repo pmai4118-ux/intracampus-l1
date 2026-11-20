@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID, CLOUD_CAMPUS_CHAIN_ID } from "../../packages/network/src/chain.ts";
 import assert from "node:assert/strict";
 import { readFile, writeFile, rename, mkdir, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -32,7 +33,7 @@ export function verifyRuntime(actual, artifact) {
 }
 
 export function deploymentTemplate(artifacts) {
-  return { schemaVersion: 1, status: "unconfigured", chainId: 20261, abiVersion: 1, environment: null,
+  return { schemaVersion: 1, status: "unconfigured", chainId: CAMPUS_CHAIN_ID, abiVersion: 1, environment: null,
     contracts: Object.fromEntries(CONTRACT_NAMES.map((name) => [name, { address: null, abiVersion: 1,
       abi: artifacts[name].abi, transactionHash: null, blockNumber: null, blockHash: null, runtimeCodeHash: null }])),
     roles: null, merchants: null, configurationTransactions: [] };
@@ -41,8 +42,8 @@ export function deploymentTemplate(artifacts) {
 /** Verify receipts independently of Foundry's local claims. Accepts a raw RPC provider for testability. */
 export async function verifyBroadcast({ provider, broadcast, artifacts, environment }) {
   assert(["avalanche-l1", "local-anvil"].includes(environment), "Explicit environment required");
-  assert.equal(BigInt(await provider.send("eth_chainId", [])), 20261n, "Wrong chain");
-  assert.equal(integer(broadcast.chain), 20261, "Wrong broadcast chain");
+  assert.equal(BigInt(await provider.send("eth_chainId", [])), BigInt(CAMPUS_CHAIN_ID), "Wrong chain");
+  assert.equal(integer(broadcast.chain), CAMPUS_CHAIN_ID, "Wrong broadcast chain");
   const client = await provider.send("web3_clientVersion", []);
   assert.equal(typeof client, "string");
   if (environment === "local-anvil") assert.match(client, /anvil/i);
@@ -67,7 +68,7 @@ export async function verifyBroadcast({ provider, broadcast, artifacts, environm
     ]);
     assert(tx && receipt, "Transaction has no confirmed receipt");
     assert.equal(hash(tx.hash), txHash); assert.equal(hash(receipt.transactionHash), txHash);
-    assert.equal(BigInt(tx.chainId), 20261n); assert.equal(BigInt(receipt.status), 1n);
+    assert.equal(BigInt(tx.chainId), BigInt(CAMPUS_CHAIN_ID)); assert.equal(BigInt(receipt.status), 1n);
     assert.equal(BigInt(tx.value), 0n, "Unexpected value transfer");
     deployer ??= address(tx.from);
     assert(sameAddress(tx.from, deployer) && sameAddress(receipt.from, deployer), "Sender mismatch");
@@ -147,14 +148,14 @@ export async function verifyBroadcast({ provider, broadcast, artifacts, environm
   }
   assert(!sameAddress(merchants.parking.address, merchants.canteen.address), "Duplicate merchants");
   // Recheck the chain and canonical blocks after all reads, before publishing the snapshot.
-  assert.equal(BigInt(await provider.send("eth_chainId", [])), 20261n);
+  assert.equal(BigInt(await provider.send("eth_chainId", [])), BigInt(CAMPUS_CHAIN_ID));
   for (const receipt of receipts) {
     const block = await provider.send("eth_getBlockByNumber", [receipt.blockNumber, false]);
     assert(block && hash(block.hash) === hash(receipt.blockHash), "Chain changed while exporting");
   }
   const finalReadBlock = await provider.send("eth_getBlockByNumber", [readBlock.number, false]);
   assert(finalReadBlock && hash(finalReadBlock.hash) === hash(readBlock.hash), "Readback snapshot changed");
-  return { schemaVersion: 1, status: "deployed", chainId: 20261, abiVersion: 1, environment,
+  return { schemaVersion: 1, status: "deployed", chainId: CAMPUS_CHAIN_ID, abiVersion: 1, environment,
     generatedAt: new Date().toISOString(), verifiedAt: { blockNumber: integer(readBlock.number), blockHash: hash(readBlock.hash) },
     contracts, roles, merchants, configurationTransactions: configurations };
 }
@@ -189,10 +190,11 @@ export async function exportDeployment({ rpcUrl, broadcastPath, outputPath, cont
 async function main() {
   const { values } = parseArgs({ options: { broadcast: { type: "string" }, output: { type: "string" }, environment: { type: "string" },
     template: { type: "boolean", default: false }, replace: { type: "boolean", default: false }, help: { type: "boolean" } } });
-  if (values.help) { console.log("export-deployment --broadcast <run-latest.json> --environment avalanche-l1|local-anvil [--output deployments/intracampus.json] [--replace]\nOr --template --output <unconfigured.json>. RPC: INTRACAMPUS_RPC_URL. See docs/deployment.md."); return; }
+  if (values.help) { console.log("export-deployment --broadcast <run-latest.json> --environment avalanche-l1|local-anvil [--output <manifest.json>] [--replace]\nOr --template --output <unconfigured.json>. RPC: INTRACAMPUS_RPC_URL. See docs/deployment.md."); return; }
   assert(values.template ? !values.broadcast && !values.environment : values.broadcast && values.environment, "See --help");
   await exportDeployment({ rpcUrl: process.env.INTRACAMPUS_RPC_URL, broadcastPath: values.broadcast,
-    outputPath: values.output ?? join(root, "deployments/intracampus.json"), environment: values.environment,
+    outputPath: values.output ?? join(root, CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID
+      ? "deployments/intracampus-cloud.json" : "deployments/intracampus.json"), environment: values.environment,
     template: values.template, replace: values.replace });
   console.log("Deployment manifest exported from verified artifacts and configuration.");
 }

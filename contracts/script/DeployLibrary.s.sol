@@ -5,6 +5,7 @@ import {LibraryDepositEscrow} from "../src/LibraryDepositEscrow.sol";
 
 interface LibraryDeploymentVm {
     function envAddress(string calldata name) external returns (address);
+    function envOr(string calldata name, uint256 defaultValue) external returns (uint256);
     function envBytes32(string calldata name, string calldata delim) external returns (bytes32[] memory);
     function envUint(string calldata name, string calldata delim) external returns (uint256[] memory);
     function startBroadcast(address signer) external;
@@ -15,6 +16,7 @@ abstract contract LibraryScriptBase {
     LibraryDeploymentVm internal constant vm =
         LibraryDeploymentVm(address(uint160(uint256(keccak256("hevm cheat code")))));
     uint256 public constant CHAIN_ID = 20261;
+    uint256 private constant CLOUD_CHAIN_ID = 20261120;
     uint256 public constant DEPOSIT_WEI = 50 ether;
 
     struct BookTermSeed {
@@ -26,6 +28,13 @@ abstract contract LibraryScriptBase {
     error WrongChain(uint256 actual);
     error InvalidDeploymentConfig();
     error DeploymentReadbackFailed();
+
+    function _requireChain() internal {
+        uint256 expectedChainId = vm.envOr("NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID", CHAIN_ID);
+        if ((expectedChainId != CHAIN_ID && expectedChainId != CLOUD_CHAIN_ID) || block.chainid != expectedChainId) {
+            revert WrongChain(block.chainid);
+        }
+    }
 
     function _loadBooksFromEnv() internal returns (BookTermSeed[] memory books) {
         bytes32[] memory ids = vm.envBytes32("LIBRARY_BOOK_IDS", ",");
@@ -74,7 +83,7 @@ contract DeployLibrary is LibraryScriptBase {
     }
 
     function run() external returns (LibraryDepositEscrow escrow) {
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         Config memory config = Config({
             deployer: vm.envAddress("DEPLOYER_ADDRESS"),
             administrator: vm.envAddress("LIBRARY_ADMIN_ADDRESS"),
@@ -86,7 +95,7 @@ contract DeployLibrary is LibraryScriptBase {
     }
 
     function runWithConfig(Config memory config) public returns (LibraryDepositEscrow escrow) {
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         validate(config);
 
         vm.startBroadcast(config.deployer);
@@ -145,7 +154,7 @@ contract SeedLibraryBooks is LibraryScriptBase {
     );
 
     function run() external {
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         address escrowAddress = vm.envAddress("LIBRARY_ESCROW_ADDRESS");
         address administrator = vm.envAddress("LIBRARY_ADMIN_ADDRESS");
         BookTermSeed[] memory books = _loadBooksFromEnv();
@@ -153,7 +162,7 @@ contract SeedLibraryBooks is LibraryScriptBase {
     }
 
     function runWithConfig(address escrowAddress, address administrator, BookTermSeed[] memory books) public {
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         if (escrowAddress == address(0) || escrowAddress.code.length == 0 || administrator == address(0)) {
             revert InvalidDeploymentConfig();
         }
@@ -184,7 +193,7 @@ contract SeedLibraryBooks is LibraryScriptBase {
         }
 
         if (anyBroadcast) {
-            if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+            _requireChain();
             vm.startBroadcast(administrator);
             for (uint256 i; i < books.length; ++i) {
                 if (needsSeed[i]) {

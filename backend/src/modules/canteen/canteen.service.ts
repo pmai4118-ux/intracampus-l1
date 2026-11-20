@@ -1,5 +1,5 @@
 import { Interface, id, type InterfaceAbi } from 'ethers';
-import { requireDeployment, type SignedInvoiceEnvelope } from '@intracampus/network';
+import { CAMPUS_CHAIN_ID, requireDeployment, type SignedInvoiceEnvelope } from '@intracampus/network';
 import type { CanteenOrder } from '@intracampus/network';
 import { CanteenRepository, CanteenError } from './canteen.repository.ts';
 import type { InvoiceCreationService } from '../invoices/invoices.service.ts';
@@ -26,7 +26,7 @@ export class CanteenService {
     order = await this.reconcileWallet(order);
     if (order.status === 'PAID' || order.status === 'EXPIRED') return { order, envelope: null };
     const chain = await this.options.rpc.call('eth_chainId',[]);
-    if (BigInt(String(chain)) !== 20261n) throw new CanteenError('WRONG_CHAIN',503);
+    if (BigInt(String(chain)) !== BigInt(CAMPUS_CHAIN_ID)) throw new CanteenError('WRONG_CHAIN',503);
     const block = await this.options.rpc.call('eth_getBlockByNumber',['latest',false]) as { number: string; timestamp: string };
     const blockNumber = Number(BigInt(block.number));
     if (!Number.isSafeInteger(blockNumber) || Math.abs(Date.now()/1000 - Number(BigInt(block.timestamp))) > 300) throw new CanteenError('STALE_CHAIN_STATE',503);

@@ -2,6 +2,7 @@ import { CanteenRepository, demoDishes } from './modules/canteen/canteen.reposit
 import { CanteenService } from './modules/canteen/canteen.service.ts';
 import { createApp } from "./app.ts";
 import { fileURLToPath } from "node:url";
+import { isAbsolute, resolve } from "node:path";
 import { SqliteInvoiceRepository } from "./modules/invoices/invoices.repository.ts";
 import { HttpInvoiceRpc } from "./modules/invoices/invoices.rpc.ts";
 import { readInvoiceDeployment } from "./modules/invoices/receipt.config.ts";
@@ -9,6 +10,7 @@ import { ReceiptService } from "./modules/invoices/receipt.service.ts";
 import { GrantsService } from "./modules/grants/grants.service.ts";
 import { InvoiceCreationService } from "./modules/invoices/invoices.service.ts";
 import { readInvoiceCreationConfig } from "./modules/invoices/invoice.config.ts";
+import { isAddress } from "./modules/invoices/invoices.schema.ts";
 import { readInvoiceChainFreshness } from "./modules/invoices/chain-freshness.ts";
 import { LibraryRepository } from "./modules/library/library.repository.ts";
 import { AuthRepository } from "./modules/auth/auth.repository.ts";
@@ -16,11 +18,19 @@ import { AuthService } from "./modules/auth/auth.service.ts";
 import { readLibraryAuthConfig, type LibraryAuthConfig } from "./modules/auth/auth.config.ts";
 import { readLibraryConfig } from "./modules/library/library.config.ts";
 import { LibraryService } from "./modules/library/library.service.ts";
-import libraryManifest from "../../deployments/intracampus.json" with { type: "json" };
+import { CAMPUS_CHAIN_ID, CLOUD_CAMPUS_CHAIN_ID, selectedDeploymentManifest as libraryManifest } from "@intracampus/network";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
+
+if (CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID) {
+  const databasePaths = [process.env.INVOICES_DB_PATH, process.env.LIBRARY_DB_PATH, process.env.CANTEEN_DB_PATH]
+    .map((value) => value?.trim() ?? "");
+  if (databasePaths.some((value) => !isAbsolute(value)) || new Set(databasePaths.map((value) => resolve(value))).size !== 3) {
+    throw new Error("Cloud demo requires three distinct absolute database paths");
+  }
+}
 
 const deployment = readInvoiceDeployment(process.env);
 const repository = new SqliteInvoiceRepository(process.env.INVOICES_DB_PATH?.trim()
@@ -29,8 +39,9 @@ const rpc = new HttpInvoiceRpc(process.env.INTRACAMPUS_RPC_URL);
 const invoiceChainFreshness = readInvoiceChainFreshness(process.env);
 const receiptService = new ReceiptService({ repository, deployment,
   rpc, chainFreshness: invoiceChainFreshness, log: (entry) => console.log(JSON.stringify(entry)) });
+const invoiceConfig = readInvoiceCreationConfig(process.env);
 const creationService = new InvoiceCreationService({ repository, deployment, rpc, chainFreshness: invoiceChainFreshness,
-  config: readInvoiceCreationConfig(process.env) });
+  config: invoiceConfig });
 const grantsService = new GrantsService({ rpcUrl: process.env.INTRACAMPUS_RPC_URL });
 const libraryRepository = new LibraryRepository(process.env.LIBRARY_DB_PATH?.trim()
   || fileURLToPath(new URL("../data/library.sqlite", import.meta.url)));
@@ -47,11 +58,20 @@ try {
 } catch {
   // Keep unrelated API modules available; auth endpoints fail closed with CONFIGURATION_ERROR.
 }
+let parkingWallet: string | undefined;
+if (authService && isAddress(invoiceConfig.merchant)) {
+  try {
+    libraryRepository.registerParkingOperator(invoiceConfig.merchant);
+    parkingWallet = invoiceConfig.merchant;
+  } catch {
+    console.error("Parking checkout is disabled: could not register the configured Parking wallet.");
+  }
+}
 const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
 canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService, canteenService, repository).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService, repository, parkingWallet).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 

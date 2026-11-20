@@ -7,6 +7,7 @@ import {PurposeBoundGrantVault} from "../src/PurposeBoundGrantVault.sol";
 
 interface DeploymentVm {
     function envAddress(string calldata name) external returns (address);
+    function envOr(string calldata name, uint256 defaultValue) external returns (uint256);
     function startBroadcast(address signer) external;
     function stopBroadcast() external;
 }
@@ -15,6 +16,7 @@ interface DeploymentVm {
 contract Deploy {
     DeploymentVm private constant vm = DeploymentVm(address(uint160(uint256(keccak256("hevm cheat code")))));
     uint256 public constant CHAIN_ID = 20261;
+    uint256 private constant CLOUD_CHAIN_ID = 20261120;
     bytes32 public constant PARKING = keccak256("PARKING");
     bytes32 public constant FOOD = keccak256("FOOD");
 
@@ -31,12 +33,19 @@ contract Deploy {
     error InvalidDeploymentConfig();
     error DeploymentReadbackFailed();
 
+    function _requireChain() internal {
+        uint256 expectedChainId = vm.envOr("NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID", CHAIN_ID);
+        if ((expectedChainId != CHAIN_ID && expectedChainId != CLOUD_CHAIN_ID) || block.chainid != expectedChainId) {
+            revert WrongChain(block.chainid);
+        }
+    }
+
     function run()
         external
         returns (StudentSBTIdentity sbt, CampusPaymentRegistry registry, PurposeBoundGrantVault vault)
     {
         // Check before even reading signer configuration, and again immediately before broadcast.
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         Config memory config = Config({
             deployer: vm.envAddress("DEPLOYER_ADDRESS"),
             sbtIssuer: vm.envAddress("SBT_ISSUER_ADDRESS"),
@@ -46,7 +55,7 @@ contract Deploy {
             canteenMerchant: vm.envAddress("CANTEEN_MERCHANT_ADDRESS")
         });
         validate(config);
-        if (block.chainid != CHAIN_ID) revert WrongChain(block.chainid);
+        _requireChain();
         vm.startBroadcast(config.deployer);
         (sbt, registry, vault) = deployContracts(config);
         vm.stopBroadcast();

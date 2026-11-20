@@ -6,7 +6,8 @@ import { AuthError, type AuthService } from "../auth/auth.service.ts";
 import type { SqliteInvoiceRepository } from "../invoices/invoices.repository.ts";
 import { isHash, same } from "../invoices/invoices.schema.ts";
 
-export function createParkingRouter(repository?: SqliteInvoiceRepository, auth?: AuthService, config?: LibraryAuthConfig) {
+export function createParkingRouter(repository?: SqliteInvoiceRepository, auth?: AuthService, config?: LibraryAuthConfig,
+  parkingWallet?: string) {
   const router = Router();
   const fail = (res: Response, status: number, code: string) => res.status(status).json({ error: { code } });
 
@@ -43,8 +44,11 @@ export function createParkingRouter(repository?: SqliteInvoiceRepository, auth?:
     try {
       const confirm = req.method === "POST";
       if (confirm) {
+        if (!parkingWallet) return fail(res, 503, "CONFIGURATION_ERROR");
         const operator = sessionAccount(req);
-        if (req.get("Origin") !== config?.origin || operator.role !== "LIBRARIAN") return fail(res, 403, "FORBIDDEN");
+        if (req.get("Origin") !== config?.origin || operator.role !== "PARKING" || !same(operator.wallet, parkingWallet)) {
+          return fail(res, 403, "FORBIDDEN");
+        }
       }
 
       const record = repository.get(invoiceId);

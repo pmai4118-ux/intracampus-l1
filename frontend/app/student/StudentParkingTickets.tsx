@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
@@ -79,7 +81,7 @@ function TicketsForWallet({ address, onCountChange }: { address: string; onCount
   if (error === "UNAUTHENTICATED" || error === "FORBIDDEN") return <>
     <p role="status">{access?.status === "error" && access.code !== "SESSION_UNAVAILABLE"
       ? librarySessionMessage(access.code) : "Đăng nhập bằng ví đã thanh toán để xem vé của bạn."}</p>
-    <button type="button" className="secondary-btn" disabled={signingIn || state.chainId !== BigInt(20261)} onClick={() => void signIn()}>
+    <button type="button" className="secondary-btn" disabled={signingIn || state.chainId !== BigInt(CAMPUS_CHAIN_ID)} onClick={() => void signIn()}>
       {signingIn ? "Đang chờ ký trong Core…" : "Đăng nhập để xem vé"}
     </button>
   </>;

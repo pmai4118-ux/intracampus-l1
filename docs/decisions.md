@@ -216,4 +216,10 @@ NetworkProbe bổ sung latestBlock.number/timestamp và headAgeSeconds khi đọ
 
 Receipt gửi xe đã xác minh là mốc check-in. `GET /api/parking/tickets` liệt kê vé chưa checkout của phiên STUDENT khớp ví đang chọn. Mỗi vé hiện QR trong Ví sinh viên. QR chỉ chứa đường dẫn tới `/staff/parking/checkout/:invoiceId`. Bảo vệ quét, kiểm tra vé và xác nhận ở cổng ra.
 
-`GET /api/parking/:invoiceId` trả mã vé và thời điểm ra (Unix giây hoặc `null`). `POST` yêu cầu Origin của frontend và phiên nhân viên demo dùng vai trò LIBRARIAN hiện có. Checkout lưu một dòng cho mỗi hóa đơn trong SQLite hóa đơn, dùng lại thời điểm cũ nếu gửi lại. Đây là xác nhận lượt ra ngoài chain và không thu thêm CAMPUS.
+`GET /api/parking/:invoiceId` trả mã vé và thời điểm ra (Unix giây hoặc `null`). `POST` yêu cầu đúng origin của frontend và phiên `PARKING` do ví Parking được cấu hình ký đăng nhập. Backend lấy ví từ địa chỉ merchant Parking đã xác thực theo manifest và đăng ký quyền khi khởi động. Checkout lưu một dòng cho mỗi hóa đơn trong SQLite hóa đơn, dùng lại thời điểm cũ nếu gửi lại. Đây là xác nhận lượt ra ngoài chain và không thu thêm CAMPUS.
+
+## D020 · Tách chain demo cloud khỏi chain local · 2026-11-20
+
+Chain local IntraCampus giữ chain ID `20261`. Demo cloud dùng `20261120`, dữ liệu và hợp đồng riêng trên VM GCP. Ví demo trong Core có thể dùng lại địa chỉ sau khi thêm mạng mới và cấp lại dữ liệu demo. Chữ ký và giao dịch thuộc chain đã ký.
+
+Chọn chain cloud bằng `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` cho build frontend, backend, RPC gateway, Foundry và các lệnh xuất manifest hoặc seed. `deployments/intracampus-cloud.json` nhận kết quả deploy đã kiểm chứng. Đặt đường dẫn SQLite cloud riêng trong cấu hình backend. Khóa validator và signer mới được tạo và giữ trên VM. Production cần nghiệm thu Preview trước.

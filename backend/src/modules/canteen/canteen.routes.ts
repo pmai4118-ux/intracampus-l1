@@ -13,7 +13,7 @@ export function createCanteenRouter(service?: CanteenService, auth?: AuthService
     const session = cookies?.length === 1 ? auth.session(cookies[0].slice(config.cookieName.length+1)) : null;
     if (!session) throw new CanteenError('UNAUTHENTICATED',401);
     if (session.account.role !== 'STUDENT') throw new CanteenError('FORBIDDEN',403);
-    return session.account;
+    return { wallet: session.account.wallet, role: 'STUDENT' as const };
   };
   router.use('/api/canteen', (_req,res,next) => { res.set('Cache-Control','no-store'); next(); });
   router.use('/api/canteen', express.json({ limit: LIBRARY_REQUEST_BODY_LIMIT_BYTES }));

@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID as CHAIN_ID } from "../../packages/network/src/chain.ts";
 import assert from "node:assert/strict";
 import { lstat, mkdir, readFile, readlink, realpath, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
@@ -12,7 +13,6 @@ import { loadVerifiedArtifact } from "./load-verified-artifact.mjs";
 export const LIBRARY_CONTRACT_NAME = "LibraryDepositEscrow";
 
 const EXPORT_LOCK_SUFFIX = ".ic-library-lock";
-const CHAIN_ID = libraryFixture.network.chainId;
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const coder = AbiCoder.defaultAbiCoder();
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;

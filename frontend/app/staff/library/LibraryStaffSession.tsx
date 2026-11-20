@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { campusNetwork, getLibraryDeployment, type LibraryBook, type LibraryLoan, type LibraryRequest, type LibrarySettlement, type LibrarySettlementIntent, type LibrarySettlementIntentRequest } from '@intracampus/network';
+import { CAMPUS_CHAIN_ID, campusNetwork, getLibraryDeployment, type LibraryBook, type LibraryLoan, type LibraryRequest, type LibrarySettlement, type LibrarySettlementIntent, type LibrarySettlementIntentRequest } from '@intracampus/network';
 import { WalletSession, useCampusWallet } from '../../student/WalletPanel';
 import { formatWalletBalance } from '../../../lib/chains';
 import { LibraryApi, LibraryUiError, libraryTransactionProof, wei } from '../../../lib/library-api';
@@ -98,7 +98,7 @@ function Wallet() {
       <div className="mode-switch-wrapper">
         <span className="mode-switch-kicker">
           <span className={`mode-status-dot ${mode === 'live' ? 'dot-live' : 'dot-demo'}`} aria-hidden="true" />
-          {mode === 'live' ? 'Avalanche L1 · Chain 20261' : 'Bản minh họa'}
+          {mode === 'live' ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : 'Bản minh họa'}
         </span>
         <div className="student-mode-switch" role="group" aria-label="Chế độ bàn thủ thư">
           <button type="button" className="secondary-btn" aria-pressed={mode === 'live'} onClick={() => setMode('live')}>Thủ thư thật</button>

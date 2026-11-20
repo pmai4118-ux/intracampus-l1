@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
@@ -28,7 +30,7 @@ function GrantView({ controller, config, access, onSignIn, onRefreshAccess, sign
   useEffect(() => { void controller.bindWallet(access.status === "ready" || access.status === "held" ? wallet.address : null); },
     [controller, wallet.address, wallet.chainId, access.status]);
   const matching = access.status === "ready" && wallet.address === state.beneficiary
-    && wallet.chainId === BigInt(20261) && wallet.canProceed;
+    && wallet.chainId === BigInt(CAMPUS_CHAIN_ID) && wallet.canProceed;
   let amountWei: bigint | null = null; try { amountWei = parseGrantAmount(amount); } catch { /* Show validation on submit, keep typed text. */ }
   if (access.status === "held") return <div className="wallet-warning" role="alert">
     <p>{librarySessionMessage("ACCOUNT_HELD")}</p>
@@ -51,7 +53,7 @@ function GrantView({ controller, config, access, onSignIn, onRefreshAccess, sign
     <p>{access.status === "error" ? librarySessionMessage(access.code)
       : access.status === "sign-in-required" ? librarySessionMessage("UNAUTHENTICATED") : "Đang kiểm tra session Library…"}</p>
     {access.status === "sign-in-required" || access.status === "error" ? <button type="button" className="secondary-btn"
-      disabled={!wallet.address || wallet.chainId !== BigInt(20261) || signingIn} onClick={onSignIn}>
+      disabled={!wallet.address || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID) || signingIn} onClick={onSignIn}>
       {signingIn ? "Đang chờ ký trong Core…" : "Đăng nhập bằng ví sinh viên"}</button> : null}
     <button type="button" className="secondary-btn" disabled={!wallet.address || signingIn} onClick={onRefreshAccess}>Kiểm tra session</button>
   </div>;
@@ -74,7 +76,7 @@ function GrantView({ controller, config, access, onSignIn, onRefreshAccess, sign
       <div className="transaction-context">
         <span>Người chi · ví sinh viên</span><HashChip value={state.beneficiary ?? "Chưa kết nối"} copyLabel="Sao chép ví sinh viên" />
         <span>Merchant nhận · Căn-tin</span><HashChip value={config.merchant} copyLabel="Sao chép địa chỉ căn-tin" />
-        <span>Vault · IntraCampus L1 · chain 20261</span><HashChip value={config.vault} copyLabel="Sao chép địa chỉ vault" />
+        <span>Vault · IntraCampus L1 · chain {CAMPUS_CHAIN_ID}</span><HashChip value={config.vault} copyLabel="Sao chép địa chỉ vault" />
       </div>
     </details>
     <TransactionStepper state={grantStep(state.phase)} errorStep={state.phase === "reverted" ? 2 : 0} />
@@ -98,7 +100,7 @@ function GrantView({ controller, config, access, onSignIn, onRefreshAccess, sign
       {state.phase === "checking" ? "Đang kiểm tra lại số dư, mạng và mô phỏng khoản chi…" : state.phase === "signing" ? "Đang chờ bạn xác nhận trong Core…" : "Đã có hash, đang chờ receipt và event GrantSpent được xác minh…"}
     </p> : null}
     {state.message ? <p role={state.errorCode ? "alert" : "status"} className={state.errorCode ? "wallet-warning" : "wallet-status"}>{state.message}</p> : null}
-    {!matching ? <p>Giữ đúng ví được cấp và chain 20261 để chi. Khi đổi tài khoản, số dư cũ được xóa khỏi màn hình.</p> : null}
+    {!matching ? <p>Giữ đúng ví được cấp và chain {CAMPUS_CHAIN_ID} để chi. Khi đổi tài khoản, số dư cũ được xóa khỏi màn hình.</p> : null}
     {state.intent?.hash ? <div className="tx-proof-box"><strong>Hash khoản chi · {state.phase === "confirmed" ? "Đã xác minh" : "Chưa xác nhận thành công"}</strong>
       <div><HashChip value={state.intent.hash} start={10} end={8} copyLabel="Sao chép mã giao dịch FOOD" /></div></div> : null}
     {state.phase === "prepared" ? <div>
@@ -142,7 +144,7 @@ export default function GrantPanel() {
     <div className="panel-heading-with-icon"><span className="panel-icon icon-gold"><Icon name="sparkle" /></span><div><span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span><h2 id="grant-title">Voucher học bổng</h2></div><span className="step-label">02 / 03</span></div>
     <p>Chi ngân sách FOOD tại căn-tin bằng ví được cấp.</p>
     {error ? <p role="status">{error}</p>
-      : !walletState.address ? <p role="status">Kết nối ví Core trên chain 20261 để kiểm tra số dư và chi voucher FOOD.</p>
+      : !walletState.address ? <p role="status">Kết nối ví Core trên chain {CAMPUS_CHAIN_ID} để kiểm tra số dư và chi voucher FOOD.</p>
       : session && access ? <GrantView controller={session.controller} config={session.config} access={access}
         onSignIn={() => void signIn()} onRefreshAccess={() => void refreshAccess()} signingIn={signingIn} />
       : <p role="status">Đang kiểm tra session và cấu hình học bổng…</p>}

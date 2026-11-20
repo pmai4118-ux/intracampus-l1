@@ -1,4 +1,6 @@
 'use client';
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { GrantController, grantConfig, grantMessage } from '../../../lib/grants';
 import { browserWalletConfig, formatWalletBalance } from '../../../lib/chains';
@@ -34,7 +36,7 @@ export default function CanteenFood({ order, onHash }: { order: CanteenOrder; on
     } catch(e) { setError(grantMessage(e instanceof Error ? e.message : 'RPC_UNAVAILABLE')); }
     return () => session?.dispose();
   },[order.id,wallet,state.address]);
-  return <>{destination ? <dl className="library-details"><dt>Mạng</dt><dd>IntraCampus L1 · 20261</dd><dt>Căn-tin nhận</dt><dd><HashChip value={destination.merchant} copyLabel="Sao chép địa chỉ căn-tin" /></dd><dt>Vault FOOD</dt><dd><HashChip value={destination.vault} copyLabel="Sao chép địa chỉ vault FOOD" /></dd></dl> : null}{error ? <p role="alert">{error}</p> : controller ? <FoodView controller={controller} order={order} onHash={onHash} /> : <p role="status">Đang đọc học bổng FOOD…</p>}</>;
+  return <>{destination ? <dl className="library-details"><dt>Mạng</dt><dd>IntraCampus L1 · {CAMPUS_CHAIN_ID}</dd><dt>Căn-tin nhận</dt><dd><HashChip value={destination.merchant} copyLabel="Sao chép địa chỉ căn-tin" /></dd><dt>Vault FOOD</dt><dd><HashChip value={destination.vault} copyLabel="Sao chép địa chỉ vault FOOD" /></dd></dl> : null}{error ? <p role="alert">{error}</p> : controller ? <FoodView controller={controller} order={order} onHash={onHash} /> : <p role="status">Đang đọc học bổng FOOD…</p>}</>;
 }
 function FoodView({ controller, order, onHash }: { controller: GrantController; order: CanteenOrder; onHash: (hash: string) => Promise<CanteenOrder | undefined> }) {
   const snapshot = useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot);

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { FetchRequest, Interface, JsonRpcProvider, Transaction, Wallet, getAddress, id, keccak256 } from "ethers";
-import { campusNetwork, requireDeployment } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, campusNetwork, requireDeployment } from "@intracampus/network";
 import { parseSeedConfig } from "./seed-demo.ts";
 import type { SeedConfig } from "./seed-demo.ts";
 import type { DeployedManifest } from "@intracampus/network";
@@ -46,7 +46,7 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
   const vault = deployment.contracts.PurposeBoundGrantVault;
   const beneficiary = getAddress(config.student.address);
   const category = deployment.merchants.canteen.category;
-  if (config.chainId !== 20261 || deployment.chainId !== 20261 || !same(category, id("FOOD"))) throw new GrantSeedError("INVALID_SEED_CONFIG");
+  if (config.chainId !== CAMPUS_CHAIN_ID || deployment.chainId !== CAMPUS_CHAIN_ID || !same(category, id("FOOD"))) throw new GrantSeedError("INVALID_SEED_CONFIG");
   const forbidden = [...Object.values(deployment.contracts).map((c) => c.address), ...Object.values(deployment.roles),
     ...Object.values(deployment.merchants).map((m) => m.address), config.funder, config.normal.address, "0x0000000000000000000000000000000000000000"];
   if (forbidden.some((address) => same(address, beneficiary))) throw new GrantSeedError("INVALID_BENEFICIARY");
@@ -107,7 +107,7 @@ export async function seedGrant({ config, reader, journal, transport, apply = fa
   try {
     const tx = Transaction.from(prepared.rawTransaction);
     const expectedData = new Interface(vault.abi).encodeFunctionData("grant", [beneficiary, category]);
-    if (!tx.isSigned() || tx.hash !== prepared.hash || tx.nonce !== prepared.nonce || tx.chainId !== 20261n
+    if (!tx.isSigned() || tx.hash !== prepared.hash || tx.nonce !== prepared.nonce || tx.chainId !== BigInt(CAMPUS_CHAIN_ID)
       || !tx.to || !same(tx.to, vault.address) || !tx.from || !same(tx.from, deployment.roles.grantIssuer)
       || tx.value !== AMOUNT || tx.data !== expectedData) throw new Error();
   } catch { throw new GrantSeedError("INVALID_SIGNED_GRANT"); }

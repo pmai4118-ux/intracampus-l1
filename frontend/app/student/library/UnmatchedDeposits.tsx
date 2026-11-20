@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Interface } from 'ethers';
-import { getLibraryDeployment, type LibraryUnmatchedDeposit } from '@intracampus/network';
+import { CAMPUS_CHAIN_ID, getLibraryDeployment, type LibraryUnmatchedDeposit } from '@intracampus/network';
 import { useCampusWallet } from '../WalletPanel';
 import { LibraryApi, LibraryUiError, bytes32 } from '../../../lib/library-api';
 import { formatWalletBalance } from '../../../lib/chains';
@@ -72,7 +72,7 @@ function Refund({ initial, api }: { initial: LibraryUnmatchedDeposit; api: Libra
     if (!alive.current) return;
     const deployment = getLibraryDeployment();
     const walletNow = controller.getSnapshot();
-    if (deployment.status !== 'deployed' || walletNow.chainId !== BigInt(20261)
+    if (deployment.status !== 'deployed' || walletNow.chainId !== BigInt(CAMPUS_CHAIN_ID)
       || walletNow.address?.toLowerCase() !== initial.borrower.toLowerCase()
       || result.deposit.requestId !== initial.requestId || result.deposit.bookId !== initial.bookId
       || result.deposit.borrower.toLowerCase() !== initial.borrower.toLowerCase()
@@ -99,10 +99,10 @@ function Refund({ initial, api }: { initial: LibraryUnmatchedDeposit; api: Libra
     const expected = new Interface(d.escrow.abi).encodeFunctionData('claimExpiredRefund', [fresh.requestId]);
     const ready = () => {
       const current = controller.getSnapshot();
-      if (!alive.current || !current.canProceed || current.chainId !== BigInt(20261) || current.address?.toLowerCase() !== fresh.borrower.toLowerCase()) throw new LibraryUiError('WALLET_SESSION_CHANGED');
+      if (!alive.current || !current.canProceed || current.chainId !== BigInt(CAMPUS_CHAIN_ID) || current.address?.toLowerCase() !== fresh.borrower.toLowerCase()) throw new LibraryUiError('WALLET_SESSION_CHANGED');
     };
     ready();
-    if (intent.chainId !== 20261 || intent.to.toLowerCase() !== d.escrow.address.toLowerCase()
+    if (intent.chainId !== CAMPUS_CHAIN_ID || intent.to.toLowerCase() !== d.escrow.address.toLowerCase()
       || fresh.depositProof.contractAddress.toLowerCase() !== d.escrow.address.toLowerCase()
       || intent.data.toLowerCase() !== expected.toLowerCase() || intent.valueWei !== '0') throw new LibraryUiError('INTENT_MISMATCH');
     const previousHashes = [...new Set([...(previous?.previousHashes ?? []), ...(previous?.hash ? [previous.hash] : [])])];
@@ -130,6 +130,6 @@ function Refund({ initial, api }: { initial: LibraryUnmatchedDeposit; api: Libra
       <label>Mã giao dịch hoàn từ lịch sử ví <input value={journal.hash ?? candidate} readOnly={journal.hash !== null} onChange={e => setCandidate(e.target.value)} autoComplete="off" spellCheck={false} /></label>
       <button type="submit" className="secondary-btn" disabled={busy}>Đối chiếu hoàn cọc</button></form>}
     {!deposit.refundProof && deposit.refundIntent && (!journal || journal.phase === 'reverted') && !review && <button type="button" className="secondary-btn" disabled={busy || !wallet.canProceed} onClick={() => setReview(true)}>Xem hoàn cọc riêng</button>}
-    {review && <div role="region" aria-label="Kiểm tra hoàn cọc riêng"><p>Hoàn {formatWalletBalance(BigInt(deposit.amountWei))} về ví đã nộp <code>{deposit.borrower}</code>. Mạng IntraCampus 20261. Không gửi thêm CAMPUS, ví trả gas riêng.</p><div className="library-actions"><button type="button" className="primary-cta-btn" disabled={busy} onClick={() => void run(send)}>Xác nhận và mở ví</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => setReview(false)}>Hủy</button></div></div>}
+    {review && <div role="region" aria-label="Kiểm tra hoàn cọc riêng"><p>Hoàn {formatWalletBalance(BigInt(deposit.amountWei))} về ví đã nộp <code>{deposit.borrower}</code>. Mạng IntraCampus {CAMPUS_CHAIN_ID}. Không gửi thêm CAMPUS, ví trả gas riêng.</p><div className="library-actions"><button type="button" className="primary-cta-btn" disabled={busy} onClick={() => void run(send)}>Xác nhận và mở ví</button><button type="button" className="secondary-btn" disabled={busy} onClick={() => setReview(false)}>Hủy</button></div></div>}
   </article>;
 }

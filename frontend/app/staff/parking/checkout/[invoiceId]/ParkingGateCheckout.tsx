@@ -1,9 +1,11 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ParkingCheckout } from "@intracampus/network";
-import { librarySessionMessage, LibrarySessionError, signInLibraryWallet } from "../../../../../lib/library-session";
+import { LibrarySessionError, signInLibraryWallet } from "../../../../../lib/library-session";
 import { formatCheckoutTime, ParkingCheckoutError, readParkingCheckout } from "../../../../../lib/parking";
 import HashChip from "../../../../components/HashChip";
 import Icon from "../../../../components/Icon";
@@ -12,11 +14,21 @@ import { useCampusWallet } from "../../../../student/WalletPanel";
 const messages: Record<string, string> = {
   PARKING_TICKET_NOT_FOUND: "Không tìm thấy vé bãi xe. Kiểm tra lại mã QR tại quầy.",
   PARKING_PAYMENT_REQUIRED: "Điểm thu chưa xác minh thanh toán cho vé này. Kiểm tra lại với quầy.",
-  UNAUTHENTICATED: "Đăng nhập bằng ví nhân viên để xác nhận lượt ra.",
-  FORBIDDEN: "Phiên đăng nhập chưa có quyền xác nhận tại cổng ra. Hãy dùng ví nhân viên demo.",
+  UNAUTHENTICATED: "Ký đăng nhập bằng ví Parking để xác nhận lượt ra.",
+  FORBIDDEN: "Hãy chọn đúng ví Parking trong Core rồi đăng nhập lại.",
+  CONFIGURATION_ERROR: "Dịch vụ cổng ra chưa được cấu hình.",
 };
 
-export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }) {
+const signInMessages: Record<string, string> = {
+  UNAUTHENTICATED: "Phiên ký đã hết hạn hoặc ví chưa được cấp quyền cổng ra. Kiểm tra ví Parking rồi thử lại.",
+  FORBIDDEN: "Không được phép đăng nhập tại cổng ra. Kiểm tra địa chỉ trang và ví Parking.",
+  WALLET_SESSION_CHANGED: "Phiên đăng nhập hoặc ví trong Core đã thay đổi. Chọn lại ví Parking.",
+  WALLET_UNAVAILABLE: "Chưa nhận được chữ ký đăng nhập. Mở Core và kiểm tra yêu cầu ký.",
+  RATE_LIMITED: "Bạn đã thử đăng nhập quá nhiều lần. Đợi một lúc rồi thử lại.",
+  CONFIGURATION_ERROR: "Dịch vụ đăng nhập cổng ra chưa được cấu hình.",
+};
+
+export default function ParkingGateCheckout({ invoiceId, parkingWallet }: { invoiceId: string; parkingWallet?: string }) {
   const { state: wallet, controller } = useCampusWallet();
   const [ticket, setTicket] = useState<ParkingCheckout | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +50,7 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
   }, [invoiceId, attempt]);
 
   async function checkout() {
+    if (!correctChain || !operatorMatches) return;
     setBusy(true);
     setError(null);
     try {
@@ -53,17 +66,15 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
   }
 
   async function signIn() {
-    if (!wallet.address) return;
+    if (!wallet.address || !correctChain || !operatorMatches) return;
     setBusy(true);
     setError(null);
     try {
-      await signInLibraryWallet(wallet.address, "LIBRARIAN", (account, message) => controller.signMessage(account, message));
+      await signInLibraryWallet(wallet.address, "PARKING", (account, message) => controller.signMessage(account, message));
       setNeedsSignIn(false);
     } catch (cause) {
       const code = cause instanceof LibrarySessionError ? cause.code : "WALLET_UNAVAILABLE";
-      setError(["FORBIDDEN", "WALLET_SESSION_CHANGED"].includes(code)
-        ? "Hãy chọn ví nhân viên demo trong Core rồi đăng nhập lại."
-        : librarySessionMessage(code));
+      setError(signInMessages[code] ?? "Chưa đăng nhập được tại cổng ra. Kiểm tra Core rồi thử lại.");
     } finally {
       setBusy(false);
     }
@@ -72,7 +83,9 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
   const isLoading = !ticket && !error;
   const isCheckedOut = ticket?.checkedOutAt != null;
   const isReadyToExit = ticket?.checkedOutAt === null;
-  const correctChain = wallet.chainId === BigInt(20261);
+  const correctChain = wallet.chainId === BigInt(CAMPUS_CHAIN_ID);
+  const operatorMatches = !!parkingWallet && wallet.address?.toLowerCase() === parkingWallet.toLowerCase();
+  const canUseGate = correctChain && operatorMatches;
   const cardTone = isCheckedOut ? "is-checked-out" : isReadyToExit ? "is-ready" : error ? "is-error" : "";
 
   return (
@@ -184,7 +197,7 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
             </button>
           ) : null}
 
-          {isReadyToExit && !needsSignIn ? (
+          {isReadyToExit && canUseGate && !needsSignIn ? (
             <button
               className="primary-cta-btn gate-confirm-btn"
               type="button"
@@ -196,8 +209,10 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
             </button>
           ) : null}
 
-          {needsSignIn &&
-            (wallet.status === "no-wallet" ? (
+          {isReadyToExit && (!canUseGate || needsSignIn) &&
+            (!parkingWallet ? (
+              <p className="wallet-warning">Chưa có ví Parking được cấu hình cho cổng ra.</p>
+            ) : wallet.status === "no-wallet" ? (
               <p className="wallet-warning">
                 Mở lại liên kết QR trong trình duyệt có ví Core để đăng nhập.
               </p>
@@ -218,6 +233,8 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
               >
                 Chuyển sang IntraCampus L1
               </button>
+            ) : !operatorMatches ? (
+              <p className="wallet-warning">Chọn ví Parking {parkingWallet.slice(0, 6)}…{parkingWallet.slice(-4)} trong Core để xác nhận lượt ra.</p>
             ) : (
               <button
                 className="primary-cta-btn"
@@ -225,7 +242,7 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
                 disabled={busy}
                 onClick={() => void signIn()}
               >
-                {busy ? "Đang đăng nhập…" : "Đăng nhập bằng ví nhân viên"}
+                {busy ? "Đang đăng nhập…" : "Đăng nhập bằng ví Parking"}
               </button>
             ))}
 
@@ -252,7 +269,7 @@ export default function ParkingGateCheckout({ invoiceId }: { invoiceId: string }
             <dd>
               <span className={`network-pill ${correctChain ? "pill-ok" : wallet.status === "wrong-chain" ? "pill-danger" : ""}`}>
                 <span className="status-dot" aria-hidden="true" />
-                {wallet.chainId === null ? "Chưa kết nối" : correctChain ? "Chain 20261" : `Chain ${wallet.chainId.toString()}`}
+                {wallet.chainId === null ? "Chưa kết nối" : correctChain ? `Chain ${CAMPUS_CHAIN_ID}` : `Chain ${wallet.chainId.toString()}`}
               </span>
             </dd>
           </div>

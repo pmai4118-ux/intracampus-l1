@@ -1,4 +1,5 @@
-export type LibraryMigration = { version: number; sql: string };
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+export type LibraryMigration = { version: number; sql: string; rebuildsReferencedTable?: true };
 
 // Version 1 is deliberately additive and has no destructive down migration.
 export const libraryMigrations: readonly LibraryMigration[] = [{
@@ -49,7 +50,7 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
       refund_status TEXT NOT NULL CHECK (refund_status IN ('NONE', 'REFUND_DUE', 'REFUNDED')),
       deposit_wei TEXT CHECK (deposit_wei IS NULL OR (deposit_wei <> '' AND deposit_wei NOT GLOB '*[^0-9]*')),
       approval_deadline INTEGER,
-      chain_id INTEGER CHECK (chain_id IS NULL OR chain_id = 20261),
+      chain_id INTEGER CHECK (chain_id IS NULL OR chain_id = ${CAMPUS_CHAIN_ID}),
       contract_address TEXT,
       deposit_tx_hash TEXT,
       created_at INTEGER NOT NULL,
@@ -89,7 +90,7 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
 
     CREATE TABLE chain_events (
       event_id INTEGER PRIMARY KEY,
-      chain_id INTEGER NOT NULL CHECK (chain_id = 20261),
+      chain_id INTEGER NOT NULL CHECK (chain_id = ${CAMPUS_CHAIN_ID}),
       contract_address TEXT NOT NULL,
       tx_hash TEXT NOT NULL,
       log_index INTEGER NOT NULL CHECK (log_index >= 0),
@@ -309,5 +310,24 @@ export const libraryMigrations: readonly LibraryMigration[] = [{
       block_number INTEGER,
       block_hash TEXT
     ) STRICT;
+  `,
+}, {
+  version: 7,
+  rebuildsReferencedTable: true,
+  sql: `
+    CREATE TABLE accounts_new (
+      account_id INTEGER PRIMARY KEY,
+      wallet TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      role TEXT NOT NULL CHECK (role IN ('STUDENT', 'LIBRARIAN', 'PARKING')),
+      enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    INSERT INTO accounts_new(account_id, wallet, role, enabled, created_at)
+      SELECT account_id, wallet, role, enabled, created_at FROM accounts;
+    DROP TABLE accounts;
+    ALTER TABLE accounts_new RENAME TO accounts;
+    CREATE TRIGGER trg_library_account_identity_immutable
+      BEFORE UPDATE OF wallet, role ON accounts
+      BEGIN SELECT RAISE(ABORT, 'LIBRARY_ACCOUNT_IDENTITY_IMMUTABLE'); END;
   `,
 }];

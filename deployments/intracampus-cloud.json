@@ -1,0 +1,2118 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "chainId": 20261120,
+  "abiVersion": 1,
+  "environment": "avalanche-l1",
+  "generatedAt": "2026-11-20T15:36:38.621Z",
+  "verifiedAt": {
+    "blockNumber": 5,
+    "blockHash": "0x2f95344f780b9a89a5d54edc8529783193f21e521089fed920a0f902d821b6c6"
+  },
+  "contracts": {
+    "StudentSBTIdentity": {
+      "address": "0x2df550860c7Aa7873631291E27ae51898Cb5e1c3",
+      "abiVersion": 1,
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "issuer_",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "approve",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "balanceOf",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "credentials",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "getApproved",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isApprovedForAll",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "issuer",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "locked",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "mint",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "ownerOf",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "revoke",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "safeTransferFrom",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "safeTransferFrom",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "setApprovalForAll",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "supportsInterface",
+          "inputs": [
+            {
+              "name": "interfaceId",
+              "type": "bytes4",
+              "internalType": "bytes4"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "function",
+          "name": "tierOf",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "transferFrom",
+          "inputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "pure"
+        },
+        {
+          "type": "event",
+          "name": "Locked",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "Transfer",
+          "inputs": [
+            {
+              "name": "from",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "to",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "indexed": true,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "CredentialAlreadyIssued",
+          "inputs": [
+            {
+              "name": "wallet",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidExpiry",
+          "inputs": [
+            {
+              "name": "expiresAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidWallet",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "Soulbound",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "TokenNotFound",
+          "inputs": [
+            {
+              "name": "tokenId",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedIssuer",
+          "inputs": []
+        }
+      ],
+      "transactionHash": "0x1be40da33103786314bc3b3d15b4b41e6fa0d47f731a2216827282d423611569",
+      "blockNumber": 1,
+      "blockHash": "0xc1f367dda92aa5052fc1d6c4dba8fa8be3c509c81a1cde48acef37aa19b52d26",
+      "runtimeCodeHash": "0xb9bd701506656bc78cf26529afacbed1355af987c4b37a18bf0ed2b9886e6646"
+    },
+    "CampusPaymentRegistry": {
+      "address": "0xE92F507aB23CC63a7b50a09117a3A16f1b02fFdD",
+      "abiVersion": 1,
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "admin_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "posSigner_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "studentSbt_",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "admin",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "allowedMerchantCategories",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "allowed",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "isInvoicePaid",
+          "inputs": [
+            {
+              "name": "invoiceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "payInvoice",
+          "inputs": [
+            {
+              "name": "invoice",
+              "type": "tuple",
+              "internalType": "struct CampusPaymentRegistry.Invoice",
+              "components": [
+                {
+                  "name": "invoiceId",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "merchant",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "category",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
+            },
+            {
+              "name": "signature",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "payable"
+        },
+        {
+          "type": "function",
+          "name": "posSigner",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "quoteInvoice",
+          "inputs": [
+            {
+              "name": "invoice",
+              "type": "tuple",
+              "internalType": "struct CampusPaymentRegistry.Invoice",
+              "components": [
+                {
+                  "name": "invoiceId",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "merchant",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "category",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "expiresAt",
+                  "type": "uint64",
+                  "internalType": "uint64"
+                }
+              ]
+            },
+            {
+              "name": "payer",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "tier",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "discountAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "paidAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "setMerchantCategory",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "allowed",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "studentSbt",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract IStudentTier"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "InvoicePaid",
+          "inputs": [
+            {
+              "name": "invoiceId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "payer",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "merchant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "indexed": false,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "originalAmount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "discountAmount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "paidAmount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "tier",
+              "type": "uint8",
+              "indexed": false,
+              "internalType": "uint8"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "MerchantCategoryUpdated",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "allowed",
+              "type": "bool",
+              "indexed": false,
+              "internalType": "bool"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "IncorrectPaymentAmount",
+          "inputs": [
+            {
+              "name": "sentValue",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "requiredAmount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidConfiguration",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidInvoice",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidMerchantOrCategory",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidSignature",
+          "inputs": [
+            {
+              "name": "recoveredSigner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "expectedSigner",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvoiceAlreadyPaid",
+          "inputs": [
+            {
+              "name": "invoiceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvoiceExpired",
+          "inputs": [
+            {
+              "name": "invoiceId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "expiresAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "currentTimestamp",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "MerchantTransferFailed",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ReentrantPayment",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedAdmin",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnsupportedTier",
+          "inputs": [
+            {
+              "name": "tier",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ]
+        }
+      ],
+      "transactionHash": "0xf0c3dc629a6f40b4ddc5df9ead3f94fc4bb37102cff79c72076a409dac425a5b",
+      "blockNumber": 2,
+      "blockHash": "0xda040c880daad37e1c22aa1f8796a6338584b03b8a6fed30e36191f51835d013",
+      "runtimeCodeHash": "0x29e6bfdffe1c684396c707e0f7c6a481a2453de1efeaaed40bd31c94f337dfea"
+    },
+    "PurposeBoundGrantVault": {
+      "address": "0x166a0b0e67bb27F216b67EC88AB9841D5d6B8B58",
+      "abiVersion": 1,
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "issuer_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "registry_",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "balances",
+          "inputs": [
+            {
+              "name": "beneficiary",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "balance",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "grant",
+          "inputs": [
+            {
+              "name": "beneficiary",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "payable"
+        },
+        {
+          "type": "function",
+          "name": "issuer",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "merchantRegistry",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "contract IGrantMerchantRegistry"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "spend",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "totalAllocated",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "GrantIssued",
+          "inputs": [
+            {
+              "name": "beneficiary",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "issuer",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "balance",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "GrantSpent",
+          "inputs": [
+            {
+              "name": "beneficiary",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "merchant",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "balance",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "InsufficientGrantBalance",
+          "inputs": [
+            {
+              "name": "available",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "requested",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidAmount",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidBeneficiary",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidCategory",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidConfiguration",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidMerchant",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "category",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "MerchantTransferFailed",
+          "inputs": [
+            {
+              "name": "merchant",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ReentrantGrant",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedIssuer",
+          "inputs": []
+        }
+      ],
+      "transactionHash": "0xc888a03256a46a1605f164e379fa2702e979397605092b0fcc4cb618fcc2336d",
+      "blockNumber": 3,
+      "blockHash": "0xd27c1d60ca5be5c6727f42fe5b0f388206182f63d75ef8eb4200bd4589529632",
+      "runtimeCodeHash": "0xdf43892e4c826965e6d22d186f8216f26c8e71c13fd40b93bfe5bda1c88ffbd3"
+    }
+  },
+  "roles": {
+    "deployer": "0x4488925B215899128a6eFE9c5efC111675F1acb1",
+    "sbtIssuer": "0xC67497dCe89e3373f95aCe1a98b9270e8ab18329",
+    "posSigner": "0x91F57891DE2b5785193C975E634a5b65155C54a0",
+    "grantIssuer": "0xA1Cb7975324Be2590b3Ae773526fcFcde25f794e"
+  },
+  "merchants": {
+    "parking": {
+      "address": "0x2ac10704067a2a68E8945185F30865dBFBE834f3",
+      "category": "0xe3415db38bf7529604e320f58333c9ff6b278ff38b3391db9da4273c7be086eb"
+    },
+    "canteen": {
+      "address": "0x73f0129Fd4B3f4Cd63290b38412345951d9BE1a0",
+      "category": "0x2f6f5a261d6f4514c3f09a834720fe583c82f2ee4758ce9a45fbd67428e9f93d"
+    }
+  },
+  "configurationTransactions": [
+    {
+      "transactionHash": "0x5383a4e223b827b4c1825ce40837f3682433c0a03dba2493bf6bee5bb11a7c56",
+      "blockNumber": 4,
+      "blockHash": "0x10285a9610389d9e0f1e55d9c61c9a0c64221c368c34c4bb98ef3f529d8066b0"
+    },
+    {
+      "transactionHash": "0xc018b04f02cad60e78d774443c07ca56b3d24db95c43f1ebd71fd60db291636d",
+      "blockNumber": 5,
+      "blockHash": "0x2f95344f780b9a89a5d54edc8529783193f21e521089fed920a0f902d821b6c6"
+    }
+  ],
+  "library": {
+    "schemaVersion": 1,
+    "status": "deployed",
+    "chainId": 20261120,
+    "abiVersion": 1,
+    "environment": "avalanche-l1",
+    "generatedAt": "2026-11-20T15:36:44.567Z",
+    "verifiedAt": {
+      "blockNumber": 8,
+      "blockHash": "0x1e3671623ce585071bcb80bf652309ddc8bf7e48e97812df2188d1eca463c40d"
+    },
+    "escrow": {
+      "address": "0x9D792353cca3bf7817207f711266A7A0Cb5d37f6",
+      "abiVersion": 1,
+      "abi": [
+        {
+          "type": "constructor",
+          "inputs": [
+            {
+              "name": "administrator_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "librarian_",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "treasury_",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "APPROVAL_WINDOW",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "FULL_DEPOSIT_RETENTION_AFTER",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "GRACE_PERIOD",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "LATE_FEE_INTERVAL",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "LATE_FEE_PER_INTERVAL",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "LOAN_DURATION",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "MAX_LATE_FEE",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "administrator",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "approve",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "bookTerms",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "depositWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "isSealed",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "claimExpiredRefund",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "confirmPhysicalReturn",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "deposit",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "payable"
+        },
+        {
+          "type": "function",
+          "name": "librarian",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "payShortfall",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "payable"
+        },
+        {
+          "type": "function",
+          "name": "reject",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "requestInfo",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "borrower",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "depositWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "depositedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "approvedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "dueAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "state",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "shortfallWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "returnReceivedAt",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "function",
+          "name": "sealBookTerms",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "seedBookTerms",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "depositWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "settleLost",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "settleReturn",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "repairRequestedWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ],
+          "outputs": [],
+          "stateMutability": "nonpayable"
+        },
+        {
+          "type": "function",
+          "name": "treasury",
+          "inputs": [],
+          "outputs": [
+            {
+              "name": "",
+              "type": "address",
+              "internalType": "address"
+            }
+          ],
+          "stateMutability": "view"
+        },
+        {
+          "type": "event",
+          "name": "BookTermsSealed",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "BookTermsSeeded",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "depositWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "DepositReceived",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "depositedAt",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ExpiredRefundClaimed",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "refundWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "LoanApproved",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "approvedAt",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "dueAt",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "LostSettled",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "replacementPriceWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "retainedWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "refundWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "shortfallWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "PhysicalReturnConfirmed",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "returnedAt",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "RequestRejected",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "refundWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ReturnSettled",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "returnedAt",
+              "type": "uint64",
+              "indexed": false,
+              "internalType": "uint64"
+            },
+            {
+              "name": "lateFeeWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "repairFeeWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "overdueForfeitWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "totalRetainedWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "refundWei",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            },
+            {
+              "name": "maintenanceRequired",
+              "type": "bool",
+              "indexed": false,
+              "internalType": "bool"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "event",
+          "name": "ShortfallPaid",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "indexed": true,
+              "internalType": "bytes32"
+            },
+            {
+              "name": "borrower",
+              "type": "address",
+              "indexed": true,
+              "internalType": "address"
+            },
+            {
+              "name": "amount",
+              "type": "uint256",
+              "indexed": false,
+              "internalType": "uint256"
+            }
+          ],
+          "anonymous": false
+        },
+        {
+          "type": "error",
+          "name": "ApprovalWindowExpired",
+          "inputs": [
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ApprovalWindowOpen",
+          "inputs": [
+            {
+              "name": "deadline",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "BookTermsAlreadySealed",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "BookTermsNotSealed",
+          "inputs": [
+            {
+              "name": "bookId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidBookTerms",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidConfiguration",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "InvalidPayment",
+          "inputs": [
+            {
+              "name": "expectedWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "receivedWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "InvalidRequestState",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "state",
+              "type": "uint8",
+              "internalType": "uint8"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "ReentrantCall",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "RequestAlreadyUsed",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "RequestNotFound",
+          "inputs": [
+            {
+              "name": "requestId",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "TransferFailed",
+          "inputs": [
+            {
+              "name": "recipient",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "amountWei",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedAdministrator",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedBorrower",
+          "inputs": []
+        },
+        {
+          "type": "error",
+          "name": "UnauthorizedLibrarian",
+          "inputs": []
+        }
+      ],
+      "transactionHash": "0x9d857b6f49e5456f6242d81af9bb9f2370d2952080f27f03ec6965a35a0505fc",
+      "blockNumber": 6,
+      "blockHash": "0xb3e9bae8a2fb139bdc1a7862fd33c4450be68fbb2b39e203bc76248264360f81",
+      "runtimeCodeHash": "0x5bbf95cddd9197b86cc0468be40c98d821dec1bf0b4a7f73712060f003e47dde"
+    },
+    "roles": {
+      "deployer": "0x4488925B215899128a6eFE9c5efC111675F1acb1",
+      "administrator": "0x4488925B215899128a6eFE9c5efC111675F1acb1",
+      "librarian": "0xdF3E797ac8A969992D6395B62B347043A2aE0F68"
+    },
+    "treasury": "0x83907f9A2685efcbb2BeDa057Cb23a3809c8f750",
+    "policy": {
+      "depositWei": "50000000000000000000",
+      "approvalWindowSeconds": 86400,
+      "loanDurationSeconds": 1209600,
+      "gracePeriodSeconds": 259200,
+      "lateFeeIntervalSeconds": 86400,
+      "lateFeePerIntervalWei": "100000000000000000",
+      "maxLateFeeWei": "25000000000000000000",
+      "fullDepositRetentionAfterSeconds": 2592000
+    },
+    "books": [
+      {
+        "bookId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "depositWei": "50000000000000000000",
+        "replacementPriceWei": "30000000000000000000",
+        "sealed": true
+      }
+    ],
+    "seedTransactions": [
+      {
+        "type": "seedBookTerms",
+        "bookId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transactionHash": "0x8e738487304505d3565ecae184c9d1c1e03145e25e2d44d02ce6fe285cfde2b2",
+        "blockNumber": 7,
+        "blockHash": "0xe37259ada7d0c475454a26dbf3521e38618399b7c2cf902567ca5ec04f423168"
+      },
+      {
+        "type": "sealBookTerms",
+        "bookId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transactionHash": "0xfdf1a7cfac18e2c30376f7a8d19538330f2ca7943f6cdb7beb17af7855bca7a5",
+        "blockNumber": 8,
+        "blockHash": "0x1e3671623ce585071bcb80bf652309ddc8bf7e48e97812df2188d1eca463c40d"
+      }
+    ]
+  }
+}

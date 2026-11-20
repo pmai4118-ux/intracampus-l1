@@ -1,6 +1,7 @@
+import { type CampusChainId } from "./chain.ts";
 export type SignedInvoiceEnvelope = {
   schemaVersion: 1;
-  domain: { name: "IntraCampusPayment"; version: "1"; chainId: 20261; verifyingContract: string };
+  domain: { name: "IntraCampusPayment"; version: "1"; chainId: CampusChainId; verifyingContract: string };
   invoice: { invoiceId: string; merchant: string; category: string; amount: string; expiresAt: number };
   meta: {
     invoiceCode: string; merchantId: string; merchantName: string;

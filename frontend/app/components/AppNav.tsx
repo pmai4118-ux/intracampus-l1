@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -69,7 +71,7 @@ export default function AppNav() {
         aria-current={pathname === href ? "page" : href === "/staff/parking" && pathname.startsWith(`${href}/`) ? "location" : undefined}>
         <Icon name={icon} /><span>{label}</span>
       </Link>)}
-      <span className="nav-network">Avalanche L1 · Chain 20261</span>
+      <span className="nav-network">Avalanche L1 · Chain {CAMPUS_CHAIN_ID}</span>
     </nav>
   </header>;
 }

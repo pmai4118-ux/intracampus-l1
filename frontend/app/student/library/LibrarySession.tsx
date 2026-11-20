@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { campusNetwork, getLibraryDeployment, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibraryAccountStatus } from '@intracampus/network';
+import { CAMPUS_CHAIN_ID, campusNetwork, getLibraryDeployment, type LibraryBook, type LibraryRequest, type LibraryLoan, type LibraryAccountStatus } from '@intracampus/network';
 import { WalletSession, useCampusWallet } from '../WalletPanel';
 import { formatWalletBalance, formatWalletBalanceCompact } from '../../../lib/chains';
 import { LibraryApi, LibraryUiError, check } from '../../../lib/library-api';
@@ -99,7 +99,7 @@ function LibraryWallet() {
       <div className="mode-switch-wrapper">
         <span className="mode-switch-kicker">
           <span className={`mode-status-dot ${mode === 'live' ? 'dot-live' : 'dot-demo'}`} aria-hidden="true" />
-          {mode === 'live' ? 'Avalanche L1 · Chain 20261' : 'Bản minh họa'}
+          {mode === 'live' ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : 'Bản minh họa'}
         </span>
         <div className="student-mode-switch" role="group" aria-label="Chế độ thư viện sinh viên">
           <button type="button" className="secondary-btn" aria-pressed={mode === 'live'} onClick={() => setMode('live')}>Thư viện thật</button>
@@ -387,7 +387,7 @@ function LibraryDemoWorkspace({ onBackToLive }: { onBackToLive: () => void }) {
                       status: 'CONFIRMED',
                       submittedAt: nowSec,
                       proof: {
-                        chainId: 20261,
+                        chainId: CAMPUS_CHAIN_ID,
                         contractAddress: '0x43683f8107e3d3a883924989941620c5c260a124',
                         txHash: '0x77a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e99',
                         blockNumber: 39,

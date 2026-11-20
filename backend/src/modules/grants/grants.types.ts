@@ -1,3 +1,4 @@
+import { type CampusChainId } from "@intracampus/network";
 export class GrantError extends Error {
   readonly code: string;
   constructor(code: string) { super(code); this.code = code; }
@@ -11,7 +12,7 @@ export type VerifiedGrantEvent = {
 };
 
 export type GrantLookup = {
-  schemaVersion: 1; status: "verified"; chainId: 20261; beneficiary: string; vaultAddress: string;
+  schemaVersion: 1; status: "verified"; chainId: CampusChainId; beneficiary: string; vaultAddress: string;
   category: { id: string; label: "FOOD" }; balanceWei: string; block: { number: number; hash: string };
   allowedMerchants: { id: "canteen"; address: string; allowed: boolean }[];
   transaction: null | { hash: string; status: "pending" | "verified"; events: VerifiedGrantEvent[] };

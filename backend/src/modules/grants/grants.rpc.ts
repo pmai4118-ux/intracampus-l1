@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 import { getAddress, Interface, keccak256, toQuantity, type JsonRpcProvider } from "ethers";
 import type { DeployedManifest } from "@intracampus/network";
 import { GrantError, type GrantSnapshot, type VerifiedGrantEvent } from "./grants.types.ts";
@@ -45,7 +46,7 @@ export class GrantsReader {
     catch (error) { throw error instanceof GrantError ? error : new GrantError("RPC_UNAVAILABLE"); }
   }
   private async chain(): Promise<void> {
-    if (quantity(await this.provider.send("eth_chainId", [])) !== 20261) throw new GrantError("WRONG_CHAIN");
+    if (quantity(await this.provider.send("eth_chainId", [])) !== CAMPUS_CHAIN_ID) throw new GrantError("WRONG_CHAIN");
   }
   private async block(tag: number | "latest", code = "RPC_UNAVAILABLE"): Promise<PinnedBlock> {
     const result = record(await this.provider.send("eth_getBlockByNumber", [tag === "latest" ? tag : toQuantity(tag), false]), code);
@@ -63,7 +64,7 @@ export class GrantsReader {
     await this.chain();
     const block = await this.block(tag);
     const { PurposeBoundGrantVault: vault, CampusPaymentRegistry: registry } = this.deployment.contracts;
-    if (this.deployment.chainId !== 20261 || this.deployment.merchants.canteen.category.toLowerCase() !== FOOD) throw new GrantError("DEPLOYMENT_MISMATCH");
+    if (this.deployment.chainId !== CAMPUS_CHAIN_ID || this.deployment.merchants.canteen.category.toLowerCase() !== FOOD) throw new GrantError("DEPLOYMENT_MISMATCH");
     grantAddress(this.deployment.merchants.canteen.address);
     await Promise.all([vault, registry].map(async (contract) => {
       if (block.number < contract.blockNumber) throw new GrantError("DEPLOYMENT_MISMATCH");

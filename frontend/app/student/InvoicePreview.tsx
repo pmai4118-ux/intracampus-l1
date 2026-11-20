@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -19,7 +21,7 @@ const messages: Record<string, string> = {
   INVOICE_EXPIRED: "Hóa đơn đã hết hạn theo thời gian của chain.",
   INVOICE_ALREADY_PAID: "Hóa đơn này đã được thanh toán. Không mở yêu cầu giao dịch mới.",
   PAYMENT_IN_PROGRESS: "Hóa đơn đang có giao dịch chưa xác minh. Giữ hash cũ và tra cứu trên POS; không thanh toán thêm.",
-  WRONG_CHAIN: "RPC đang kết nối sai mạng. Yêu cầu IntraCampus L1 · Chain 20261.",
+  WRONG_CHAIN: `RPC đang kết nối sai mạng. Yêu cầu IntraCampus L1 · Chain ${CAMPUS_CHAIN_ID}.`,
   STALE_CHAIN_STATE: "Block mới nhất của IntraCampus L1 đã cũ. Kiểm tra node/RPC đang chạy và có block mới, rồi thử lại.",
   DEPLOYMENT_NOT_CONFIGURED: "Chưa có địa chỉ verifier và POS signer từ manifest L06. Chưa thể xác minh hóa đơn.",
   PAYMENT_SIMULATION_FAILED: "Contract chưa chấp nhận thanh toán tại trạng thái hiện tại. Kiểm tra chữ ký hóa đơn, dịch vụ và số dư CAMPUS rồi thử lại.",
@@ -122,7 +124,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
   async function checkInvoice() {
     clearPreview();
     if (checkoutLink) { router.push(checkoutLink); return; }
-    if (!wallet.address || !wallet.canProceed || wallet.chainId !== BigInt(20261)) {
+    if (!wallet.address || !wallet.canProceed || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID)) {
       setError(messages.WALLET_REQUIRED);
       return;
     }
@@ -193,7 +195,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
   return <div className="invoice-student-preview" aria-labelledby="invoice-preview-title" aria-busy={busy}>
     <PaymentRecovery />
     <h3 id="invoice-preview-title">Quét hoặc dán hóa đơn POS</h3>
-    <p>Đối chiếu hóa đơn với backend và chain 20261, sau đó kiểm tra số tiền trước khi mở Core xác nhận.</p>
+    <p>Đối chiếu hóa đơn với backend và chain {CAMPUS_CHAIN_ID}, sau đó kiểm tra số tiền trước khi mở Core xác nhận.</p>
     <div className="qr-source-header">
       <label htmlFor="student-invoice-payload">Payload QR</label>
       <div className="qr-paste-actions">
@@ -256,7 +258,7 @@ export function InvoicePreview({ wallet }: { wallet: WalletSnapshot }) {
     {error ? <p id="student-invoice-error" className="invoice-feedback error-panel" role="alert">{error}</p> : null}
     {preview ? <section className="invoice-verified-preview invoice-checkout-sheet" aria-live="polite" aria-label="Hóa đơn đã xác minh">
       <div className="invoice-checkout-head">
-        <span className="verified-badge tabular-nums">ĐÃ XÁC MINH · Chain 20261 · block {BigInt(preview.quote.blockNumber).toString()}</span>
+        <span className="verified-badge tabular-nums">ĐÃ XÁC MINH · Chain {CAMPUS_CHAIN_ID} · block {BigInt(preview.quote.blockNumber).toString()}</span>
         <h4>{preview.envelope.meta.serviceName}</h4>
         <p className="invoice-merchant-line">
           <span>{preview.envelope.meta.merchantName} · người nhận</span>{" "}

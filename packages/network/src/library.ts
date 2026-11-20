@@ -1,4 +1,6 @@
+import { type CampusChainId } from "./chain.ts";
 export type LibraryRole = "STUDENT" | "LIBRARIAN";
+export type CampusAuthRole = LibraryRole | "PARKING";
 export const LIBRARY_REQUEST_BODY_LIMIT_BYTES = 8192 as const;
 export type LibraryRequestStatus =
   | "AWAITING_DEPOSIT"
@@ -71,7 +73,7 @@ export type LibraryBook = {
 };
 
 export type LibraryDepositIntent = {
-  chainId: 20261;
+  chainId: CampusChainId;
   to: LibraryAddress;
   data: `0x${string}`;
   valueWei: LibraryWei;
@@ -99,7 +101,7 @@ export type LibraryTransactionSubmission =
     };
 
 export type LibraryEventProof = {
-  chainId: 20261;
+  chainId: CampusChainId;
   contractAddress: LibraryAddress;
   txHash: `0x${string}`;
   blockNumber: number;
@@ -190,7 +192,7 @@ type LibrarySettlementIntentBase = {
   requestId: LibraryBytes32;
   loanId: LibraryBytes32;
   borrower: LibraryAddress;
-  chainId: 20261;
+  chainId: CampusChainId;
   escrow: LibraryAddress;
   treasury: LibraryAddress;
   walletCall: {
