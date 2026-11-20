@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { requireDeployment } from "@intracampus/network";
+import { isParkingInvoice, requireDeployment } from "@intracampus/network";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { librarySessionMessage, LibrarySessionError, requireLibraryStudentNotHeld } from "../../lib/library-session";
@@ -10,6 +10,7 @@ import { createWalletRpc } from "../../lib/wallet";
 import { Receipt } from "../pos/Receipt";
 import { CopyButton } from "../demo-controls";
 import HashChip from "../components/HashChip";
+import Icon from "../components/Icon";
 import TransactionStepper, { type StepState } from "../components/TransactionStepper";
 import { useCampusWallet } from "./WalletPanel";
 
@@ -22,11 +23,32 @@ function paymentStep(status?: PaymentSnapshot["status"]): StepState {
   return "error";
 }
 
-export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPaid?: (hash: string) => void }) {
+function paymentErrorStep(payment: PaymentSnapshot | null, lastStep: 0 | 1 | 2): 0 | 1 | 2 {
+  if (!payment) return 0;
+  if (payment.status === "reverted" || payment.txHash) return 2;
+  return lastStep;
+}
+
+export function PayInvoice({
+  preview,
+  onPaid,
+  compact = false,
+}: {
+  preview: InvoicePreview;
+  onPaid?: (hash: string) => void;
+  compact?: boolean;
+}) {
   const { state: wallet, controller: walletController, access, signingIn, signIn, refreshAccess } = useCampusWallet();
   const [controller, setController] = useState<PaymentController | null>(null);
   const [payment, setPayment] = useState<PaymentSnapshot | null>(null);
+  const [lastStep, setLastStep] = useState<0 | 1 | 2>(0);
   useEffect(() => { if (payment?.status === "paid" && payment.receipt) onPaid?.(payment.receipt.txHash); }, [payment?.status, payment?.receipt?.txHash, onPaid]);
+  useEffect(() => {
+    if (!payment) return;
+    if (payment.status === "preflight" || payment.status === "ready" || payment.status === "quote-changed") setLastStep(0);
+    else if (payment.status === "signing") setLastStep(1);
+    else if (payment.status === "pending" || payment.status === "unknown" || payment.status === "reverted") setLastStep(2);
+  }, [payment?.status]);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [manualHash, setManualHash] = useState("");
   const id = useId();
@@ -43,16 +65,20 @@ export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPai
       const config = browserWalletConfig();
       if (!config.rpcUrl || !navigator.locks) throw Error();
       const rpc = createWalletRpc(config.rpcUrl);
-      session = new PaymentController({ preview, account: wallet.address, storage: window.localStorage, wallet: walletController,
+      session = new PaymentController({
+        preview, account: wallet.address, storage: window.localStorage, wallet: walletController,
         preflight: async (payload, account, signal) => {
           try { await requireLibraryStudentNotHeld(account); }
           catch (error) { throw new InvoicePreviewError(error instanceof LibrarySessionError ? error.code : "SESSION_UNAVAILABLE"); }
           return verifyInvoicePreview(payload, account, config, rpc, signal);
         },
-        exclusive: async (key, run) => { await navigator.locks.request(key, { mode: "exclusive", ifAvailable: true }, async (lock) => {
-          if (!lock) throw Error("PAYMENT_LOCKED");
-          await run();
-        }); } });
+        exclusive: async (key, run) => {
+          await navigator.locks.request(key, { mode: "exclusive", ifAvailable: true }, async (lock) => {
+            if (!lock) throw Error("PAYMENT_LOCKED");
+            await run();
+          });
+        }
+      });
       setController(session); setPayment(session.getSnapshot()); setSetupError(null);
       unsubscribe = session.subscribe(() => setPayment(session.getSnapshot()));
       void session.refresh();
@@ -73,22 +99,38 @@ export function PayInvoice({ preview, onPaid }: { preview: InvoicePreview; onPai
 
   const quote = payment?.preview.quote ?? preview.quote;
   const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261) || access?.status !== "ready";
-  if (payment?.status === "paid" && payment.receipt) return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`}>
+  const parking = isParkingInvoice(preview.envelope);
+  const showSummary = !compact || payment?.status === "quote-changed";
+  if (payment?.status === "paid" && payment.receipt) return <section className={`invoice-payment-panel${compact ? " invoice-payment-compact" : ""}`} aria-labelledby={`${id}-title`}>
     <TransactionStepper state="done" />
     <h4 id={`${id}-title`}>Thanh toán đã xác minh</h4>
-    <p role="status">Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác.</p>
+    <p role="status">{parking ? "Đã check-in bãi xe. Khi ra, mở vé trong ví để bảo vệ quét QR." : "Khoản thanh toán đã hoàn tất. Bạn có thể tiếp tục sử dụng dịch vụ khác."}</p>
+    {parking ? <div className="inline-actions"><a className="primary-cta-btn" href="#parking-tickets"><Icon name="qr" />Xem QR vé gửi xe</a></div> : null}
     <Receipt receipt={payment.receipt} />
   </section>;
-  return <section className="invoice-payment-panel" aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>
+  return <section className={`invoice-payment-panel${compact ? " invoice-payment-compact" : ""}`} aria-labelledby={`${id}-title`} aria-busy={payment?.busy}>
     <h4 id={`${id}-title`}>Thanh toán bằng ví sinh viên</h4>
     <p>Core sẽ yêu cầu xác nhận giao dịch tới payment registry. Gas được tính riêng.</p>
-    <TransactionStepper state={paymentStep(payment?.status)} />
-    <p>Ví trả: <HashChip value={wallet.address ?? ""} copyLabel="Sao chép địa chỉ ví trả" /></p>
-    <p>Người nhận CAMPUS: <HashChip value={preview.envelope.invoice.merchant} copyLabel="Sao chép địa chỉ người nhận" /></p>
-    <p><strong>Số tiền cần xác nhận: {formatWalletBalance(quote.paidAmount)}</strong></p>
-    {payment?.status === "quote-changed" ? <dl className="price-breakdown">
+    <TransactionStepper state={paymentStep(payment?.status)} errorStep={paymentErrorStep(payment, lastStep)} />
+    <div className="payment-meta-summary">
+      <div className="payment-meta-row">
+        <span>Ví trả</span>
+        <HashChip value={wallet.address ?? ""} copyLabel="Sao chép địa chỉ ví trả" />
+      </div>
+      {showSummary ? <>
+        <div className="payment-meta-row">
+          <span>Người nhận CAMPUS</span>
+          <HashChip value={preview.envelope.invoice.merchant} copyLabel="Sao chép địa chỉ người nhận" />
+        </div>
+        <div className="payment-meta-row payment-meta-amount">
+          <span>Số tiền cần xác nhận</span>
+          <strong className="tabular-nums">{formatWalletBalance(quote.paidAmount)}</strong>
+        </div>
+      </> : null}
+    </div>
+    {payment?.status === "quote-changed" ? <dl className="price-breakdown tabular-nums">
       <div className="price-row"><dt>Giá gốc mới kiểm tra</dt><dd>{formatWalletBalance(quote.originalAmount)}</dd></div>
-      <div className="price-row"><dt>Ưu đãi hiện tại</dt><dd>{formatWalletBalance(quote.discountAmount)}</dd></div>
+      <div className="price-row discount-row"><dt>Ưu đãi hiện tại</dt><dd>{formatWalletBalance(quote.discountAmount)}</dd></div>
     </dl> : null}
     {setupError ? <p className="wallet-warning" role="alert">{setupError}</p> : null}
     {access?.status !== "ready" ? <div className="wallet-warning" role={access?.status === "held" || access?.status === "error" ? "alert" : "status"}>
@@ -127,16 +169,55 @@ export function PaymentRecovery() {
   const { state: wallet } = useCampusWallet();
   const [preview, setPreview] = useState<InvoicePreview | null>(null);
   const [error, setError] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
-    setPreview(null); setError(false);
+    setPreview(null); setError(false); setIsPaid(false); setCollapsed(false); setDismissed(false);
     if (!wallet.address) return;
     try { setPreview(restorePaymentPreview(window.localStorage, wallet.address)); }
     catch { setError(true); }
   }, [wallet.address]);
-  return error ? <p className="wallet-warning" role="alert">Không đọc được lần thanh toán đã lưu. Giữ invoiceId/hash từ Core và đối chiếu trên POS trước khi ký thêm.</p>
-    : preview ? <section className="surface-panel" aria-label="Khôi phục thanh toán">
-      <h3>Lần thanh toán đã lưu</h3>
-      <p>invoiceId: <code className="tx-hash-code">{preview.envelope.invoice.invoiceId}</code></p>
-      <PayInvoice preview={preview} />
-    </section> : null;
+  if (error) return <p className="wallet-warning" role="alert">Không đọc được lần thanh toán đã lưu. Giữ invoiceId/hash từ Core và đối chiếu trên POS trước khi ký thêm.</p>;
+  if (!preview) return null;
+  if (isPaid && dismissed) {
+    return (
+      <section className="recovery-dismissed-bar" aria-label="Khôi phục thanh toán">
+        <span>Biên lai gần nhất ({preview.envelope.meta.invoiceCode}) đã xác minh.</span>
+        <button type="button" className="text-action-btn" onClick={() => { setDismissed(false); setCollapsed(false); }}>
+          Hiện lại biên lai
+        </button>
+      </section>
+    );
+  }
+  return (
+    <section className="surface-panel recovery-panel" aria-label="Khôi phục thanh toán">
+      <div className="recovery-header-row">
+        <div className="recovery-header-meta">
+          <h3>Lần thanh toán đã lưu</h3>
+          <div className="recovery-id-line">
+            <span className="status-id-label">invoiceId</span>
+            <HashChip value={preview.envelope.invoice.invoiceId} start={6} end={4} copyLabel="Sao chép invoiceId" />
+          </div>
+        </div>
+        {isPaid ? (
+          <div className="recovery-header-actions">
+            <button type="button" className="text-action-btn" onClick={() => setCollapsed((prev) => !prev)}>
+              {collapsed ? "Mở rộng" : "Thu gọn"}
+            </button>
+            <button type="button" className="text-action-btn" onClick={() => setDismissed(true)}>
+              Ẩn biên lai cũ
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {collapsed ? (
+        <p className="metric-note">
+          Biên lai đã xác minh. Bấm Mở rộng để xem lại chi tiết hoặc bấm Ẩn biên lai cũ.
+        </p>
+      ) : (
+        <PayInvoice preview={preview} onPaid={() => setIsPaid(true)} />
+      )}
+    </section>
+  );
 }

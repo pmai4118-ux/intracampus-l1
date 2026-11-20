@@ -1,31 +1,89 @@
 "use client";
 
 import { campusNetwork } from "@intracampus/network";
-import { useState } from "react";
+import { useEffect, useState, type ClipboardEvent, type FormEvent } from "react";
+import { parseGrantAmount } from "../../lib/grants";
+import { decodeQrImage, pastedQrImage } from "../../lib/qr-image";
+import HashChip from "../components/HashChip";
+import Icon from "../components/Icon";
+import TransactionStepper, { type StepState } from "../components/TransactionStepper";
 import { CopyButton, DemoControls } from "../demo-controls";
 import {
+  DEMO_CANTEEN_MERCHANT_WALLET,
   calculateInvoiceQuote,
-  type DemoErrorKind,
   demoErrorScenarios,
-  type DemoUiState,
-  type DemoWalletKind,
   demoWalletProfiles,
   formatCampusWei,
   getDemoReceiptFixture,
+  matchesSharedDemoPayload,
   sharedParkingInvoiceEnvelope,
   sharedQrPayloadString,
-  matchesSharedDemoPayload,
   shortenHex,
+  type DemoErrorKind,
+  type DemoUiState,
+  type DemoWalletKind,
 } from "../demo-fixtures";
 
-export default function StudentDemo() {
+const INITIAL_FOOD_GRANT_WEI = BigInt("150000000000000000000"); // 150 CAMPUS
+const DEMO_GRANT_VAULT = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const DEMO_GRANT_TX_HASH =
+  "0x7a4c1d9e0f2b3a4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3cc";
+
+type DemoGrantPhase = "idle" | "signing" | "confirming" | "confirmed";
+
+function paymentDemoStep(uiState: DemoUiState): StepState {
+  if (uiState === "loading") return "checking";
+  if (uiState === "awaiting-signature") return "signing";
+  if (uiState === "pending") return "confirming";
+  if (uiState === "receipt") return "done";
+  if (uiState === "error") return "error";
+  return "idle";
+}
+
+function demoErrorStep(errorKind: DemoErrorKind): 0 | 1 | 2 {
+  if (errorKind === "wallet-rejected") return 1;
+  if (errorKind === "rpc-unreachable") return 2;
+  return 0;
+}
+
+function grantDemoStep(phase: DemoGrantPhase): StepState {
+  if (phase === "signing") return "signing";
+  if (phase === "confirming") return "confirming";
+  if (phase === "confirmed") return "done";
+  return "idle";
+}
+
+const walletStatusLabel: Record<DemoUiState, string> = {
+  waiting: "Đã đọc dữ liệu mẫu · Sẵn sàng thanh toán QR",
+  loading: "Đang kiểm tra hóa đơn và ưu đãi mẫu…",
+  "awaiting-signature": "Đang chờ bạn xác nhận ký trong ví (mô phỏng)",
+  pending: "Đang chờ xác nhận giao dịch trên L1 (mô phỏng)",
+  error: "Đang mô phỏng tình huống lỗi",
+  receipt: "Đã có biên lai mẫu · Chưa xác minh on-chain",
+};
+
+export default function StudentDemo({
+  onBackToLive,
+}: {
+  onBackToLive?: () => void;
+} = {}) {
   const [uiState, setUiState] = useState<DemoUiState>("waiting");
   const [walletKind, setWalletKind] = useState<DemoWalletKind>("sbt");
   const [errorKind, setErrorKind] = useState<DemoErrorKind>("expired");
-  const [qrInputOpen, setQrInputOpen] = useState(false);
   const [pastedQr, setPastedQr] = useState(sharedQrPayloadString);
-  const payloadMatches = matchesSharedDemoPayload(pastedQr);
+  const [readingQr, setReadingQr] = useState(false);
+  const [qrStatus, setQrStatus] = useState("");
+  const [previewVerified, setPreviewVerified] = useState(true);
+  const [addressCopied, setAddressCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "qr" | "food">("all");
 
+  const [grantBalanceWei, setGrantBalanceWei] = useState<bigint>(INITIAL_FOOD_GRANT_WEI);
+  const [grantAmount, setGrantAmount] = useState("25");
+  const [grantPhase, setGrantPhase] = useState<DemoGrantPhase>("idle");
+  const [grantError, setGrantError] = useState<string | null>(null);
+  const [pendingGrantWei, setPendingGrantWei] = useState<bigint | null>(null);
+
+  const payloadMatches = matchesSharedDemoPayload(pastedQr);
   const wallet = demoWalletProfiles[walletKind];
   const invoice = sharedParkingInvoiceEnvelope;
   const quote = calculateInvoiceQuote(
@@ -34,14 +92,83 @@ export default function StudentDemo() {
   );
   const receipt = getDemoReceiptFixture(walletKind);
   const activeError = demoErrorScenarios[errorKind];
+  const isWrongChain = uiState === "error" && errorKind === "wrong-chain";
+
+  useEffect(() => {
+    if (!addressCopied) return;
+    const timer = window.setTimeout(() => setAddressCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [addressCopied]);
+
+  let parsedGrantWei: bigint | null = null;
+  try {
+    parsedGrantWei = parseGrantAmount(grantAmount);
+  } catch {
+    /* Hiển thị lỗi khi người dùng bấm chi, giữ nguyên text đang gõ. */
+  }
 
   function resetPreview() {
     setPastedQr(sharedQrPayloadString);
+    setPreviewVerified(true);
     setUiState("waiting");
+    setQrStatus("");
+  }
+
+  async function pasteQrImage(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const image = pastedQrImage(event.clipboardData);
+    if (!image) return;
+    event.preventDefault();
+    if (readingQr) return;
+    setReadingQr(true);
+    setQrStatus("Đang đọc mã QR…");
+    try {
+      const code = await decodeQrImage(image);
+      if (!code) { setQrStatus("Không tìm thấy mã QR trong ảnh. Hãy thử ảnh rõ hơn, có đủ bốn góc mã."); return; }
+      setPastedQr(code);
+      setPreviewVerified(matchesSharedDemoPayload(code));
+      setUiState("waiting");
+      setQrStatus("Đã đọc mã QR từ ảnh.");
+    } catch {
+      setQrStatus("Không đọc được ảnh QR. Hãy thử ảnh PNG hoặc JPEG.");
+    } finally {
+      setReadingQr(false);
+    }
+  }
+
+  function startGrantSpend(event: FormEvent) {
+    event.preventDefault();
+    setGrantError(null);
+    let wei: bigint;
+    try {
+      wei = parseGrantAmount(grantAmount);
+    } catch {
+      setGrantError("Số CAMPUS không hợp lệ. Dùng số dương, dấu chấm cho phần lẻ.");
+      return;
+    }
+    if (wei > grantBalanceWei) {
+      setGrantError("Số tiền vượt quá ngân sách FOOD mẫu hiện có.");
+      return;
+    }
+    setPendingGrantWei(wei);
+    setGrantPhase("signing");
+  }
+
+  function confirmDemoGrantReceipt() {
+    if (pendingGrantWei === null) return;
+    setGrantBalanceWei((prev) => (prev >= pendingGrantWei ? prev - pendingGrantWei : BigInt(0)));
+    setGrantPhase("confirmed");
+  }
+
+  function resetDemoGrant() {
+    setGrantBalanceWei(INITIAL_FOOD_GRANT_WEI);
+    setGrantAmount("25");
+    setGrantPhase("idle");
+    setGrantError(null);
+    setPendingGrantWei(null);
   }
 
   return (
-    <div className="student-shell">
+    <>
       <DemoControls
         state={uiState}
         wallet={walletKind}
@@ -49,469 +176,912 @@ export default function StudentDemo() {
         onState={setUiState}
         onWallet={setWalletKind}
         onError={setErrorKind}
+        onBackToLive={onBackToLive}
+        backToLiveLabel="Ví thật →"
+        summary="Mô phỏng đầy đủ Ví sinh viên, QR POS và Voucher FOOD · chưa kết nối ví thật"
       />
 
-      {/* Thẻ sinh viên & Số dư ví trường học */}
-      <header className="surface-panel student-identity-panel">
-        <div className="panel-top-row">
-          <div>
-            <h2 className="screen-title">Ví sinh viên</h2>
-            <p className="screen-subtitle">
-              Thanh toán trong khuôn viên trường
-            </p>
-          </div>
-          <span
-            className={
-              uiState === "error" && errorKind === "wrong-chain"
-                ? "network-pill pill-danger"
-                : "network-pill pill-ok"
-            }
+      <div className="student-shell live-wallet-view">
+        {/* Cột trái sticky: Thẻ sinh viên SBT & Số dư ví mẫu */}
+        <div className="student-identity-column">
+          <section
+            className="surface-panel student-identity-panel"
+            aria-labelledby="demo-wallet-title"
+            aria-busy={uiState === "loading"}
           >
-            <span className="status-dot" aria-hidden="true" />
-            {uiState === "error" && errorKind === "wrong-chain"
-              ? "Mẫu lỗi · Sai mạng"
-              : "Mạng mẫu · IntraCampus L1"}
-          </span>
-        </div>
-
-        <div className="wallet-summary-grid">
-          <div className="metric-block">
-            <span className="metric-label">Sinh viên</span>
-            <strong>{wallet.studentName}</strong>
-            <span className="metric-note">{wallet.studentIdLabel}</span>
-          </div>
-          <div className="metric-block">
-            <span className="metric-label">Số dư hiện có</span>
-            <strong className="tabular-value">
-              {formatCampusWei(wallet.balanceWei)}
-            </strong>
-            <span className="metric-note">Số dư mẫu · Chưa đọc từ ví</span>
-          </div>
-        </div>
-
-        <div
-          className={
-            wallet.sbt.hasValidCard
-              ? "sbt-banner sbt-active"
-              : "sbt-banner sbt-muted"
-          }
-        >
-          <div className="sbt-banner-head">
-            <strong>{wallet.sbt.badgeLabel}</strong>
-            <span className="sbt-badge">
-              {wallet.sbt.hasValidCard ? "Tự động giảm 10%" : "Tính nguyên giá"}
-            </span>
-          </div>
-          <p>{wallet.sbt.friendlyStatus}</p>
-          <span className="sbt-meta">
-            Hạn sử dụng thẻ: {wallet.sbt.expiresAtLabel}
-          </span>
-        </div>
-      </header>
-
-      {/* Ô dán fixture; chưa mở camera hoặc xác minh QR thật */}
-      <section
-        className="surface-panel qr-source-panel"
-        aria-label="Thông tin phiếu thu từ nhà xe"
-      >
-        <div className="qr-source-header">
-          <div>
-            <h2>Hóa đơn mẫu · {invoice.meta.merchantName}</h2>
-            <p className="muted-line">
-              Mã số phiếu:{" "}
-              <code className="inline-code">{invoice.meta.invoiceCode}</code>
-            </p>
-          </div>
-          <button
-            type="button"
-            className="secondary-btn"
-            aria-expanded={qrInputOpen}
-            onClick={() => setQrInputOpen((prev) => !prev)}
-          >
-            {qrInputOpen ? "Đóng ô nhập" : "Dán phiếu mẫu"}
-          </button>
-        </div>
-
-        {qrInputOpen ? (
-          <div className="qr-paste-box">
-            <label htmlFor="student-qr-paste" className="field-label">
-              Dán nội dung phiếu mẫu từ POS để thử giao diện:
-            </label>
-            <textarea
-              id="student-qr-paste"
-              rows={3}
-              value={pastedQr}
-              onChange={(e) => setPastedQr(e.target.value)}
-              aria-describedby="payload-feedback"
-              className="mono-textarea"
-            />
-            <div className="qr-paste-actions">
-              <span id="payload-feedback" className="muted-line" role="status">
-                {payloadMatches
-                  ? "Nội dung khớp phiếu mẫu. Chưa xác minh chữ ký."
-                  : "Nội dung chưa hợp lệ. Nút yêu cầu ký đang bị khóa."}
+            <div className="panel-top-row">
+              <div>
+                <span className="panel-eyebrow">CAMPUS WALLET · MINH HỌA</span>
+                <h2 id="demo-wallet-title" className="screen-title">
+                  Ví sinh viên
+                </h2>
+                <p className="screen-subtitle">Số dư và quyền ưu đãi của bạn</p>
+              </div>
+              <span
+                className={`network-pill ${isWrongChain ? "pill-danger" : "pill-ok"}`}
+              >
+                <span className="status-dot" aria-hidden="true" />
+                {isWrongChain ? "Mẫu lỗi · Sai mạng" : `${campusNetwork.name} (Mẫu)`}
               </span>
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={resetPreview}
-              >
-                Lấy lại phiếu mẫu
-              </button>
             </div>
-          </div>
-        ) : null}
-      </section>
 
-      {/* Nội dung theo trạng thái xem thử */}
-      {uiState === "loading" ? (
-        <section
-          className="surface-panel state-panel"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <div className="status-banner banner-loading">
-            <span className="spinner" aria-hidden="true" />
-            <div>
-              <h2>Đang kiểm tra phiếu gửi xe và thẻ sinh viên của bạn…</h2>
-              <p>
-                Vui lòng giữ màn hình trong giây lát, hệ thống đang tính mức
-                giảm giá tự động.
+            <div className="campus-live-pass" aria-hidden="true">
+              <div className="live-pass-top">
+                <span className="live-pass-brand">
+                  <Icon name="graduation" />
+                  IntraCampus Pass
+                </span>
+                <span className="live-pass-chain">
+                  {isWrongChain ? "CHỜ MẠNG 20261" : "L1 · 20261 (MẪU)"}
+                </span>
+              </div>
+              <div className="live-pass-body">
+                <div className="pass-chip">
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                <div className="live-pass-identity">
+                  <span className="live-pass-kicker">
+                    {wallet.sbt.hasValidCard
+                      ? "THẺ SINH VIÊN SBT · ƯU ĐÃI -10%"
+                      : "TÀI KHOẢN TIÊU CHUẨN · GIÁ GỐC"}
+                  </span>
+                  <strong>{shortenHex(wallet.address, 6, 4)}</strong>
+                </div>
+                <Icon name="leaf" className="live-pass-leaf" />
+              </div>
+              <div className="live-pass-bottom">
+                <span>
+                  {wallet.sbt.hasValidCard ? "PASS #0001 · MẪU" : "CHƯA CẤP MÃ THẺ"}
+                </span>
+                <span>
+                  {wallet.sbt.hasValidCard
+                    ? `HẠN ${wallet.sbt.expiresAtLabel}`
+                    : "INTRACAMPUS L1"}
+                </span>
+              </div>
+            </div>
+
+            <div className="wallet-balance-hero">
+              <div className="wallet-balance-hero-head">
+                <span className="metric-label">Số dư CAMPUS</span>
+                <span className="wallet-status wallet-status-pill" role="status">
+                  {isWrongChain
+                    ? "Ví mẫu đang ở sai mạng"
+                    : walletStatusLabel[uiState]}
+                </span>
+              </div>
+              <strong className="tabular-value wallet-balance wallet-balance-hero-amount">
+                {formatCampusWei(wallet.balanceWei)}
+              </strong>
+              <span className="metric-note">Số dư mẫu · Chưa đọc từ ví</span>
+            </div>
+
+            {isWrongChain ? (
+              <p className="wallet-warning">
+                Ví mẫu đang ở sai mạng. Hãy chuyển sang IntraCampus L1 · Chain{" "}
+                {campusNetwork.chainId} trước khi tiếp tục.
               </p>
-            </div>
-          </div>
-          <div className="skeleton-list" aria-hidden="true">
-            <div className="skeleton-row" />
-            <div className="skeleton-row" />
-            <div className="skeleton-row short" />
-          </div>
-        </section>
-      ) : null}
+            ) : null}
 
-      {uiState === "error" ? (
-        <section className="surface-panel state-panel error-panel" role="alert">
-          <div className="error-header">
-            <span className="error-code-badge">
-              Tình huống mẫu · {activeError.code}
-            </span>
-            <h2>{activeError.studentTitle}</h2>
-          </div>
-          <p className="error-body">{activeError.studentMessage}</p>
-          <div className="next-step-box">
-            <strong>Bạn chỉ cần làm bước này:</strong>
-            <p>{activeError.nextStepStudent}</p>
-          </div>
-          <div className="inline-actions">
-            <button
-              type="button"
-              className="primary-cta-btn"
-              onClick={resetPreview}
+            <div className="wallet-summary-grid wallet-summary-compact">
+              <div className="metric-block metric-block-wide">
+                <span className="metric-label">Tài khoản ví mẫu</span>
+                <div className="wallet-address-row">
+                  <code className="wallet-address" translate="no">
+                    {wallet.address}
+                  </code>
+                  <button
+                    type="button"
+                    className={`hash-chip-btn hash-copy-icon-btn ${addressCopied ? "is-copied" : ""}`}
+                    aria-label={`Sao chép địa chỉ ví mẫu: ${wallet.address}`}
+                    title={addressCopied ? "Đã chép" : "Sao chép địa chỉ ví mẫu"}
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(wallet.address)
+                        .then(() => setAddressCopied(true))
+                        .catch(() => { });
+                    }}
+                  >
+                    <Icon name={addressCopied ? "check" : "copy"} />
+                    {addressCopied ? <span>Đã chép</span> : null}
+                  </button>
+                </div>
+                <span className="metric-note">
+                  {wallet.studentName} · {wallet.studentIdLabel}
+                </span>
+              </div>
+
+              <div className="metric-block metric-block-wide">
+                <span className="metric-label">Mức ưu đãi hiện tại</span>
+                <strong>
+                  {wallet.sbt.hasValidCard
+                    ? "Giảm 10% tự động"
+                    : "Giá niêm yết (0%)"}
+                </strong>
+                <span className="metric-note">
+                  {wallet.sbt.hasValidCard
+                    ? "Áp dụng cho bãi xe & nhà ăn"
+                    : "Cần thẻ SBT còn hạn để giảm 10%"}
+                </span>
+              </div>
+            </div>
+
+            <div
+              className={`sbt-banner ${wallet.sbt.hasValidCard ? "sbt-active" : "sbt-muted"}`}
             >
-              {activeError.actionLabelStudent}
-            </button>
-          </div>
-        </section>
-      ) : null}
+              <div className="sbt-banner-head">
+                <strong>{wallet.sbt.badgeLabel}</strong>
+                <span className="sbt-badge">Tier {wallet.sbt.tier}</span>
+              </div>
+              <p>{wallet.sbt.friendlyStatus}</p>
+              <span className="sbt-meta">
+                {wallet.sbt.hasValidCard
+                  ? `Thẻ #1 (Mẫu) · Hạn sử dụng: ${wallet.sbt.expiresAtLabel}`
+                  : `Trạng thái: ${wallet.sbt.expiresAtLabel}`}
+              </span>
+              {!wallet.sbt.hasValidCard ? (
+                <div className="sbt-tier0-guidance">
+                  <button
+                    type="button"
+                    className="link-action-btn"
+                    onClick={() => setWalletKind("sbt")}
+                  >
+                    Đổi sang ví mẫu có thẻ SBT (-10%) →
+                  </button>
+                </div>
+              ) : null}
+            </div>
 
-      {uiState === "waiting" ? (
-        <section
-          className="surface-panel invoice-preview-panel"
-          aria-label="Chi tiết số tiền cần trả"
-        >
-          <div className="invoice-preview-head">
-            <div>
-              <h2>{invoice.meta.serviceName}</h2>
-              <p className="muted-line">Nơi thu: {invoice.meta.merchantName}</p>
-            </div>
-            <span className="timer-badge tabular-value">Hạn mẫu: 05:00</span>
-          </div>
-
-          <div className="transaction-context">
-            <span>
-              Mạng: {campusNetwork.name} · Chain {campusNetwork.chainId}
-            </span>
-            <span>Địa chỉ nhận mẫu:</span>
-            <code className="mono-value">{invoice.invoice.merchant}</code>
-          </div>
-          <dl className="price-breakdown">
-            <div className="price-row">
-              <dt>Giá vé niêm yết</dt>
-              <dd className="tabular-value">
-                {formatCampusWei(quote.originalAmountWei)}
-              </dd>
-            </div>
-            <div className="price-row discount-row">
-              <dt>
-                Ưu đãi thẻ sinh viên (
-                {wallet.sbt.hasValidCard ? "Giảm 10%" : "Không có ưu đãi"})
-              </dt>
-              <dd className="tabular-value">
-                {quote.discountBps > 0
-                  ? `-${formatCampusWei(quote.discountAmountWei)}`
-                  : "0 CAMPUS"}
-              </dd>
-            </div>
-            <div className="price-row total-row">
-              <dt>Số tiền bạn cần trả</dt>
-              <dd className="tabular-value total-amount">
-                {formatCampusWei(quote.paidAmountWei)}
-              </dd>
-            </div>
-            <div className="price-row gas-row">
-              <dt>Phí gas mẫu (tách riêng)</dt>
-              <dd className="tabular-value">
-                ~{formatCampusWei(quote.estimatedGasWei)}
-              </dd>
-            </div>
-          </dl>
-        </section>
-      ) : null}
-
-      {uiState === "awaiting-signature" || uiState === "pending" ? (
-        <section className="surface-panel state-panel" aria-live="polite">
-          <span className="timer-badge">Tình huống mô phỏng</span>
-          <h2>
-            {uiState === "awaiting-signature"
-              ? "Đang chờ bạn xác nhận ký"
-              : "Đang chờ xác nhận giao dịch"}
-          </h2>
-          {uiState === "pending" ? (
-            <div className="l1-shimmer-track" aria-hidden="true">
-              <div className="l1-shimmer-bar" />
-            </div>
-          ) : null}
-          <p>
-            {uiState === "awaiting-signature"
-              ? "Kiểm tra số tiền và đích nhận. Trong bản tích hợp, ví sẽ yêu cầu bạn xác nhận ở bước này."
-              : "Chưa có receipt hợp lệ thì chưa báo thanh toán thành công. Bản xem thử không gửi giao dịch."}
-          </p>
-          <div className="transaction-context">
-            <strong>
-              {formatCampusWei(quote.paidAmountWei)} ·{" "}
-              {invoice.meta.merchantName}
-            </strong>
-            <code className="mono-value">{invoice.invoice.merchant}</code>
-            <span>
-              {campusNetwork.name} · Chain {campusNetwork.chainId}
-            </span>
-          </div>
-          {uiState === "awaiting-signature" ? (
-            <div className="inline-actions">
-              <button
-                type="button"
-                className="primary-cta-btn"
-                onClick={() => setUiState("pending")}
-              >
-                Mô phỏng đồng ý ký
-              </button>
+            <div className="inline-actions wallet-actions">
               <button
                 type="button"
                 className="secondary-btn"
-                onClick={() => {
-                  setErrorKind("wallet-rejected");
-                  setUiState("error");
-                }}
+                onClick={() =>
+                  setWalletKind(walletKind === "sbt" ? "standard" : "sbt")
+                }
               >
-                Mô phỏng từ chối ký
+                {walletKind === "sbt"
+                  ? "Thử ví không có thẻ (0%)"
+                  : "Thử ví có thẻ SBT (-10%)"}
               </button>
+              {onBackToLive ? (
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={onBackToLive}
+                >
+                  Chuyển sang Ví thật
+                </button>
+              ) : null}
             </div>
-          ) : (
-            <div className="inline-actions">
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => setUiState("receipt")}
-              >
-                Xem biên lai mẫu
-              </button>
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => {
-                  setErrorKind("rpc-unreachable");
-                  setUiState("error");
-                }}
-              >
-                Thử lỗi xác minh
-              </button>
-            </div>
-          )}
-        </section>
-      ) : null}
-
-      {uiState === "receipt" ? (
-        <section className="surface-panel receipt-panel" aria-live="polite">
-          <div className="receipt-header">
-            <span className="verified-badge">
-              BIÊN LAI MẪU · KHÔNG PHẢI GIAO DỊCH THẬT
-            </span>
-            <h2>Xem trước biên lai thanh toán</h2>
-            <p className="muted-line">{receipt.verifiedAtLabel}</p>
-          </div>
-
-          <dl className="price-breakdown">
-            <div className="price-row">
-              <dt>Dịch vụ</dt>
-              <dd>{invoice.meta.serviceName}</dd>
-            </div>
-            <div className="price-row">
-              <dt>Nơi thu</dt>
-              <dd>{invoice.meta.merchantName}</dd>
-            </div>
-            <div className="price-row">
-              <dt>Giá vé gốc</dt>
-              <dd className="tabular-value">
-                {formatCampusWei(receipt.originalAmountWei)}
-              </dd>
-            </div>
-            <div className="price-row discount-row">
-              <dt>Đã giảm nhờ thẻ sinh viên</dt>
-              <dd className="tabular-value">
-                {receipt.tier === 1
-                  ? `-${formatCampusWei(receipt.discountAmountWei)}`
-                  : "0 CAMPUS"}
-              </dd>
-            </div>
-            <div className="price-row total-row">
-              <dt>Số tiền thanh toán mẫu</dt>
-              <dd className="tabular-value total-amount">
-                {formatCampusWei(receipt.paidAmountWei)}
-              </dd>
-            </div>
-            <div className="price-row gas-row">
-              <dt>Phí giao dịch đã tính riêng</dt>
-              <dd className="tabular-value">
-                {formatCampusWei(receipt.gasFeeWei)}
-              </dd>
-            </div>
-          </dl>
-
-          <p className="replay-guard-note">
-            Đây là biên lai giả lập cho cùng hóa đơn với POS. Hai màn hình chưa
-            đồng bộ qua API. Khi tích hợp, chỉ xác nhận sau receipt thành công
-            và event khớp hóa đơn.
-          </p>
-        </section>
-      ) : null}
-
-      {/* Thanh nút bấm chính cố định ở đáy màn hình điện thoại (Sticky CTA Dock) */}
-      <div
-        className="student-sticky-cta"
-        role="region"
-        aria-label="Nút trả tiền nhanh"
-      >
-        <div className="sticky-cta-summary">
-          <span className="sticky-cta-label">
-            {uiState === "receipt"
-              ? "Biên lai mẫu"
-              : uiState === "error"
-                ? "Chưa thể tiếp tục"
-                : "Cần thanh toán"}
-          </span>
-          <strong className="tabular-value sticky-cta-amount">
-            {uiState === "receipt"
-              ? formatCampusWei(receipt.paidAmountWei)
-              : formatCampusWei(quote.paidAmountWei)}
-          </strong>
+          </section>
         </div>
 
-        {uiState === "waiting" ? (
-          <button
-            type="button"
-            className="primary-cta-btn"
-            disabled={!payloadMatches}
-            onClick={() => setUiState("awaiting-signature")}
-          >
-            Thử bước ký · {formatCampusWei(quote.paidAmountWei)}
-          </button>
-        ) : null}
-
-        {uiState === "awaiting-signature" || uiState === "pending" ? (
-          <button type="button" className="primary-cta-btn" disabled>
-            {uiState === "pending"
-              ? "Chờ xác nhận · Mô phỏng"
-              : "Chờ ký · Mô phỏng"}
-          </button>
-        ) : null}
-
-        {uiState === "loading" ? (
-          <button type="button" className="primary-cta-btn" disabled>
-            Đang kiểm tra phiếu…
-          </button>
-        ) : null}
-
-        {uiState === "error" ? (
-          <button
-            type="button"
-            className="primary-cta-btn"
-            onClick={resetPreview}
-          >
-            {activeError.actionLabelStudent}
-          </button>
-        ) : null}
-
-        {uiState === "receipt" ? (
-          <button
-            type="button"
-            className="secondary-btn full-width"
-            onClick={resetPreview}
-          >
-            Quay lại hóa đơn mẫu
-          </button>
-        ) : null}
-      </div>
-
-      {/* Chi tiết fixture phục vụ đối chiếu khi tích hợp */}
-      <section className="secondary-modules" aria-label="Chi tiết dữ liệu mẫu">
-        <details className="module-accordion">
-          <summary>
-            <span>Thông tin fixture</span>
-            <span className="muted-tag">Chain {campusNetwork.chainId}</span>
-          </summary>
-          <div className="accordion-content">
-            <dl className="meta-grid">
-              <div>
-                <dt>Địa chỉ ví đang chọn</dt>
-                <dd className="mono-value">
-                  {shortenHex(wallet.address, 8, 6)}
-                </dd>
-              </div>
-              <div>
-                <dt>Verifier mẫu · CampusPaymentRegistry</dt>
-                <dd className="mono-value">
-                  {shortenHex(invoice.domain.verifyingContract, 8, 6)}
-                </dd>
-              </div>
-              <div>
-                <dt>Mã băm invoiceId</dt>
-                <dd className="mono-value">
-                  {shortenHex(invoice.invoice.invoiceId, 10, 6)}
-                </dd>
-              </div>
-              <div>
-                <dt>Chữ ký EIP-712 POS</dt>
-                <dd className="mono-value">
-                  {shortenHex(invoice.signature, 10, 6)}
-                </dd>
-              </div>
-            </dl>
-            {uiState === "receipt" && (
-              <div className="tx-proof-box">
-                <span>
-                  Hash mẫu · Block #{receipt.blockNumber} · Chưa xác minh
-                  on-chain
-                </span>
-                <CopyButton
-                  key={walletKind}
-                  value={receipt.txHash}
-                  label="Sao chép hash mẫu"
-                />
-                <code className="tx-hash-code">{receipt.txHash}</code>
-              </div>
-            )}
+        <div className="student-services-column">
+          <div className="student-tab-bar" role="group" aria-label="Lọc tiện ích sinh viên mẫu">
+            {([
+              ["all", "Tất cả"],
+              ["qr", "Quét QR"],
+              ["food", "Học bổng FOOD"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`seg-btn ${activeTab === key ? "active" : ""}`}
+                aria-pressed={activeTab === key}
+                onClick={() => setActiveTab(key)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        </details>
-      </section>
-    </div>
+
+          {/* Cột phải 01 / 02: Quét & thanh toán QR */}
+          <section
+            className="surface-panel wallet-payment-gate"
+            aria-labelledby="payment-gate-title"
+            aria-busy={uiState === "loading"}
+            hidden={activeTab !== "all" && activeTab !== "qr"}
+          >
+            <div className="panel-heading-with-icon">
+              <span className="panel-icon">
+                <Icon name="qr" />
+              </span>
+              <div>
+                <span className="panel-eyebrow">QUÉT & THANH TOÁN</span>
+                <h2 id="payment-gate-title">Thanh toán bằng QR</h2>
+              </div>
+              <span className="step-label">01 / 02</span>
+            </div>
+            <p>
+              Dán hoặc dùng phiếu mẫu từ điểm thu trên chain{" "}
+              {campusNetwork.chainId} để xem trước số CAMPUS cần trả và thử bước ký
+              ví Core.
+            </p>
+
+            <div className="invoice-student-preview">
+              <h3>Quét hoặc dán hóa đơn POS</h3>
+              <p>
+                Đối chiếu phiếu mẫu và mức giảm SBT, sau đó mô phỏng xác nhận ký
+                tới payment registry.
+              </p>
+
+              <div className="qr-source-header">
+                <label htmlFor="student-qr-paste">Payload QR mẫu</label>
+                <div className="qr-paste-actions">
+                  <button
+                    type="button"
+                    className="text-action-btn pos-bridge-btn"
+                    disabled={readingQr}
+                    onClick={resetPreview}
+                  >
+                    Dùng phiếu mẫu POS
+                  </button>
+                  {pastedQr ? (
+                    <button
+                      type="button"
+                      className="text-action-btn"
+                      disabled={readingQr}
+                      onClick={() => {
+                        setPastedQr("");
+                        setPreviewVerified(false);
+                        setUiState("waiting");
+                        setQrStatus("");
+                      }}
+                    >
+                      Xóa
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <textarea
+                id="student-qr-paste"
+                className="invoice-payload"
+                rows={3}
+                value={pastedQr}
+                placeholder="Dán ảnh hoặc nội dung QR của phiếu mẫu POS…"
+                aria-describedby="demo-qr-help payload-feedback"
+                readOnly={readingQr}
+                onPaste={(event) => void pasteQrImage(event)}
+                onChange={(e) => {
+                  setPastedQr(e.target.value);
+                  setPreviewVerified(matchesSharedDemoPayload(e.target.value));
+                  setQrStatus("");
+                }}
+              />
+              <p id="demo-qr-help" className="metric-note">Bấm vào ô rồi dán ảnh QR của bản minh họa POS.</p>
+              <p className="metric-note" role="status" hidden={!qrStatus}>{qrStatus}</p>
+              <p id="payload-feedback" className="metric-note" role="status">
+                {payloadMatches
+                  ? "Nội dung khớp phiếu mẫu dùng chung với POS. Chưa xác minh chữ ký thật."
+                  : "Nội dung chưa khớp phiếu mẫu. Nút thanh toán đang bị khóa."}
+              </p>
+
+              <div className="inline-actions invoice-preview-actions">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  disabled={readingQr}
+                  onClick={resetPreview}
+                >
+                  Lấy lại phiếu mẫu
+                </button>
+                <button
+                  type="button"
+                  className="primary-cta-btn"
+                  disabled={
+                    readingQr ||
+                    !payloadMatches ||
+                    uiState === "loading" ||
+                    uiState === "awaiting-signature" ||
+                    uiState === "pending"
+                  }
+                  onClick={() => {
+                    setPreviewVerified(true);
+                    setUiState("waiting");
+                  }}
+                >
+                  {uiState === "loading"
+                    ? "Đang kiểm tra phiếu…"
+                    : uiState === "awaiting-signature"
+                      ? "Đang chờ ký trong ví…"
+                      : uiState === "pending"
+                        ? "Đang chờ xác nhận L1…"
+                        : uiState === "error" || uiState === "receipt"
+                          ? "Kiểm tra lại hóa đơn mẫu"
+                          : "Kiểm tra hóa đơn mẫu"}
+                </button>
+              </div>
+
+              {!payloadMatches ? (
+                <p className="invoice-feedback error-panel" role="alert">
+                  Nội dung vừa nhập không khớp phiếu mẫu chuẩn. Bấm “Dùng phiếu
+                  mẫu POS” hoặc “Lấy lại phiếu mẫu” để khôi phục.
+                </p>
+              ) : null}
+
+              {uiState === "loading" ? (
+                <div aria-live="polite" aria-busy="true">
+                  <TransactionStepper state="checking" />
+                  <div className="status-banner banner-loading">
+                    <span className="spinner" aria-hidden="true" />
+                    <div>
+                      <strong>
+                        Đang kiểm tra phiếu gửi xe và thẻ sinh viên…
+                      </strong>
+                      <p>
+                        Hệ thống đang mô phỏng tra cứu chữ ký POS và quyền ưu đãi
+                        SBT trên chain {campusNetwork.chainId}.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="skeleton-list" aria-hidden="true">
+                    <div className="skeleton-row" />
+                    <div className="skeleton-row" />
+                    <div className="skeleton-row short" />
+                  </div>
+                </div>
+              ) : null}
+
+              {uiState === "error" ? (
+                <div className="invoice-feedback error-panel" role="alert">
+                  <TransactionStepper state="error" errorStep={demoErrorStep(errorKind)} />
+                  <div className="error-header">
+                    <span className="error-code-badge">
+                      Tình huống mẫu · {activeError.code}
+                    </span>
+                    <strong>{activeError.studentTitle}</strong>
+                  </div>
+                  <p className="error-body">{activeError.studentMessage}</p>
+                  <div className="next-step-box">
+                    <strong>Bạn chỉ cần làm bước này:</strong>
+                    <p>{activeError.nextStepStudent}</p>
+                  </div>
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="primary-cta-btn"
+                      onClick={resetPreview}
+                    >
+                      {activeError.actionLabelStudent}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {(uiState === "waiting" && previewVerified) ||
+                uiState === "awaiting-signature" ||
+                uiState === "pending" ? (
+                <section
+                  className="invoice-verified-preview"
+                  aria-live="polite"
+                  aria-label="Hóa đơn mẫu đã xem trước"
+                >
+                  <span className="verified-badge tabular-nums">
+                    PHIẾU MẪU · Chain {campusNetwork.chainId} · Hạn mẫu 05:00
+                  </span>
+                  <h4>{invoice.meta.serviceName}</h4>
+                  <p>
+                    {invoice.meta.merchantName} · người nhận{" "}
+                    <HashChip
+                      value={invoice.invoice.merchant}
+                      copyLabel="Sao chép địa chỉ merchant mẫu"
+                    />
+                  </p>
+                  <h5>
+                    {wallet.sbt.hasValidCard
+                      ? "Đủ điều kiện giảm giá SBT (-10%)"
+                      : "Không áp dụng giảm giá SBT"}
+                  </h5>
+
+                  <dl className="price-breakdown tabular-nums">
+                    <div className="price-row">
+                      <dt>Giá vé niêm yết</dt>
+                      <dd className="tabular-nums">
+                        {formatCampusWei(quote.originalAmountWei)}
+                      </dd>
+                    </div>
+                    <div className="price-row discount-row">
+                      <dt>
+                        Ưu đãi thẻ sinh viên (
+                        {wallet.sbt.hasValidCard ? "Giảm 10%" : "0%"})
+                      </dt>
+                      <dd className="tabular-nums">
+                        {quote.discountBps > 0
+                          ? `-${formatCampusWei(quote.discountAmountWei)}`
+                          : "0 CAMPUS"}
+                      </dd>
+                    </div>
+                    <div className="price-row total-row">
+                      <dt>Số CAMPUS cần trả</dt>
+                      <dd className="total-amount tabular-nums">
+                        {formatCampusWei(quote.paidAmountWei)}
+                      </dd>
+                    </div>
+                    <div className="price-row gas-row">
+                      <dt>Phí gas mẫu (tách riêng)</dt>
+                      <dd className="tabular-nums">
+                        ~{formatCampusWei(quote.estimatedGasWei)}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="invoice-payment-panel invoice-payment-compact">
+                    <h4>Thanh toán bằng ví sinh viên (Mô phỏng)</h4>
+                    <p>
+                      {uiState === "awaiting-signature"
+                        ? "Kiểm tra số tiền và đích nhận. Trong bản thật, ví Core sẽ bật cửa sổ xác nhận ở bước này."
+                        : uiState === "pending"
+                          ? "Đã gửi mô phỏng. Chưa có receipt hợp lệ thì chưa báo thanh toán thành công."
+                          : "Hạn, paid flag, verifier/signer, giá và mô phỏng được đối chiếu trước khi mở Core xác nhận."}
+                    </p>
+                    <TransactionStepper state={paymentDemoStep(uiState)} />
+                    <div className="payment-meta-summary">
+                      <div className="payment-meta-row">
+                        <span>Ví trả</span>
+                        <HashChip
+                          value={wallet.address}
+                          copyLabel="Sao chép địa chỉ ví trả mẫu"
+                        />
+                      </div>
+                    </div>
+
+                    {uiState === "pending" ? (
+                      <>
+                        <p className="wallet-status" role="status">
+                          Đang chờ receipt và sự kiện khớp hóa đơn (mô phỏng)…
+                        </p>
+                        <p>Tx hash mẫu</p>
+                        <code className="tx-hash-code">{receipt.txHash}</code>
+                        <CopyButton
+                          key={walletKind}
+                          label="Sao chép hash thanh toán mẫu"
+                          value={receipt.txHash}
+                        />
+                      </>
+                    ) : null}
+
+                    <div className="inline-actions invoice-preview-actions">
+                      {uiState === "waiting" ? (
+                        <button
+                          type="button"
+                          className="primary-cta-btn"
+                          disabled={!payloadMatches}
+                          onClick={() => setUiState("awaiting-signature")}
+                        >
+                          Thanh toán bằng Core (Mô phỏng)
+                        </button>
+                      ) : null}
+
+                      {uiState === "awaiting-signature" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="primary-cta-btn"
+                            onClick={() => setUiState("pending")}
+                          >
+                            Mô phỏng đồng ý ký
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => {
+                              setErrorKind("wallet-rejected");
+                              setUiState("error");
+                            }}
+                          >
+                            Mô phỏng từ chối ký
+                          </button>
+                        </>
+                      ) : null}
+
+                      {uiState === "pending" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="primary-cta-btn"
+                            onClick={() => setUiState("receipt")}
+                          >
+                            Xem biên lai mẫu
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={() => {
+                              setErrorKind("rpc-unreachable");
+                              setUiState("error");
+                            }}
+                          >
+                            Thử lỗi xác minh
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {uiState === "receipt" ? (
+                <section className="invoice-payment-panel" aria-live="polite">
+                  <TransactionStepper state="done" />
+                  <h4>Thanh toán đã xác minh (Mẫu)</h4>
+                  <p role="status">
+                    Biên lai giả lập cho cùng hóa đơn với POS. Chưa có xác nhận
+                    on-chain.
+                  </p>
+                  <div className="invoice-verified-preview receipt-ticket">
+                    <div className="receipt-hero">
+                      <div className="receipt-hero-top">
+                        <span className="receipt-hero-icon" aria-hidden="true">
+                          <Icon name="check" />
+                        </span>
+                        <span className="verified-badge">
+                          BIÊN LAI MẪU · CHƯA XÁC MINH ON-CHAIN
+                        </span>
+                      </div>
+                      <span className="receipt-hero-label">Số tiền đã thanh toán (mẫu)</span>
+                      <strong className="receipt-hero-amount tabular-nums">
+                        {formatCampusWei(receipt.paidAmountWei)}
+                      </strong>
+                      {BigInt(receipt.discountAmountWei) > BigInt(0) ? (
+                        <div className="receipt-hero-savings tabular-nums">
+                          <s className="receipt-original-strike">
+                            {formatCampusWei(receipt.originalAmountWei)}
+                          </s>
+                          <span className="receipt-savings-pill">
+                            Tiết kiệm {formatCampusWei(receipt.discountAmountWei)}
+                            {receipt.tier === 1 ? " (-10% SBT)" : ""}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="receipt-tear-line" aria-hidden="true" />
+
+                    <dl className="price-breakdown tabular-nums">
+                      <div className="price-row invoice-code-row">
+                        <dt>Mã hóa đơn</dt>
+                        <dd>
+                          <code className="mono-badge invoice-code-badge">{receipt.invoiceCode}</code>
+                        </dd>
+                      </div>
+                      <div className="price-row">
+                        <dt>Giá gốc</dt>
+                        <dd>{formatCampusWei(receipt.originalAmountWei)}</dd>
+                      </div>
+                      <div className="price-row discount-row">
+                        <dt>Ưu đãi (tier {receipt.tier})</dt>
+                        <dd>
+                          {receipt.tier === 1
+                            ? `-${formatCampusWei(receipt.discountAmountWei)}`
+                            : "0 CAMPUS"}
+                        </dd>
+                      </div>
+                      <div className="price-row total-row">
+                        <dt>Đã trả (mẫu)</dt>
+                        <dd className="total-amount">
+                          {formatCampusWei(receipt.paidAmountWei)}
+                        </dd>
+                      </div>
+                      <div className="price-row gas-row">
+                        <dt>Gas (riêng)</dt>
+                        <dd>{formatCampusWei(receipt.gasFeeWei)}</dd>
+                      </div>
+                    </dl>
+
+                    <details className="receipt-proof-details">
+                      <summary>
+                        Xem bằng chứng mẫu (Block #{receipt.blockNumber})
+                      </summary>
+                      <div className="receipt-proof-body">
+                        <p>Block / log</p>
+                        <code className="tx-hash-code">
+                          #{receipt.blockNumber} / 0 (Mẫu)
+                        </code>
+                        <p>Người trả</p>
+                        <code className="tx-hash-code">{receipt.payer}</code>
+                        <p>Người nhận</p>
+                        <code className="tx-hash-code">{receipt.merchant}</code>
+                        <p>Hợp đồng · chain {receipt.chainId}</p>
+                        <code className="tx-hash-code">
+                          {receipt.contractAddress}
+                        </code>
+                        <p>Tx hash mẫu</p>
+                        <code className="tx-hash-code">{receipt.txHash}</code>
+                        <CopyButton
+                          key={walletKind}
+                          label="Sao chép tx hash mẫu"
+                          value={receipt.txHash}
+                        />
+                      </div>
+                    </details>
+                  </div>
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={resetPreview}
+                    >
+                      Quay lại hóa đơn mẫu
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+
+            <details className="module-accordion">
+              <summary>
+                <span>Thông tin fixture</span>
+                <span className="muted-tag">Chain {campusNetwork.chainId}</span>
+              </summary>
+              <div className="accordion-content">
+                <dl className="meta-grid">
+                  <div>
+                    <dt>Địa chỉ ví đang chọn</dt>
+                    <dd className="mono-value">
+                      {shortenHex(wallet.address, 8, 6)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Verifier mẫu · CampusPaymentRegistry</dt>
+                    <dd className="mono-value">
+                      {shortenHex(invoice.domain.verifyingContract, 8, 6)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Mã băm invoiceId</dt>
+                    <dd className="mono-value">
+                      {shortenHex(invoice.invoice.invoiceId, 10, 6)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Chữ ký EIP-712 POS</dt>
+                    <dd className="mono-value">
+                      {shortenHex(invoice.signature, 10, 6)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </details>
+          </section>
+
+          {/* Cột phải 02 / 02: Voucher học bổng FOOD */}
+          <section
+            className="surface-panel grant-panel"
+            aria-labelledby="grant-title"
+            hidden={activeTab !== "all" && activeTab !== "food"}
+          >
+            <div className="panel-heading-with-icon">
+              <span className="panel-icon icon-gold">
+                <Icon name="sparkle" />
+              </span>
+              <div>
+                <span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span>
+                <h2 id="grant-title">Voucher học bổng</h2>
+              </div>
+              <span className="step-label">02 / 02</span>
+            </div>
+            <p>
+              Chi ngân sách FOOD tại căn-tin bằng ví được cấp (mô phỏng trên
+              trình duyệt).
+            </p>
+
+            <div className="wallet-summary-grid">
+              <div className="metric-block">
+                <span className="metric-label">Ngân sách FOOD</span>
+                <strong className="tabular-value" data-testid="demo-grant-balance">
+                  {formatCampusWei(grantBalanceWei.toString())}
+                </strong>
+                <span className="metric-note">
+                  Số dư mẫu trong vault · khác CAMPUS trong ví cá nhân
+                </span>
+              </div>
+              <div className="metric-block">
+                <span className="metric-label">Danh mục được cấp</span>
+                <strong>FOOD · Căn-tin</strong>
+                <span className="metric-note">
+                  Căn-tin đang được phép nhận FOOD (mô phỏng)
+                </span>
+              </div>
+            </div>
+
+            <details className="grant-details-disclosure">
+              <summary>Chi tiết ví, căn-tin &amp; hợp đồng vault</summary>
+              <div className="transaction-context">
+                <span>Người chi · ví sinh viên</span>
+                <HashChip
+                  value={wallet.address}
+                  copyLabel="Sao chép ví sinh viên mẫu"
+                />
+                <span>Merchant nhận · Căn-tin</span>
+                <HashChip
+                  value={DEMO_CANTEEN_MERCHANT_WALLET}
+                  copyLabel="Sao chép địa chỉ căn-tin mẫu"
+                />
+                <span>Vault · IntraCampus L1 · chain {campusNetwork.chainId}</span>
+                <HashChip
+                  value={DEMO_GRANT_VAULT}
+                  copyLabel="Sao chép địa chỉ vault mẫu"
+                />
+              </div>
+            </details>
+
+            <TransactionStepper state={grantDemoStep(grantPhase)} />
+
+            <form onSubmit={startGrantSpend}>
+              <label className="field-label" htmlFor="demo-grant-amount">
+                Số CAMPUS chi từ voucher
+              </label>
+              <input
+                id="demo-grant-amount"
+                className="mono-textarea amount-input tabular-nums"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={grantAmount}
+                disabled={grantPhase !== "idle"}
+                onChange={(e) => {
+                  setGrantAmount(e.target.value);
+                  setGrantError(null);
+                }}
+                aria-describedby="demo-grant-amount-help"
+              />
+              <p
+                id="demo-grant-amount-help"
+                className="muted-line tabular-nums"
+              >
+                {parsedGrantWei === null
+                  ? "Dùng số dương, dấu chấm cho phần lẻ, tối đa 18 chữ số thập phân."
+                  : `Dự kiến trừ ${formatCampusWei(parsedGrantWei.toString())} từ voucher. ${parsedGrantWei > grantBalanceWei
+                    ? "Vượt số dư FOOD mẫu hiện tại."
+                    : ""
+                  }`}
+              </p>
+              <p className="muted-line">
+                Ví của bạn ký khoản chi. Giao dịch không gửi thêm CAMPUS vào
+                vault; phí gas được trả riêng từ ví.
+              </p>
+
+              {grantPhase === "idle" ? (
+                <div className="inline-actions">
+                  <button
+                    type="submit"
+                    className="primary-cta-btn"
+                    disabled={
+                      parsedGrantWei === null || parsedGrantWei > grantBalanceWei
+                    }
+                  >
+                    Chi FOOD mẫu bằng Core
+                  </button>
+                  {grantBalanceWei !== INITIAL_FOOD_GRANT_WEI ? (
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={resetDemoGrant}
+                    >
+                      Đặt lại 150 CAMPUS
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </form>
+
+            {grantError ? (
+              <p className="wallet-warning" role="alert">
+                {grantError}
+              </p>
+            ) : null}
+
+            {grantPhase === "signing" ? (
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="primary-cta-btn"
+                  onClick={() => setGrantPhase("confirming")}
+                >
+                  Mô phỏng đồng ý ký chi FOOD
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    setGrantPhase("idle");
+                    setPendingGrantWei(null);
+                  }}
+                >
+                  Hủy ký
+                </button>
+              </div>
+            ) : null}
+
+            {grantPhase === "confirming" ? (
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="primary-cta-btn"
+                  onClick={confirmDemoGrantReceipt}
+                >
+                  Xác nhận biên nhận GrantSpent mẫu
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    setGrantPhase("idle");
+                    setPendingGrantWei(null);
+                  }}
+                >
+                  Quay lại
+                </button>
+              </div>
+            ) : null}
+
+            {grantPhase === "confirmed" ? (
+              <>
+                <div className="tx-proof-box">
+                  <strong>
+                    Hash khoản chi mẫu · Chưa xác minh on-chain (
+                    {pendingGrantWei
+                      ? `-${formatCampusWei(pendingGrantWei.toString())}`
+                      : "Đã trừ"}
+                    )
+                  </strong>
+                  <div>
+                    <HashChip
+                      value={DEMO_GRANT_TX_HASH}
+                      start={10}
+                      end={8}
+                      copyLabel="Sao chép mã giao dịch FOOD mẫu"
+                    />
+                  </div>
+                </div>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => {
+                      setGrantPhase("idle");
+                      setPendingGrantWei(null);
+                    }}
+                  >
+                    Tạo khoản chi mẫu mới
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={resetDemoGrant}
+                  >
+                    Đặt lại 150 CAMPUS
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            <details className="module-accordion">
+              <summary>Giới hạn voucher</summary>
+              <div className="accordion-content">
+                <p>
+                  Ngân sách này chỉ chi FOOD tại căn-tin đã xác minh. Không rút về
+                  ví cá nhân hoặc đổi sang PARKING. Contract kiểm tra quyền
+                  merchant ở mỗi lần chi.
+                </p>
+                <p>
+                  Trong bản thật, chỉ receipt thành công và event GrantSpent khớp
+                  mới xác nhận khoản chi.
+                </p>
+              </div>
+            </details>
+          </section>
+        </div>
+
+        <p className="wallet-live-note">
+          Bản minh họa chỉ mô phỏng dữ liệu trên trình duyệt, không kết nối ví
+          Core hoặc gửi giao dịch lên mạng.
+        </p>
+      </div>
+    </>
   );
 }

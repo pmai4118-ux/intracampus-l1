@@ -211,3 +211,9 @@ Menu và snapshot đơn ở SQLite riêng; một đơn cố định nguồn WALL
 ## Network head metadata · 2026-11-17
 
 NetworkProbe bổ sung latestBlock.number/timestamp và headAgeSeconds khi đọc được chain/latest block. status ready tiếp tục nghĩa chain ID đúng; service nghiệp vụ tự áp freshness configuration. Tuổi block tính bằng server clock, không clamp block tương lai. Probe đọc hai RPC song song trong timeout 2.5 giây; malformed/missing block báo unreachable. Quyết định này giúp phát hiện node local không tạo block khi idle mà vẫn giữ guard invoice/Library.
+
+## Checkout bãi xe · 2026-11-20
+
+Receipt gửi xe đã xác minh là mốc check-in. `GET /api/parking/tickets` liệt kê vé chưa checkout của phiên STUDENT khớp ví đang chọn. Mỗi vé hiện QR trong Ví sinh viên. QR chỉ chứa đường dẫn tới `/staff/parking/checkout/:invoiceId`. Bảo vệ quét, kiểm tra vé và xác nhận ở cổng ra.
+
+`GET /api/parking/:invoiceId` trả mã vé và thời điểm ra (Unix giây hoặc `null`). `POST` yêu cầu Origin của frontend và phiên nhân viên demo dùng vai trò LIBRARIAN hiện có. Checkout lưu một dòng cho mỗi hóa đơn trong SQLite hóa đơn, dùng lại thời điểm cũ nếu gửi lại. Đây là xác nhận lượt ra ngoài chain và không thu thêm CAMPUS.

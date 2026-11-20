@@ -1,9 +1,9 @@
 "use client";
 
-import QRCode from "qrcode";
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { formatWalletBalance } from "../../lib/chains";
 import { parseInvoicePayload, sameInvoiceEnvelope } from "../../lib/invoice";
+import { renderInvoiceQr, type InvoiceQrImage } from "../../lib/invoice-qr";
 import { InvoiceStatusController, POS_ACTIVE_PAYLOAD_KEY, receiptEventKey } from "../../lib/invoice-status";
 import { InvoiceStatus } from "./InvoiceStatus";
 import PosShiftLedger from "./PosShiftLedger";
@@ -41,7 +41,7 @@ export function InvoiceForm() {
 function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
   const state = useSyncExternalStore(tracker.subscribe, tracker.getSnapshot, tracker.getSnapshot);
   const invoice = state.envelope, qrPayload = invoice ? JSON.stringify(invoice) : "";
-  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrImage, setQrImage] = useState<InvoiceQrImage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -130,7 +130,7 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
   }, [copied]);
   useEffect(() => {
     let cancelled = false; setQrImage(null);
-    if (qrPayload) void QRCode.toDataURL(qrPayload, { errorCorrectionLevel: "Q", margin: 2, width: 360 })
+    if (qrPayload) void renderInvoiceQr(qrPayload)
       .then((image) => { if (!cancelled) setQrImage(image); })
       .catch(() => { if (!cancelled) setError("Không tạo được mã QR. Bạn vẫn có thể sao chép payload để dán vào Student."); });
     return () => { cancelled = true; };
@@ -233,7 +233,7 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
           <div className="gate-pass-main">
             <span className="gate-pass-icon"><Icon name="check" /></span>
             <div>
-              <span className="verified-badge">ĐÃ XÁC MINH THU TIỀN · CHO QUA CỔNG</span>
+              <span className="verified-badge">ĐÃ XÁC MINH THU TIỀN · CHECK-IN</span>
               <h3>Thực thu {formatWalletBalance(BigInt(paidReceipt.paidAmount))}</h3>
               <p>{paidReceipt.tier === 1 ? "Đã áp dụng ưu đãi thẻ sinh viên SBT (-10%)" : "Thu theo mức giá tiêu chuẩn"} · Block #{paidReceipt.blockNumber}</p>
               {autoRenewRemainingSec !== null ? (
@@ -259,7 +259,7 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
             <div className="last-paid-copy">
               <span className="last-paid-check" aria-hidden="true"><Icon name="check" /></span>
               <div>
-                <strong>Lượt vừa thu xong ({lastPaidSummary.invoiceCode}): Đã nhận {formatWalletBalance(BigInt(lastPaidSummary.paidAmountWei))} · Cho xe qua cổng</strong>
+                <strong>Lượt vừa thu xong ({lastPaidSummary.invoiceCode}): Đã nhận {formatWalletBalance(BigInt(lastPaidSummary.paidAmountWei))} · Đã check-in</strong>
                 <p>Mã QR bên dưới đã tự động làm mới ({invoice.meta.invoiceCode}) — sẵn sàng cho xe tiếp theo quét.</p>
               </div>
             </div>
@@ -276,7 +276,9 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
         <div className={`invoice-qr-card ${paidReceipt ? "qr-card-paid" : ""}`}>
           {paidReceipt ? <span className="verified-badge">ĐÃ THU TIỀN · HÓA ĐƠN HOÀN TẤT</span> : null}
           <div className="qr-image-wrap">
-            {qrImage ? <img src={qrImage} alt={`Mã QR cho hóa đơn ${invoice.meta.invoiceCode}`} width={320} height={320} /> : <p role="status">Đang tạo mã QR…</p>}
+            {qrImage ? <img src={qrImage.src} alt={`Mã QR cho hóa đơn ${invoice.meta.invoiceCode}`}
+              width={qrImage.displayWidth} height={qrImage.displayWidth} style={{ maxWidth: qrImage.displayWidth }} />
+              : <p role="status">Đang tạo mã QR…</p>}
             {paidReceipt ? (
               <div className="qr-paid-overlay" aria-hidden="true">
                 <span className="qr-paid-check"><Icon name="check" /></span>

@@ -21,7 +21,8 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-- Web: <http://127.0.0.1:3000> (`/student` và `/pos`).
+- Ví và dịch vụ sinh viên: <http://127.0.0.1:3000/student>.
+- Điểm thu và công cụ vận hành: <http://127.0.0.1:3000/pos>.
 - API: <http://127.0.0.1:4000/healthz> và <http://127.0.0.1:4000/api/network>.
 
 Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật, lấy RPC của IntraCampus từ nhóm, đặt chain ID `20261` và đồng gốc `CAMPUS`, rồi chạy `pnpm rpc:check`. Không dùng RPC Fuji C-Chain `43113` cho cấu hình dự án. Xem [hướng dẫn L1](infra/README.md) và [quyết định về mạng/ví](docs/decisions.md#d014--giữ-intracampus-l1-và-tách-quyền-ký-theo-người-khởi-tạo) trước khi cấu hình.

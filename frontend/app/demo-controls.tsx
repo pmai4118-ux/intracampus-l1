@@ -16,6 +16,9 @@ export function DemoControls({
   onState,
   onWallet,
   onError,
+  onBackToLive,
+  backToLiveLabel = "Quay lại bản thật →",
+  summary = "Mô phỏng giao diện · chưa kết nối ví thật",
 }: {
   state: DemoUiState;
   wallet: DemoWalletKind;
@@ -23,17 +26,51 @@ export function DemoControls({
   onState: (value: DemoUiState) => void;
   onWallet: (value: DemoWalletKind) => void;
   onError: (value: DemoErrorKind) => void;
+  onBackToLive?: () => void;
+  backToLiveLabel?: string;
+  summary?: string;
 }) {
   return (
     <aside className="demo-notice demo-pill-banner" aria-label="Chế độ xem thử">
       <div className="demo-pill-head">
         <span className="demo-pill-badge">
           <span className="mode-status-dot dot-demo" aria-hidden="true" />
-          Bản xem thử · Dữ liệu mẫu
+          Bản minh họa · Dữ liệu mẫu
         </span>
-        <span className="demo-pill-summary">
-          Mô phỏng giao diện · chưa kết nối ví thật
-        </span>
+        <span className="demo-pill-summary">{summary}</span>
+      </div>
+      <div className="demo-pill-actions">
+        <div
+          className="segmented-row"
+          role="group"
+          aria-label="Chọn nhanh tài khoản mẫu"
+        >
+          {(
+            [
+              ["sbt", "Có SBT (-10%)"],
+              ["standard", "Ví thường (0%)"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={wallet === value ? "seg-btn active" : "seg-btn"}
+              aria-pressed={wallet === value}
+              onClick={() => onWallet(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {onBackToLive ? (
+          <button
+            type="button"
+            className="secondary-btn btn-pill-sm"
+            onClick={onBackToLive}
+          >
+            {backToLiveLabel}
+          </button>
+        ) : null}
       </div>
       <details className="demo-toolbar">
         <summary>Thử các trạng thái màn hình</summary>

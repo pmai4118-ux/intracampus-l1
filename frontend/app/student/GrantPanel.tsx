@@ -69,12 +69,15 @@ function GrantView({ controller, config, access, onSignIn, onRefreshAccess, sign
         <span className="metric-note">{state.lookup ? state.lookup.allowed ? "Căn-tin đang được phép nhận FOOD" : "Căn-tin đã bị tắt quyền nhận FOOD" : "Quyền merchant chưa xác minh"}</span>
       </div>
     </div>
-    <div className="transaction-context">
-      <span>Người chi · ví sinh viên</span><HashChip value={state.beneficiary ?? "Chưa kết nối"} copyLabel="Sao chép ví sinh viên" />
-      <span>Merchant nhận · Căn-tin</span><HashChip value={config.merchant} copyLabel="Sao chép địa chỉ căn-tin" />
-      <span>Vault · IntraCampus L1 · chain 20261</span><HashChip value={config.vault} copyLabel="Sao chép địa chỉ vault" />
-    </div>
-    <TransactionStepper state={grantStep(state.phase)} />
+    <details className="grant-details-disclosure">
+      <summary>Chi tiết ví, căn-tin &amp; hợp đồng vault</summary>
+      <div className="transaction-context">
+        <span>Người chi · ví sinh viên</span><HashChip value={state.beneficiary ?? "Chưa kết nối"} copyLabel="Sao chép ví sinh viên" />
+        <span>Merchant nhận · Căn-tin</span><HashChip value={config.merchant} copyLabel="Sao chép địa chỉ căn-tin" />
+        <span>Vault · IntraCampus L1 · chain 20261</span><HashChip value={config.vault} copyLabel="Sao chép địa chỉ vault" />
+      </div>
+    </details>
+    <TransactionStepper state={grantStep(state.phase)} errorStep={state.phase === "reverted" ? 2 : 0} />
     <form onSubmit={(event) => {
       event.preventDefault(); setInputError(null);
       try { void controller.spend(parseGrantAmount(amount)); } catch { setInputError(grantMessage("INVALID_AMOUNT")); }
@@ -136,7 +139,7 @@ export default function GrantPanel() {
     return () => controller?.dispose();
   }, [wallet]);
   return <section className="surface-panel grant-panel" aria-labelledby="grant-title">
-    <div className="panel-heading-with-icon"><span className="panel-icon icon-gold"><Icon name="sparkle" /></span><div><span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span><h2 id="grant-title">Voucher học bổng</h2></div><span className="step-label">02 / 02</span></div>
+    <div className="panel-heading-with-icon"><span className="panel-icon icon-gold"><Icon name="sparkle" /></span><div><span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span><h2 id="grant-title">Voucher học bổng</h2></div><span className="step-label">02 / 03</span></div>
     <p>Chi ngân sách FOOD tại căn-tin bằng ví được cấp.</p>
     {error ? <p role="status">{error}</p>
       : !walletState.address ? <p role="status">Kết nối ví Core trên chain 20261 để kiểm tra số dư và chi voucher FOOD.</p>
