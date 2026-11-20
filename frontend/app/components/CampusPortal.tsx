@@ -47,7 +47,13 @@ function Portal({ mode }: { mode: Mode }) {
     running.current = true; setBusy(true); setError(""); setNotice("");
     try { await work(); } catch (e) { if (active.current) {
       const code = e instanceof Error ? e.message : "SERVICE_UNAVAILABLE";
-      if (["UNAUTHENTICATED", "WALLET_SESSION_CHANGED"].includes(code)) { setMe(null); setProfiles([]); setPayout(null); setRecoveries({}); }
+      if (code === "UNAUTHENTICATED" || code === "WALLET_SESSION_CHANGED") {
+        setMe(null);
+        setProfiles([]);
+        setPayout(null);
+        // An expired session can sign in again with the same wallet and release the unsent payout.
+        if (code === "WALLET_SESSION_CHANGED") setRecoveries({});
+      }
       setError(campusMessage(code));
     } } finally { running.current = false; if (active.current) setBusy(false); }
   }
@@ -92,6 +98,9 @@ function Portal({ mode }: { mode: Mode }) {
       <section className="surface-panel campus-login-card" aria-busy={busy}>
         <span className="panel-eyebrow">{me ? "PHIÊN ĐĂNG NHẬP" : "KẾT NỐI & XÁC NHẬN"}</span><h2>{me ? "Đã đăng nhập bằng ví" : "Đăng nhập IntraCampus"}</h2>
         <p>{wallet.status === "no-wallet" ? "Mở bằng Core/MetaMask hoặc cài tiện ích ví trong trình duyệt, sau đó tải lại trang." : "Kết nối ví và ký thông điệp để đăng nhập an toàn."}</p>
+        {!me && mode === "school" && Object.keys(recoveries).length > 0 ? (
+          <p>Đăng nhập lại bằng cùng ví ngay trên trang này, rồi mở lượt cấp để tiếp tục khôi phục.</p>
+        ) : null}
         {wallet.address ? <code className="campus-wallet-address">{wallet.address}</code> : <span className="campus-wallet-address">Chưa kết nối ví</span>}
         <span className="network-pill">{wallet.chainId === BigInt(20261) ? "IntraCampus L1 · 20261" : "Cần mạng IntraCampus L1 · 20261"}</span>
         <div className="campus-login-actions">
