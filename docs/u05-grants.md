@@ -11,18 +11,15 @@ Số CAMPUS trong ví cá nhân dùng trả gas; khoản chi được lấy từ
   `WalletController.sendTransactionWithGuard(account, transaction, beforeBroadcast)`:
   callback đồng bộ lưu ranh giới gửi sau các kiểm tra ví, ngay trước
   `eth_sendTransaction`. Sender cũ thiếu API này bị chặn trước khi tạo intent.
-- L05/L06 đã có trên `main` `f6667b4`; manifest Git hiện vẫn `unconfigured`.
-  Cần operator xuất deployment mạng demo thật, RPC 20261 và rebuild cả hai client.
-  Manifest unconfigured hoặc local-anvil không bật nút chi production.
-- B05 PR [#16](https://github.com/pmai4118-ux/intracampus-l1/pull/16) cung cấp
-  `GET /api/grants/:beneficiary?txHash=...`, seed và xác minh receipt. B05 đã
-  được nhóm merge vào main tại `ad3e05c`; nhánh U05 đã ghép main bằng merge
-  local `8ede41e`, giữ D017 của B05 và D018 của U05. Không chép backend/seed
-  sang frontend. Review đã chấp nhận sửa no-hash tại `fccc5ac`.
-  Source kết hợp đã chạy lại typecheck/test/build và harness Anvil; xem
-  [kết quả tích hợp mới](evidence/u05-b05-integration.md). PR #19 vẫn draft
-  trên GitHub vì lượt này chưa push/cập nhật PR; cần reviewer xem lại source
-  mới và CI sau khi người dùng cho phép push. Nghiệm thu L1 vẫn còn riêng.
+- Cloud demo dùng chain `20261120`, RPC cloud và manifest
+  `deployments/intracampus-cloud.json`; local dùng `20261` và
+  `deployments/intracampus.json`. Chain ID, RPC và manifest phải thuộc profile
+  tương ứng. Nút chi chỉ mở khi manifest và RPC của profile được xác minh;
+  xem [runbook cloud](cloud-deployment.md) và [L06](deployment.md).
+- B05 cung cấp `GET /api/grants/:beneficiary?txHash=...`, seed và xác minh
+  receipt. Không chép backend/seed sang frontend. Kết quả harness Anvil ở
+  [bằng chứng tích hợp B05/U05](evidence/u05-b05-integration.md) là kiểm thử
+  local, không phải giao dịch trên chain cloud.
 - Next proxy `/api/grants/:path*` dùng chung `BACKEND_URL` đã được B04 kiểm tra.
   API đi qua cùng origin HTTPS để Core điện thoại truy cập được; không cần mở
   CORS rộng hoặc đưa địa chỉ backend loopback vào trình duyệt điện thoại.
@@ -30,7 +27,7 @@ Số CAMPUS trong ví cá nhân dùng trả gas; khoản chi được lấy từ
 ## Luồng người dùng
 
 1. Mở `/student` trong trình duyệt Core, kết nối ví được B03/B05 cấp và chuyển
-   đúng chain `20261`. Bảng hiển thị beneficiary, vault, căn-tin, FOOD và block đọc.
+   đúng chain profile (`20261` local hoặc `20261120` cloud). Bảng hiển thị beneficiary, vault, căn-tin, FOOD và block đọc.
    `balanceWei: null` hoặc lỗi đọc hiện “Chưa xác minh”; chỉ response xác minh
    được số 0 mới hiển thị `0 CAMPUS`.
 2. Nhập `1000` để xem số voucher dự kiến trừ. Dùng dấu chấm khi nhập phần lẻ,

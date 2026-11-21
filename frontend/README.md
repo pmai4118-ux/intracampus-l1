@@ -2,6 +2,8 @@
 
 U02 bổ sung chế độ ví thật tại `/student`; bản U01 vẫn nằm ở **Xem bản minh họa**. Xem [cấu hình, kiểm thử hai tài khoản và bàn giao U02](../docs/u02-wallet.md). Các phần fixture bên dưới chỉ áp dụng cho bản minh họa.
 
+Khi deploy online, Vercel chạy frontend; đặt `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120`, RPC trình duyệt HTTPS và `BACKEND_URL` theo [runbook cloud](../docs/cloud-deployment.md). Các biến `NEXT_PUBLIC_*` được đóng vào bundle lúc build. Local mặc định dùng chain `20261`.
+
 Hai trang dùng chung fixture ở `app/demo-fixtures.ts`. Bản xem thử dùng tông sáng, xanh lá và không cần RPC hay ví.
 
 ## Xem trên máy

@@ -1,5 +1,10 @@
 # Q01 · Phí, receipt và độ trễ POS
 
+> Báo cáo dưới đây là kết quả benchmark Anvil/local ở thời điểm thực hiện;
+> các trạng thái chờ L1 không phải trạng thái online hiện tại. Demo cloud dùng
+> chain `20261120`; cấu hình và probe hiện hành nằm trong
+> [runbook cloud](cloud-deployment.md) và [handoff Vercel/GCP/Core](handoffs/2026-11-21-vercel-gcp-core-wallet.md).
+
 Đã chạy luồng U04 từ trang POS tạo invoice mới đến Student dán payload, kiểm tra
 quote, gửi qua provider EIP-1193 và POS hiển thị biên nhận khớp hash. Giao dịch và
 receipt trong hai lượt dưới đây đến từ Anvil chain 20261. Kết quả dùng để kiểm

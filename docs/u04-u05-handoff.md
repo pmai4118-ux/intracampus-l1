@@ -1,5 +1,10 @@
 # U04 / U05 · Bàn giao tích hợp
 
+> Đây là snapshot bàn giao task U04/U05 cũ. Các dòng yêu cầu cung cấp RPC/L1
+> chain `20261` và manifest `unconfigured` mô tả trạng thái lúc task được làm,
+> không phải hướng dẫn deploy online hiện tại. Demo cloud chọn chain `20261120`;
+> xem [runbook Vercel/GCP](cloud-deployment.md) và handoff ngày 21/11.
+
 B05 #16 đã được nhóm merge vào main tại `ad3e05c` ngày 2026-11-13. Nhánh U05
 đã ghép main bằng merge local `8ede41e`, giữ D017 của B05 và D018 của U05.
 API grants và UI/controller nay cùng một source, không cần worktree ghép thử.

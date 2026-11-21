@@ -1,5 +1,11 @@
 # Q02 · Ghi chú nghiệm thu và phương án dự phòng
 
+> **Ảnh chụp lịch sử ngày 14/11/2026:** các trạng thái “CHƯA CHẠY”,
+> `not-configured` và các việc chờ bên dưới phản ánh lượt Q02 local lúc đó.
+> Sau đó demo cloud đã được cấu hình trên chain `20261120`; trạng thái và các
+> bước vận hành hiện tại xem [bàn giao Vercel/GCP/Core ngày 21/11](handoffs/2026-11-21-vercel-gcp-core-wallet.md)
+> và [runbook cloud](cloud-deployment.md).
+
 Ngày 14/11/2026, nhánh `codex/Q02-demo-acceptance` dựa trên `main` `14b4a62`.
 Đã chuẩn bị [checklist hai thiết bị](demo-checklist.md) và chạy lại các bài kiểm
 tra local từ source này. Demo trực tiếp với Core còn chờ môi trường và lượt

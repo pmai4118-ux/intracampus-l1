@@ -1,18 +1,19 @@
 # Chạy IntraCampus L1 trên máy cá nhân
 
-Tài liệu này hướng dẫn chạy giao diện POS/Student và API. Luồng hóa đơn thật cần RPC L1 và địa chỉ triển khai do nhóm bàn giao; nếu chưa có cấu hình đó, chỉ có thể mở giao diện và xem bản minh họa.
+Tài liệu này hướng dẫn chạy giao diện POS/Student và API với profile local `20261`. Nó không cấu hình RPC online trên VM. Để chạy web online qua Vercel và backend/RPC trên GCP, dùng [runbook cloud](cloud-deployment.md). Luồng hóa đơn thật cần RPC L1 và địa chỉ triển khai do nhóm bàn giao; nếu chưa có cấu hình đó, chỉ có thể mở giao diện và xem bản minh họa.
 
 ## 1. Yêu cầu
 
 - Windows PowerShell, Node.js 24.x và pnpm 11.25.0.
-- Checkout nhánh dự án cần chạy. Để lấy bộ sửa lỗi/setup đang bàn giao trong PR này:
+- Checkout source mới nhất đã được merge:
 
 ```powershell
 git fetch origin
-git switch codex/stale-chain-demo-readiness
+git switch main
+git pull --ff-only
 ```
 
-Sau khi PR được merge, dùng `git switch main` rồi `git pull --ff-only` để lấy bản mới nhất.
+Nếu đang làm việc trên một nhánh task, giữ nguyên nhánh đó và không chạy các lệnh trên giữa chừng.
 
 Kiểm tra công cụ:
 

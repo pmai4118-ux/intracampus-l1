@@ -1,17 +1,21 @@
 # P01 · Kịch bản demo IntraCampus L1 trên hai thiết bị
 
-Ngày soạn: 08/11/2026. Trạng thái: kịch bản đề xuất để review và triển khai; chưa chạy thử trên L1. Phạm vi, cách làm luân phiên và dữ liệu đề xuất ở [scope.md](scope.md).
+Ngày soạn: 08/11/2026. Đây là kịch bản baseline được viết trước khi app chạy online;
+chi tiết triển khai hiện hành ở [runbook cloud](cloud-deployment.md). Demo trực
+tiếp dùng chain cloud `20261120`; chain `20261` chỉ dành cho phát triển local và
+Anvil. Phạm vi ban đầu ở [scope.md](scope.md).
 
 ## 1. Chuẩn bị trước buổi chạy
 
-Đây là checklist chuẩn bị khi các task triển khai đã hoàn thành. Repo hiện mới có khung ứng dụng; các nút và màn hình mô tả dưới đây là hành vi cần xây dựng.
+Đây là kịch bản thao tác dự kiến. Giao diện thực tế có thể thay đổi theo source;
+trước buổi demo đối chiếu URL, env, API và RPC với runbook cloud.
 
 | Hạng mục | Cách kiểm tra / điều kiện bắt đầu | Người phụ trách |
 | --- | --- | --- |
 | Thiết bị A | Laptop mở `<APP_URL>/pos`; thấy đúng merchant bãi xe và menu demo | Người vận hành POS của buổi demo |
 | Thiết bị B | Điện thoại mở `<APP_URL>/student` bằng trình duyệt có kết nối ví EVM đã thử; camera được cấp quyền khi dùng quét | Người vận hành ví sinh viên |
 | Đường truy cập | `APP_URL` là URL hai thiết bị truy cập được; API và RPC HTTPS đã cấu hình; không nhập `127.0.0.1` của laptop trên điện thoại | Người nhận L02 cùng người ghép frontend/backend |
-| Chain | Cấu hình ví là chain `20261`; `pnpm rpc:check` trả `ready`; kiểm tra truy cập RPC từ cả hai thiết bị | Người nhận task L tương ứng |
+| Chain | Cấu hình ví là chain cloud `20261120`; RPC gateway HTTPS trả đúng chain ID và đọc được từ thiết bị | Operator cloud |
 | Contract | ABI/địa chỉ theo bản L06; merchant bãi xe hoạt động; signer invoice được phép; vault cho phép căn-tin | Người nhận L06 và người tích hợp |
 | Dữ liệu seed | Ví ưu đãi có SBT còn hạn; có ví thường đối chứng; các ví có CAMPUS đủ trả tiền/gas; grant và merchant đã seed | Người nhận B03/B05 |
 | Giá và ưu đãi | Xác nhận số liệu mục 2 trùng P02, cấu hình contract và seed; nếu đổi thì sửa cả hai tài liệu P01 trước khi quay | Người nhận P02 và reviewer |
@@ -42,7 +46,7 @@ sequenceDiagram
     actor Student as Sinh viên · điện thoại B
     participant View as Student /student
     participant Wallet as Ví sinh viên
-    participant Chain as Contract · L1 20261
+    participant Chain as Contract · cloud L1 20261120
     Staff->>POS: Chọn dịch vụ và tạo hóa đơn
     POS->>API: Yêu cầu invoice cho dịch vụ demo
     API-->>POS: Invoice + domain + chữ ký theo P02
@@ -68,9 +72,9 @@ QR bàn giao dữ liệu invoice có chữ ký hoặc cách truy xuất nó theo
 
 | Thời gian | Người / màn hình | Đầu vào và thao tác | Kết quả quan sát được |
 | --- | --- | --- | --- |
-| 00:00–00:15 | Thuyết trình; A và B | Giới thiệu nhân viên bãi xe và sinh viên demo. Chỉ mạng trên A; trên B mở `/student`, kết nối ví SBT và xác nhận `20261` | Hai thiết bị cùng mạng; B hiện ví demo, số dư và thẻ còn hạn |
+| 00:00–00:15 | Thuyết trình; A và B | Giới thiệu nhân viên bãi xe và sinh viên demo. Chỉ mạng trên A; trên B mở `/student`, kết nối ví SBT và xác nhận `20261120` | Hai thiết bị cùng mạng; B hiện ví demo, số dư và thẻ còn hạn |
 | 00:15–00:35 | Nhân viên; A `/pos` | Chọn “Một lượt gửi xe demo”, merchant “Bãi xe demo”; bấm tạo hóa đơn | A hiện QR, invoiceId mới, giá `3.000 CAMPUS`, thời hạn và trạng thái chờ thanh toán |
-| 00:35–00:55 | Sinh viên; B `/student` | Mở quét QR và quét trên A. Nếu camera lỗi, dán cùng nội dung QR theo mục 5 | B hiện cùng invoiceId/merchant, chain `20261`, giá gốc, tier, giảm `300` và phải trả `2.700 CAMPUS` |
+| 00:35–00:55 | Sinh viên; B `/student` | Mở quét QR và quét trên A. Nếu camera lỗi, dán cùng nội dung QR theo mục 5 | B hiện cùng invoiceId/merchant, chain `20261120`, giá gốc, tier, giảm `300` và phải trả `2.700 CAMPUS` |
 | 00:55–01:20 | Sinh viên; B và ví | Đọc merchant, địa chỉ contract, mạng, số tiền và gas; bấm thanh toán rồi xác nhận trong ví | Ví gửi giao dịch; B có tx hash và trạng thái đang chờ. A chưa báo đã thanh toán chỉ vì có hash |
 | 01:20–01:35 | Nhân viên; A `/pos`; sinh viên B | Chờ backend đọc và xác minh receipt. Đối chiếu invoiceId và tiền ở hai màn hình | Receipt thành công và `InvoicePaid` khớp: A/B hiện đã thanh toán; biên nhận có tx hash, giá gốc `3.000`, giảm `300`, đã trả `2.700` |
 | 01:35–01:45 | Sinh viên; B, cùng invoice | Mở lại invoice đã trả. Nếu kiểm tra replay on-chain, dùng bộ test đã chuẩn bị thay vì gửi một giao dịch có thể tốn gas trong lượt quay | UI hiện đã trả, không cho thanh toán lần hai; bằng chứng contract từ L04 cho thấy replay bị từ chối |
@@ -90,7 +94,7 @@ Các nhãn dưới đây diễn đạt hành vi UI cần có; tên enum và mã 
 | Camera không đọc QR trên B | Thử lại một lần; sau tối đa `10` giây, A sao chép nội dung QR vào cuộc trò chuyện riêng của hai tài khoản demo đã mở sẵn; B sao chép tin đó và dán vào ô nhập trên `/student`. Chỉ chuyển payload/link công khai, không chứa khóa | Cùng invoiceId và dữ liệu ký; B kiểm tra chữ ký, hạn, mạng như khi quét. Không sửa amount để bỏ qua lỗi; cơ chế quét/dán được xây trong U03 |
 | QR hết hạn | A tạo invoice mới; B quét/dán bản mới và xem lại số tiền trước khi ký | B báo hết hạn với invoice cũ; bản mới có invoiceId mới, không tái sử dụng chữ ký cũ |
 | QR bị sửa hoặc sai signer/contract | B nhập mẫu đã thay dữ liệu được chuẩn bị khi kiểm thử P02/L04 | Báo dữ liệu/chữ ký không hợp lệ, không báo đã thanh toán; contract vẫn kiểm tra khi nhận giao dịch |
-| Ví sai mạng | Trên B chuyển ví sang mạng khác trong buổi kiểm thử; sau đó trở lại `20261` | Hiện sai mạng và chặn gửi mới tới khi đúng mạng; không ký/gửi invoice sang chain khác |
+| Ví sai mạng | Trên B chuyển ví sang mạng khác trong buổi kiểm thử; sau đó trở lại `20261120` | Hiện sai mạng và chặn gửi mới tới khi đúng mạng; không ký/gửi invoice sang chain khác |
 | Người dùng từ chối trong ví | Từ chối xác nhận rồi trở lại B | Chưa thanh toán; có thể thử lại khi invoice còn hạn. Không hiện tx hash hoặc trạng thái đã gửi khi ví chưa gửi |
 | RPC mất trước khi gửi | Dừng gửi mới, kiểm tra kết nối/hotspot và thử đọc lại một lần; chuyển video nếu không khôi phục trong `20` giây | A/B báo không xác minh được mạng/dữ liệu; không dùng receipt giả hoặc mở ví với giá chưa xác minh |
 | RPC mất sau khi có tx hash | Giữ invoiceId/tx hash, báo đang chờ xác minh, thử đọc lại sau khi nối mạng; không tự gửi lại. Nếu sau `20` giây vẫn không đọc được, chuyển video | Khi mạng về, tra giao dịch cũ rồi cập nhật trạng thái đúng; nếu chưa tìm thấy thì tiếp tục chưa xác minh. Chỉ cho thử lại sau khi xác định giao dịch cũ thất bại hoặc không được gửi, xử lý invoice còn hạn |
@@ -105,7 +109,7 @@ Mốc `10`/`20` giây là ngân sách thao tác trình diễn do P01 đề xuấ
 | Loại | Nội dung | Cách trình bày |
 | --- | --- | --- |
 | Dữ liệu demo giả lập | Persona, tên dịch vụ, merchant demo, các ví và khoản seed, mức giảm đã cấu hình | Nói rõ là dữ liệu thử nghiệm; không dùng danh tính sinh viên thật |
-| Trạng thái chạy trực tiếp | SBT, số dư, chữ ký, giao dịch, event và receipt thật trên L1 `20261` | Kèm mạng, địa chỉ contract và tx hash; tiền gas tách khỏi tiền dịch vụ |
+| Trạng thái chạy trực tiếp | SBT, số dư, chữ ký, giao dịch, event và receipt thật trên cloud L1 `20261120` | Kèm mạng, địa chỉ contract và tx hash; tiền gas tách khỏi tiền dịch vụ |
 | Fixture / EVM local | Mẫu chữ ký, kiểm thử lỗi, replay, grant hoặc contract ở local | Ghi môi trường fixture/local; không gọi là đã kiểm tra trên L1 |
 | Bản ghi trước | Video, ảnh, receipt đã ghi từ một phiên demo trước | Gắn nhãn bản ghi và môi trường của phiên đó; không thay trạng thái phiên trực tiếp |
 

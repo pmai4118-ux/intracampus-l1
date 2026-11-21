@@ -135,10 +135,11 @@ không chứa RPC/khóa. Backend và frontend dùng cùng loader `@intracampus/n
 cho `/api/deployment`, chặn cấu hình thiếu hoặc ABI sai. Sau đổi deployment
 phải build/khởi động lại hai client. Xem [runbook L06](deployment.md).
 
-Manifest trong Git còn `unconfigured` vì chưa có receipt Avalanche L1 thật.
-Evidence Anvil riêng có nhãn `local-anvil`, không kích hoạt endpoint production.
-CI chạy luồng deploy/export, B03 seed hai lần và L05 grant với registry thật.
-Không sửa giao kèo Invoice/InvoicePaid P02 hoặc genesis L01.
+Tại thời điểm ghi D013, manifest local trong Git còn `unconfigured` vì chưa có
+receipt Avalanche L1 thật. Evidence Anvil riêng có nhãn `local-anvil`, không
+kích hoạt endpoint production. Hiện cloud demo dùng manifest riêng
+`deployments/intracampus-cloud.json` trên chain `20261120`; không đổi kết luận
+lịch sử của L06/local. Không sửa giao kèo Invoice/InvoicePaid P02 hoặc genesis L01.
 
 Sau khi B02 vào `main` tại `12a45f1`, receipt config lấy verifier/block từ cùng
 manifest khi đã cấu hình, ABI decoder cũng lấy ABI chung; các biến môi trường
@@ -223,6 +224,10 @@ Receipt gửi xe đã xác minh là mốc check-in. `GET /api/parking/tickets` l
 Chain local IntraCampus giữ chain ID `20261`. Demo cloud dùng `20261120`, dữ liệu và hợp đồng riêng trên VM GCP. Ví demo trong Core có thể dùng lại địa chỉ sau khi thêm mạng mới và cấp lại dữ liệu demo. Chữ ký và giao dịch thuộc chain đã ký.
 
 Chọn chain cloud bằng `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` cho build frontend, backend, RPC gateway, Foundry và các lệnh xuất manifest hoặc seed. `deployments/intracampus-cloud.json` nhận kết quả deploy đã kiểm chứng. Đặt đường dẫn SQLite cloud riêng trong cấu hình backend. Khóa validator và signer mới được tạo và giữ trên VM. Production cần nghiệm thu Preview trước.
+
+### Cập nhật vận hành online · 2026-11-21
+
+Frontend online chạy trên Vercel; backend và RPC gateway chạy trên VM GCP. `BACKEND_URL` là origin API mà Next rewrite gọi server-side; `NEXT_PUBLIC_INTRACAMPUS_RPC_URL` là HTTPS gateway trình duyệt/Core gọi trực tiếp; `INTRACAMPUS_RPC_URL` là RPC nội bộ backend. Ba endpoint không được thay thế cho nhau. RPC gateway allowlist CORS theo origin frontend/Core chính xác. Profile cloud được chọn rõ ràng bằng chain ID và manifest cloud. Runbook cấu hình, redeploy và smoke check ở [docs/cloud-deployment.md](cloud-deployment.md).
 
 ## Xác minh sinh viên và xét học bổng · 2026-11-20
 

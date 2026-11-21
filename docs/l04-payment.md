@@ -28,7 +28,8 @@ B01 không tự gọi hàm quản trị khi tạo hóa đơn.
 
 - Giữ nguyên Invoice, domain `IntraCampusPayment` / `1`, getter `posSigner()` và
   sáu lỗi thanh toán P02. Domain luôn dùng `block.chainid` và `address(this)`;
-  cấu hình đích của nhóm là chain 20261. Không hardcode địa chỉ verifier fixture.
+  profile local dùng chain `20261`, profile cloud demo dùng `20261120`. Không
+  hardcode địa chỉ verifier fixture; lấy cấu hình từ manifest của chain tương ứng.
 - Chữ ký đúng 65 byte, low-s, v 27/28. Thư viện OpenZeppelin ECDSA v5.0.2 được
   ghim nguyên bản trong `contracts/lib/openzeppelin-contracts/`, kèm MIT license
   và SHA-256. Mọi lỗi recover trả lỗi P02 `InvalidSignature`; trường recovered

@@ -1,5 +1,11 @@
 # U02 · Ví sinh viên, số dư và SBT
 
+> Kết quả `not-configured`, expected chain `20261` và ảnh
+> `production-unconfigured-mobile.png` bên dưới là bằng chứng lịch sử của lượt
+> phát triển U02, không phải trạng thái cloud hiện tại. Demo online chọn chain
+> `20261120`; xem [runbook cloud](cloud-deployment.md) và
+> [bàn giao Vercel/GCP/Core](handoffs/2026-11-21-vercel-gcp-core-wallet.md).
+
 Student View `/student` mặc định mở **Ví thật**. Bản U01 được giữ nguyên ở **Xem bản minh họa**; dữ liệu fixture không đi vào trạng thái ví thật. U02 không ký, không gửi giao dịch, không tạo QR. Nút thanh toán luôn khóa cho tới khi U03/U04 được tích hợp.
 
 ## Cấu hình công khai
@@ -11,11 +17,11 @@ NEXT_PUBLIC_INTRACAMPUS_RPC_URL=
 NEXT_PUBLIC_STUDENT_SBT_ADDRESS=
 ```
 
-L02 bàn giao RPC HTTPS đúng chain `20261`; L06 bàn giao địa chỉ `StudentSBTIdentity` thật của cùng deployment. Khi chưa có, để trống; không lấy địa chỉ từ QR, ví hoặc fixture. Chỉ các giá trị công khai được đặt trong biến `NEXT_PUBLIC_`; tuyệt đối không có private key/API token. HTTP chỉ được chấp nhận cho loopback khi phát triển local. RPC cần cho phép CORS origin của frontend.
+Chọn RPC theo profile: chain `20261` local hoặc chain cloud `20261120`. Online, `NEXT_PUBLIC_INTRACAMPUS_RPC_URL` phải là HTTPS RPC gateway của cloud và CORS phải cho phép origin frontend; Core cần origin extension được gateway allowlist nếu gọi RPC trực tiếp. RPC backend `INTRACAMPUS_RPC_URL` là cấu hình riêng. Không đưa private key/API token vào `NEXT_PUBLIC_*`. HTTP chỉ được chấp nhận cho loopback local.
 
 Các biến này được Next.js đóng vào bundle ở build time: đổi cấu hình phải khởi động lại dev server hoặc build lại. Địa chỉ SBT phải khác zero. Sai cấu hình không tạo kết quả mặc định tier 0. Khi chỉ thiếu SBT, số dư đọc được vẫn hiển thị, quyền ưu đãi giữ **chưa xác minh**.
 
-PR L06 #12 hiện chưa merge. U02 không nhập loader chưa có trong main, không tạo thêm manifest và không merge PR đó. Khi L06 vào main, người tích hợp đổi nguồn `WalletConfig` sang manifest đã được shared loader xác minh (`contracts.StudentSBTIdentity.address`), giữ RPC công khai từ L02; nếu đồng thời giữ env địa chỉ thì phải kiểm tra nó khớp manifest. Không coi manifest `unconfigured` hay `local-anvil` là deployment Avalanche L1 thật.
+Contract address/ABI lấy từ manifest profile đã chọn và phải khớp chain: `20261` dùng `deployments/intracampus.json`, `20261120` dùng `deployments/intracampus-cloud.json`. Manifest cloud hiện đã có deployment; không coi fixture hoặc manifest `local-anvil` là deployment online. Khi đổi profile, đổi chain ID và RPC cùng lúc rồi build lại frontend.
 
 ## Cách thử bằng hai tài khoản demo
 

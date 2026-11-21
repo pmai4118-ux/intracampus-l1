@@ -165,3 +165,10 @@ Tại lúc tạo tài liệu, worktree đã có nhiều file sửa đổi và m�
 - Redeploy đúng source Preview hiện tại `codex/intracampus-phase-3b`; Vercel Ready tại `https://intracampus-l1-plg18vzrd-ae-12-t.vercel.app` (deployment `HscpcqjfxML8oh5hePArPZ7uXwev`). GET `/api/network` trên deployment mới trả `ready`, `expectedChainId=chainId=20261120`, block 69.
 - Mở `/pos` trên deployment mới xác nhận giao diện hiện “Tạo hóa đơn POS”, trạng thái “Sẵn sàng cho lượt thanh toán tiếp theo” và nút “Tạo hóa đơn”; không còn cảnh báo backend/network. Không bấm tạo hóa đơn, không gửi giao dịch và không ký ví.
 - Đây là bản sửa riêng cho định tuyến POS backend. Nó không thay đổi cấu hình RPC của Core hoặc frontend balance, và không redeploy Production. Ghi chú này cập nhật các dòng cũ phía trên nói balance còn chờ xác minh: balance Preview đã được kiểm tra trước đó ở mức 2.998,99 CAMPUS.
+
+## Trạng thái Production Vercel khi rà tài liệu ngày 2026-11-21
+
+- Dashboard cho thấy alias Production `https://intracampus-l1.vercel.app` đang trỏ tới một deployment CLI cũ từ branch `feat/ui-receipt-gate-mobile`; project chưa kết nối Git repository.
+- Preview của branch `codex/intracampus-phase-3b` ở trạng thái Ready tại `https://intracampus-l1-plg18vzrd-ae-12-t.vercel.app`; các biến `BACKEND_URL`, `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` và `NEXT_PUBLIC_INTRACAMPUS_RPC_URL` hiện chỉ có scope Preview.
+- Chưa promote source lên alias Production: cần cấu hình ba biến cloud cho Production cùng allowlist origin backend/RPC, nếu không deployment mới có thể về chain local hoặc làm luồng API/wallet lỗi.
+- Đây là trạng thái được quan sát trong dashboard ngày 21/11; Vercel, hostname tunnel và cấu hình VM có thể thay đổi. Đối chiếu lại trước mỗi lần publish; quy trình nằm trong [runbook cloud](../cloud-deployment.md).
