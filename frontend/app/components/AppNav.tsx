@@ -26,6 +26,7 @@ const providerLinks: NavLink[] = [
 export default function AppNav() {
   const pathname = usePathname();
   const header = useRef<HTMLElement>(null);
+  const hiddenAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const provider = pathname === "/pos" || pathname.startsWith("/staff/");
   const links = provider ? providerLinks : studentLinks;
   const home = provider ? "/pos" : "/";
@@ -58,6 +59,8 @@ export default function AppNav() {
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, [pathname]);
+
+  if (hiddenAdmin) return null;
 
   return <header ref={header} className="app-header">
     <div className="app-topbar">

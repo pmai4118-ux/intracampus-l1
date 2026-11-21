@@ -215,6 +215,85 @@ contract LibraryDepositEscrowTest {
         new LibraryDepositEscrow(ADMIN, LIBRARIAN, address(0));
     }
 
+    function testSetTreasuryAndSetLibrarian() public {
+        address newTreasury = address(0x3003);
+        address newLibrarian = address(0x3002);
+
+        // Only administrator may update treasury or librarian.
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedAdministrator.selector);
+        vm.prank(LIBRARIAN);
+        escrow.setTreasury(newTreasury);
+
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedAdministrator.selector);
+        vm.prank(OTHER_USER);
+        escrow.setLibrarian(newLibrarian);
+
+        // Invalid addresses are rejected.
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setTreasury(address(0));
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setTreasury(address(escrow));
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setTreasury(ADMIN);
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setTreasury(LIBRARIAN);
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setLibrarian(address(0));
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setLibrarian(address(escrow));
+
+        vm.expectRevert(LibraryDepositEscrow.InvalidConfiguration.selector);
+        vm.prank(ADMIN);
+        escrow.setLibrarian(TREASURY);
+
+        // Update treasury and librarian, then verify funds & permissions route to the new wallets.
+        vm.expectEmit(true, true, false, false, address(escrow));
+        emit LibraryDepositEscrow.TreasuryUpdated(TREASURY, newTreasury);
+        vm.prank(ADMIN);
+        escrow.setTreasury(newTreasury);
+        require(escrow.treasury() == newTreasury, "updated treasury");
+
+        vm.expectEmit(true, true, false, false, address(escrow));
+        emit LibraryDepositEscrow.LibrarianUpdated(LIBRARIAN, newLibrarian);
+        vm.prank(ADMIN);
+        escrow.setLibrarian(newLibrarian);
+        require(escrow.librarian() == newLibrarian, "updated librarian");
+
+        bytes32 reqId = keccak256("REQ-ROTATED-ROLES");
+        _deposit(reqId, BOOK_EXPENSIVE, BORROWER);
+
+        // Old librarian is no longer authorized.
+        vm.expectRevert(LibraryDepositEscrow.UnauthorizedLibrarian.selector);
+        vm.prank(LIBRARIAN);
+        escrow.approve(reqId);
+
+        // New librarian approves and settles as lost; retained deposit and shortfall route to newTreasury.
+        vm.prank(newLibrarian);
+        escrow.approve(reqId);
+
+        uint256 oldTreasuryBefore = TREASURY.balance;
+        uint256 newTreasuryBefore = newTreasury.balance;
+        vm.prank(newLibrarian);
+        escrow.settleLost(reqId);
+        require(TREASURY.balance == oldTreasuryBefore, "old treasury unchanged");
+        require(newTreasury.balance == newTreasuryBefore + DEPOSIT_WEI, "new treasury received retained deposit");
+
+        vm.prank(BORROWER);
+        escrow.payShortfall{value: 30 ether}(reqId);
+        require(newTreasury.balance == newTreasuryBefore + 80 ether, "new treasury received shortfall");
+    }
+
     function testBookTermsSeedSealImmutabilityAndRoleChecks() public {
         bytes32 bookId = keccak256("BOOK-NEW");
 

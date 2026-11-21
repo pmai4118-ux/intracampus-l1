@@ -17,6 +17,8 @@ type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & Partial<Pick<
 type Sender = { getSnapshot(): Pick<WalletSnapshot, 'address' | 'chainId' | 'canProceed'> & Partial<Pick<WalletSnapshot, 'blockTimestamp'>>; refresh?: () => Promise<void>;
   sendTransactionWithGuard(account: string, transaction: WalletTransaction, guard: () => void): Promise<string> };
 type Options = { deployment: DeployedLibraryDeployment; account: string; api: LibraryApi; wallet: Sender; storage: Store; role?: 'STUDENT' | 'LIBRARIAN';
+  librarianOverride?: string | null;
+  treasuryOverride?: string | null;
   lock: (key: string, run: () => Promise<void>, signal?: AbortSignal) => Promise<void> };
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const approvalActions = ['approve', 'reject'] as const;
@@ -106,7 +108,11 @@ export class LibraryTransactions {
     const { api, account, deployment: d } = this.options;
     const role = this.options.role ?? 'STUDENT';
     if ((role === 'LIBRARIAN') !== isStaffAction(action)) throw new LibraryUiError('ACTION_UNAVAILABLE');
-    if (role === 'LIBRARIAN' && !same(account, d.roles.librarian)) throw new LibraryUiError('WALLET_SESSION_CHANGED');
+    if (role === 'LIBRARIAN') {
+      const activeLibrarian = this.options.librarianOverride ?? d.roles.librarian;
+      if (!same(account, activeLibrarian)) throw new LibraryUiError('WALLET_SESSION_CHANGED');
+    }
+    const activeTreasury = this.options.treasuryOverride ?? d.treasury;
     await api.session(account, role);
     if (action === 'deposit') await requireLibraryStudentNotHeld(account, api.fetcher);
     const request = await api.getRequest(id);
@@ -132,7 +138,7 @@ export class LibraryTransactions {
       const terms = d.books.find(b => same(b.bookId, request.bookId));
       if (!terms || loan.loanId !== id || loan.bookId !== request.bookId || loan.settlement.replacementPriceWei !== terms.replacementPriceWei
         || BigInt(loan.settlement.shortfallWei) !== BigInt(terms.replacementPriceWei) - BigInt(terms.depositWei)) throw new LibraryUiError('INTENT_MISMATCH');
-      amountWei = loan.settlement.shortfallWei; data = iface.encodeFunctionData('payShortfall', [id]); recipient = d.treasury;
+      amountWei = loan.settlement.shortfallWei; data = iface.encodeFunctionData('payShortfall', [id]); recipient = activeTreasury;
     } else {
       recipient = verifiedBorrower(request, id, d.escrow.address); refundWei = request.depositWei ?? '0';
       if (action === 'approve' || action === 'reject') {
@@ -151,7 +157,7 @@ export class LibraryTransactions {
           if (!['ACTIVE','RETURN_REQUESTED'].includes(loan.status) || loan.returnReceivedAt !== null) throw new LibraryUiError('ACTION_UNAVAILABLE');
           data = iface.encodeFunctionData('confirmPhysicalReturn', [id]);
         } else {
-          if (!intent || !libraryIntentId(intent.intentId) || !same(intent.requestId,id) || !same(intent.loanId,loan.loanId) || !same(intent.borrower,recipient) || intent.chainId !== campusNetwork.chainId || !same(intent.escrow,d.escrow.address) || !same(intent.treasury,d.treasury) || !same(intent.walletCall.to,d.escrow.address) || intent.walletCall.valueWei !== '0' || intent.outcome !== (action === 'return' ? 'RETURNED' : 'LOST')) throw new LibraryUiError('INTENT_MISMATCH');
+          if (!intent || !libraryIntentId(intent.intentId) || !same(intent.requestId,id) || !same(intent.loanId,loan.loanId) || !same(intent.borrower,recipient) || intent.chainId !== campusNetwork.chainId || !same(intent.escrow,d.escrow.address) || !same(intent.treasury,activeTreasury) || !same(intent.walletCall.to,d.escrow.address) || intent.walletCall.valueWei !== '0' || intent.outcome !== (action === 'return' ? 'RETURNED' : 'LOST')) throw new LibraryUiError('INTENT_MISMATCH');
           const receipt = libraryTransactionProof(request.transactions.find(tx => tx.action === 'confirmReturn'), id, d.escrow.address, recipient);
           if (action === 'return' ? loan.status !== 'SETTLEMENT_PENDING' || loan.returnReceivedAt === null || !receipt : !['ACTIVE','RETURN_REQUESTED'].includes(loan.status) || loan.returnReceivedAt !== null || !!receipt) throw new LibraryUiError('ACTION_UNAVAILABLE');
           if (action === 'return') {

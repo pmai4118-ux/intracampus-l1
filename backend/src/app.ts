@@ -17,6 +17,8 @@ import { createParkingRouter } from "./modules/parking/parking.routes.ts";
 import { createCampusRouter } from "./modules/campus/campus.routes.ts";
 import type { CampusService } from "./modules/campus/campus.service.ts";
 import type { LibraryRepository } from "./modules/library/library.repository.ts";
+import { createAdminRouter } from "./modules/admin/admin.routes.ts";
+import type { AdminService } from "./modules/admin/admin.service.ts";
 
 export function createApp(
   rpcUrl?: string,
@@ -28,9 +30,10 @@ export function createApp(
   libraryService?: LibraryService,
   canteenService?: CanteenService,
   parkingRepository?: SqliteInvoiceRepository,
-  parkingWallet?: string,
+  parkingWallet?: string | (() => string | undefined),
   campusService?: CampusService,
   libraryRepository?: LibraryRepository,
+  adminService?: AdminService,
 ) {
   const app = express();
   app.disable("x-powered-by");
@@ -47,6 +50,7 @@ export function createApp(
   app.use(createCanteenRouter(canteenService, authService, authConfig, libraryService));
   app.use(createAuthRouter(authService, authConfig));
   app.use(createCampusRouter(campusService, libraryRepository));
+  app.use(createAdminRouter(adminService));
 
   return app;
 }

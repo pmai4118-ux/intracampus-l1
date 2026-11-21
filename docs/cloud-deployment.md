@@ -63,8 +63,22 @@ vào repo. Dùng `backend/.env.example` để đối chiếu tên biến:
 - Đặt `CAMPUS_ALLOW_LOCAL_ANVIL=false` và `LIBRARY_ALLOW_LOCAL_ANVIL=false`.
 - Đặt bốn đường dẫn SQLite tuyệt đối, khác nhau và nằm trên đĩa bền vững của VM:
   `INVOICES_DB_PATH`, `LIBRARY_DB_PATH`, `CANTEEN_DB_PATH`, `CAMPUS_DB_PATH`.
+  (Tùy chọn thêm `ADMIN_DB_PATH` cho trang quản trị test `/admin`; nếu để trống
+  trên cloud demo, backend tự tạo `admin.sqlite` cùng thư mục với `CAMPUS_DB_PATH`.)
   Vercel không lưu các database này. Demo hiện không yêu cầu bản sao lưu riêng;
   nếu xóa/tạo lại VM hoặc đĩa thì dữ liệu demo có thể mất.
+- Cấu hình trang quản trị test nội bộ `/admin` (ẩn khỏi thanh điều hướng công khai,
+  không cần nối ví để vào): đặt `ADMIN_ACCESS_KEY` (key cố định dùng chung cả nhóm
+  trên mọi máy) và `ADMIN_AUTH_ORIGIN` (origin Vercel HTTPS, hỗ trợ danh sách cách
+  nhau dấu phẩy). Nếu muốn bấm đổi ví đích / cấp SBT / giải ngân `FOOD` ngay trên
+  `/admin`, đặt các khóa vận hành test trên VM (`ADMIN_REGISTRY_SIGNER_PRIVATE_KEY`,
+  `ADMIN_LIBRARY_SIGNER_PRIVATE_KEY`, `ADMIN_SBT_ISSUER_PRIVATE_KEY`,
+  `ADMIN_GRANT_ISSUER_PRIVATE_KEY`, `ADMIN_FUNDER_PRIVATE_KEY`); không đưa bất kỳ
+  khóa hoặc `ADMIN_ACCESS_KEY` nào lên Vercel hay Git.
+- Lưu ý đổi ví Thư viện (`treasury` và `librarian`): cần redeploy riêng
+  `LibraryDepositEscrow` bản mới có `setTreasury`/`setLibrarian` qua `DeployLibrary.s.sol`
+  và cập nhật phần `library` trong `deployments/intracampus-cloud.json` bằng
+  `export-library-deployment.mjs` (3 contract còn lại giữ nguyên).
 
 Backend cần lắng nghe trên địa chỉ/cổng mà dịch vụ HTTPS/tunnel trên VM có thể
 truy cập. Giữ RPC node và cổng quản trị không public; chỉ công bố backend API và

@@ -91,10 +91,11 @@ export class CanteenRepository {
     } catch(e) { this.db.exec('ROLLBACK'); throw e; }
   }
   // Conditional update prevents stale async lookups from overwriting a confirmed order.
-  prepare(id: string, wallet: string, block: number, invoiceId: string | null) {
+  prepare(id: string, wallet: string, block: number, invoiceId: string | null, merchantAddress?: string | null) {
     const order = this.get(id,wallet);
     if (order.afterBlock !== null) return order;
     order.afterBlock = block; order.invoiceId = invoiceId;
+    if (merchantAddress) order.merchantAddress = merchantAddress.toLowerCase();
     this.db.prepare("UPDATE canteen_orders SET data=? WHERE id=? AND json_extract(data,'$.afterBlock') IS NULL").run(JSON.stringify(order),id);
     return this.get(id,wallet);
   }

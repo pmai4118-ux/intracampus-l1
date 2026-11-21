@@ -10,10 +10,14 @@ const same = (a: unknown,b: string) => typeof a === 'string' && a.toLowerCase() 
 export class CanteenService {
   repository: CanteenRepository;
   private options: { manifest?: unknown; allowLocal?: boolean; rpc: InvoiceRpc;
-    invoices: InvoiceCreationService; receipts: ReceiptService; grants: GrantsService };
+    invoices: InvoiceCreationService; receipts: ReceiptService; grants: GrantsService;
+    resolveCanteenMerchant?: () => string | undefined };
   constructor(repository: CanteenRepository, options: CanteenService["options"]) { this.repository = repository; this.options = options; }
   private deployment() { try { return requireDeployment(this.options.manifest, { allowLocal: this.options.allowLocal }); }
     catch { throw new CanteenError('CONFIGURATION_ERROR',503); } }
+  private activeMerchant(manifest: ReturnType<CanteenService["deployment"]>) {
+    return this.options.resolveCanteenMerchant?.() ?? manifest.merchants.canteen.address;
+  }
   async reconcileWallet(order: CanteenOrder): Promise<CanteenOrder> {
     if (order.method !== 'WALLET' || order.status === 'PAID' || !order.invoiceId) return order;
     const result = await this.options.receipts.lookup(order.invoiceId);
@@ -30,18 +34,19 @@ export class CanteenService {
     const block = await this.options.rpc.call('eth_getBlockByNumber',['latest',false]) as { number: string; timestamp: string };
     const blockNumber = Number(BigInt(block.number));
     if (!Number.isSafeInteger(blockNumber) || Math.abs(Date.now()/1000 - Number(BigInt(block.timestamp))) > 300) throw new CanteenError('STALE_CHAIN_STATE',503);
+    const merchant = this.activeMerchant(manifest);
     let envelope: SignedInvoiceEnvelope | null = null;
     if (order.method === 'WALLET') {
       const result = await this.options.invoices.createForService({ merchantId: 'canteen', merchantName: 'Nhà ăn IntraCampus',
         serviceId: order.id, serviceName: 'Đơn món ăn', categoryCode: 'FOOD', amount: BigInt(order.totalWei), ttlSeconds: 300 },
-        manifest.merchants.canteen.address, `CANTEEN-${order.id}`);
+        merchant, `CANTEEN-${order.id}`);
       envelope = result.envelope;
     } else {
-      const lookup = await this.options.grants.lookup(order.wallet);
-      if (!lookup.allowedMerchants.some(m => m.allowed && same(m.address,manifest.merchants.canteen.address))) throw new CanteenError('MERCHANT_NOT_ALLOWED',409);
+      const lookup = await this.options.grants.lookup(order.wallet, undefined, merchant);
+      if (!lookup.allowedMerchants.some(m => m.allowed && same(m.address, merchant))) throw new CanteenError('MERCHANT_NOT_ALLOWED',409);
       if (BigInt(lookup.balanceWei) < BigInt(order.totalWei)) throw new CanteenError('INSUFFICIENT_FOOD',409);
     }
-    return { order: this.repository.prepare(order.id,order.wallet,blockNumber,envelope?.invoice.invoiceId ?? null), envelope };
+    return { order: this.repository.prepare(order.id,order.wallet,blockNumber,envelope?.invoice.invoiceId ?? null,merchant), envelope };
   }
   async track(order: CanteenOrder, txHash: string) {
     if (!/^0x[0-9a-f]{64}$/i.test(txHash)) throw new CanteenError('INVALID_HASH');
@@ -49,6 +54,7 @@ export class CanteenService {
     if (order.status === 'PAID') { if (order.txHash !== txHash) throw new CanteenError('PAYMENT_ALREADY_TRACKED',409); return order; }
     if (order.afterBlock === null) throw new CanteenError('PAYMENT_NOT_PREPARED',409);
     const manifest = this.deployment();
+    const merchant = order.merchantAddress ?? this.activeMerchant(manifest);
     // Check sender and destination before reserving a user-supplied hash.
     const tx = await this.options.rpc.call('eth_getTransactionByHash',[txHash]) as null | { from: string; to: string; input: string; value: string; blockNumber: string | null };
     if (!tx) throw new CanteenError('TRANSACTION_NOT_FOUND',503);
@@ -56,7 +62,7 @@ export class CanteenService {
     if (!same(tx.from,order.wallet) || !same(tx.to,target)) throw new CanteenError('RECEIPT_MISMATCH',422);
     if (order.method === 'FOOD') {
       const iface = new Interface(manifest.contracts.PurposeBoundGrantVault.abi as InterfaceAbi);
-      const expected = iface.encodeFunctionData('spend',[manifest.merchants.canteen.address,id('FOOD'),order.totalWei]);
+      const expected = iface.encodeFunctionData('spend',[merchant,id('FOOD'),order.totalWei]);
       if (!same(tx.input,expected) || BigInt(tx.value) !== 0n) throw new CanteenError('RECEIPT_MISMATCH',422);
     }
     if (tx.blockNumber !== null && Number(BigInt(tx.blockNumber)) <= order.afterBlock) throw new CanteenError('RECEIPT_MISMATCH',422);
@@ -68,20 +74,20 @@ export class CanteenService {
         return order;
       }
       const receipt = result.body.receipt;
-      if (!same(receipt.payer,order.wallet) || !same(receipt.txHash,txHash) || !same(receipt.merchant,manifest.merchants.canteen.address)
+      if (!same(receipt.payer,order.wallet) || !same(receipt.txHash,txHash) || !same(receipt.merchant,merchant)
         || !same(receipt.category,id('FOOD')) || receipt.originalAmount !== order.totalWei) throw new CanteenError('RECEIPT_MISMATCH',422);
       return this.repository.confirm(order.id,order.wallet,txHash,receipt.paidAmount);
     }
-    const result = await this.options.grants.lookup(order.wallet,txHash);
+    const result = await this.options.grants.lookup(order.wallet,txHash,merchant);
     if (result.transaction?.status !== 'verified') return order;
     const events = result.transaction.events.filter(e => e.event === 'GrantSpent' && same(e.beneficiary,order.wallet)
-      && same(e.merchant,manifest.merchants.canteen.address) && same(e.category,id('FOOD')) && e.amountWei === order.totalWei && e.blockNumber > order.afterBlock!);
+      && same(e.merchant,merchant) && same(e.category,id('FOOD')) && e.amountWei === order.totalWei && e.blockNumber > order.afterBlock!);
     if (events.length !== 1) throw new CanteenError('RECEIPT_MISMATCH',422);
     return this.repository.confirm(order.id,order.wallet,txHash,order.totalWei);
   }
   async staffOverview() {
     let merchantWallet: string | null = null;
-    try { merchantWallet = this.deployment().merchants.canteen.address; } catch { merchantWallet = null; }
+    try { merchantWallet = this.activeMerchant(this.deployment()); } catch { merchantWallet = null; }
     const initial = this.repository.listAllWithFulfillment();
     const pendingWallet = initial.filter(o => o.status === 'AWAITING_PAYMENT' && o.method === 'WALLET' && o.invoiceId !== null).slice(0, 8);
     for (const candidate of pendingWallet) {

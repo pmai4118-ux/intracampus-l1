@@ -4,4 +4,5 @@ export type CanteenOrder = {
   id: string; wallet: string; method: 'WALLET' | 'FOOD'; items: CanteenItem[]; totalWei: string;
   status: 'AWAITING_PAYMENT' | 'EXPIRED' | 'PAID'; createdAt: number; afterBlock: number | null;
   invoiceId: string | null; txHash: string | null; paidAmountWei: string | null;
+  merchantAddress?: string | null;
 };

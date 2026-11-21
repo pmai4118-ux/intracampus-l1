@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import type { ParkingCheckout } from "@intracampus/network";
 import { LibrarySessionError, signInLibraryWallet } from "../../../../../lib/library-session";
 import { formatCheckoutTime, ParkingCheckoutError, readParkingCheckout } from "../../../../../lib/parking";
+import { fetchRuntimeWalletConfig } from "../../../../../lib/runtime-config";
 import HashChip from "../../../../components/HashChip";
 import Icon from "../../../../components/Icon";
 import { useCampusWallet } from "../../../../student/WalletPanel";
@@ -30,11 +31,24 @@ const signInMessages: Record<string, string> = {
 
 export default function ParkingGateCheckout({ invoiceId, parkingWallet }: { invoiceId: string; parkingWallet?: string }) {
   const { state: wallet, controller } = useCampusWallet();
+  const [runtimeParkingWallet, setRuntimeParkingWallet] = useState<string | null>(null);
   const [ticket, setTicket] = useState<ParkingCheckout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    const abortController = new AbortController();
+    void fetchRuntimeWalletConfig(fetch, abortController.signal).then((cfg) => {
+      if (mounted && cfg?.parkingMerchant) setRuntimeParkingWallet(cfg.parkingMerchant);
+    });
+    return () => {
+      mounted = false;
+      abortController.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -80,11 +94,12 @@ export default function ParkingGateCheckout({ invoiceId, parkingWallet }: { invo
     }
   }
 
+  const activeParkingWallet = runtimeParkingWallet ?? parkingWallet;
   const isLoading = !ticket && !error;
   const isCheckedOut = ticket?.checkedOutAt != null;
   const isReadyToExit = ticket?.checkedOutAt === null;
   const correctChain = wallet.chainId === BigInt(CAMPUS_CHAIN_ID);
-  const operatorMatches = !!parkingWallet && wallet.address?.toLowerCase() === parkingWallet.toLowerCase();
+  const operatorMatches = !!activeParkingWallet && wallet.address?.toLowerCase() === activeParkingWallet.toLowerCase();
   const canUseGate = correctChain && operatorMatches;
   const cardTone = isCheckedOut ? "is-checked-out" : isReadyToExit ? "is-ready" : error ? "is-error" : "";
 
@@ -210,7 +225,7 @@ export default function ParkingGateCheckout({ invoiceId, parkingWallet }: { invo
           ) : null}
 
           {isReadyToExit && (!canUseGate || needsSignIn) &&
-            (!parkingWallet ? (
+            (!activeParkingWallet ? (
               <p className="wallet-warning">Chưa có ví Parking được cấu hình cho cổng ra.</p>
             ) : wallet.status === "no-wallet" ? (
               <p className="wallet-warning">
@@ -234,7 +249,7 @@ export default function ParkingGateCheckout({ invoiceId, parkingWallet }: { invo
                 Chuyển sang IntraCampus L1
               </button>
             ) : !operatorMatches ? (
-              <p className="wallet-warning">Chọn ví Parking {parkingWallet.slice(0, 6)}…{parkingWallet.slice(-4)} trong Core để xác nhận lượt ra.</p>
+              <p className="wallet-warning">Chọn ví Parking {activeParkingWallet.slice(0, 6)}…{activeParkingWallet.slice(-4)} trong Core để xác nhận lượt ra.</p>
             ) : (
               <button
                 className="primary-cta-btn"

@@ -114,6 +114,39 @@ export class CampusRepository implements AuthStore {
       this.db.prepare("INSERT INTO campus_audit(actor,wallet,action,created) VALUES (?,?,?,?)").run(actor, wallet, `${kind}:${record.status}`, Date.now()); return this.profile(wallet);
     });
   }
+  adminReviewStudent(actor: string, wallet: string, approve: boolean, options: { studentCode?: string; program?: string; reason?: string } = {}) {
+    wallet = wallet.toLowerCase();
+    return this.atomic(() => {
+      const existing = this.profile(wallet).application;
+      const code = (options.studentCode?.trim().toUpperCase() || existing?.studentCode || `TEST-${wallet.slice(2, 8).toUpperCase()}`);
+      const program = (options.program?.trim() || existing?.program || "Tài khoản test nội bộ");
+      const status = approve ? "APPROVED" as const : "REJECTED" as const;
+      const reason = options.reason?.trim() || (approve ? "VERIFIED" : "NOT_ELIGIBLE");
+      if (approve && this.db.prepare("SELECT 1 FROM campus_applications WHERE code=? AND status='APPROVED' AND wallet<>?").get(code, wallet)) {
+        throw new CampusError("STUDENT_ID_ALREADY_VERIFIED");
+      }
+      const record: CampusApplication = { wallet, studentCode: code, program, status, reason, reviewedBy: actor, updatedAt: Date.now() };
+      this.db.prepare("INSERT INTO campus_applications VALUES (?,?,?,?) ON CONFLICT(wallet) DO UPDATE SET code=excluded.code,status=excluded.status,data=excluded.data")
+        .run(wallet, code, status, JSON.stringify(record));
+      this.db.prepare("INSERT INTO campus_audit(actor,wallet,action,created) VALUES (?,?,?,?)").run(actor, wallet, `ADMIN_STUDENT:${status}`, Date.now());
+      return this.profile(wallet);
+    });
+  }
+  adminReviewScholarship(actor: string, wallet: string, approve: boolean, options: { category?: CampusScholarship["category"]; reason?: string } = {}) {
+    wallet = wallet.toLowerCase();
+    return this.atomic(() => {
+      const profile = this.profile(wallet);
+      if (approve && profile.application?.status !== "APPROVED") throw new CampusError("STUDENT_NOT_VERIFIED", 403);
+      const category = options.category ?? profile.scholarship?.category ?? "SUPPORT";
+      const status = approve ? "APPROVED" as const : "REJECTED" as const;
+      const reason = options.reason?.trim() || (approve ? "VERIFIED" : "NOT_ELIGIBLE");
+      const record: CampusScholarship = { wallet, category, status, reason, reviewedBy: actor };
+      this.db.prepare("INSERT INTO campus_scholarships VALUES (?,?) ON CONFLICT(wallet) DO UPDATE SET data=excluded.data")
+        .run(wallet, JSON.stringify(record));
+      this.db.prepare("INSERT INTO campus_audit(actor,wallet,action,created) VALUES (?,?,?,?)").run(actor, wallet, `ADMIN_SCHOLARSHIP:${status}`, Date.now());
+      return this.profile(wallet);
+    });
+  }
   payout(id: string) { const result = this.read<CampusPayout>("campus_payouts", id); if (!result) throw new CampusError("NOT_FOUND", 404); return result; }
   prepare(record: Omit<CampusPayout, "id" | "status" | "txHash" | "data"> & { data: (id: string) => string }) {
     return this.atomic(() => {

@@ -31,7 +31,7 @@ Web và API có thể khởi động khi chưa có RPC. Khi phát triển local,
 
 Để tạo hóa đơn, backend cần cấu hình signer POS server-side theo `backend/.env.example`; khóa đó chỉ ký payload hóa đơn ngoài chain. Student cần RPC trình duyệt, verifier và POS signer đồng bộ với manifest L06; không lấy verifier tin cậy từ QR. Thanh toán do sinh viên khởi tạo phải được ví Core của sinh viên ký. `frontend/.env.local.example` chứa RPC/SBT/verifier/signer công khai và `BACKEND_URL` server-side cho Next.js API proxy; phân biệt API URL với cả hai RPC theo [runbook cloud](docs/cloud-deployment.md). Builder Hub chỉ cần khi tạo L1 hoặc lấy Data API key, không cần cho việc chạy ứng dụng với L1 đã có.
 
-Hướng dẫn cài môi trường và kiểm tra chain local trên Windows nằm ở [docs/run-local.md](docs/run-local.md). Cấu hình Vercel, GCP, backend API và RPC gateway online nằm ở [docs/cloud-deployment.md](docs/cloud-deployment.md).
+Hướng dẫn cài môi trường và kiểm tra chain local trên Windows nằm ở [docs/run-local.md](docs/run-local.md). Cấu hình Vercel, GCP, backend API và RPC gateway online nằm ở [docs/cloud-deployment.md](docs/cloud-deployment.md). Vận hành trang quản trị test ẩn `/admin`, đổi ví đích và key nội bộ xem ở [docs/admin-console.md](docs/admin-console.md).
 
 B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) lưu bằng chứng task lịch sử; trạng thái cloud hiện tại xem [runbook online](docs/cloud-deployment.md).
 

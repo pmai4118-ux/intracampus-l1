@@ -6,6 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { createWalletRpc } from "../../lib/wallet";
 import { GrantController, GrantUiError, grantConfig, grantMessage, parseGrantAmount, type GrantConfig } from "../../lib/grants";
+import { fetchRuntimeWalletConfig } from "../../lib/runtime-config";
 import { librarySessionMessage, LibrarySessionError, requireLibraryStudentNotHeld, type LibraryStudentAccess } from "../../lib/library-session";
 import { useCampusWallet } from "./WalletPanel";
 import Icon from "../components/Icon";
@@ -127,18 +128,26 @@ export default function GrantPanel() {
   const [session, setSession] = useState<{ controller: GrantController; config: GrantConfig } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    let active = true;
     let controller: GrantController | undefined;
-    try {
-      const config = grantConfig(), rpcUrl = browserWalletConfig().rpcUrl;
-      if (!rpcUrl) throw new Error("RPC_UNAVAILABLE");
-      controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet, storage: window.localStorage,
-        accountGuard: async (account) => {
-          try { await requireLibraryStudentNotHeld(account); }
-          catch (cause) { throw new GrantUiError(cause instanceof LibrarySessionError ? cause.code : "SESSION_UNAVAILABLE"); }
-        } });
-      setSession({ controller, config });
-    } catch (cause) { setError(grantMessage(cause instanceof Error ? cause.message : "DEPLOYMENT_NOT_CONFIGURED")); }
-    return () => controller?.dispose();
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        const runtime = await fetchRuntimeWalletConfig(fetch, abort.signal);
+        if (!active) return;
+        const config = grantConfig(undefined, runtime?.canteenMerchant), rpcUrl = browserWalletConfig().rpcUrl;
+        if (!rpcUrl) throw new Error("RPC_UNAVAILABLE");
+        controller = new GrantController({ config, rpc: createWalletRpc(rpcUrl), wallet, storage: window.localStorage,
+          accountGuard: async (account) => {
+            try { await requireLibraryStudentNotHeld(account); }
+            catch (cause) { throw new GrantUiError(cause instanceof LibrarySessionError ? cause.code : "SESSION_UNAVAILABLE"); }
+          } });
+        setSession({ controller, config });
+      } catch (cause) {
+        if (active) setError(grantMessage(cause instanceof Error ? cause.message : "DEPLOYMENT_NOT_CONFIGURED"));
+      }
+    })();
+    return () => { active = false; abort.abort(); controller?.dispose(); };
   }, [wallet]);
   return <section className="surface-panel grant-panel" aria-labelledby="grant-title">
     <div className="panel-heading-with-icon"><span className="panel-icon icon-gold"><Icon name="sparkle" /></span><div><span className="panel-eyebrow">MỘT BỮA TRƯA, THÊM NĂNG LƯỢNG</span><h2 id="grant-title">Voucher học bổng</h2></div><span className="step-label">02 / 03</span></div>

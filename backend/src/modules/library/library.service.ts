@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Interface, type InterfaceAbi } from "ethers";
 import {
-  CAMPUS_CHAIN_ID, campusNetwork, requireLibraryDeployment, type DeployedLibraryDeployment, type LibraryAccount,
+  CAMPUS_CHAIN_ID, campusNetwork, libraryEscrowSupportsRoleUpdates, requireLibraryDeployment, type DeployedLibraryDeployment, type LibraryAccount,
   type LibraryApiErrorCode, type LibraryBook, type LibraryDepositIntent, type LibraryLoan,
   type LibraryRequest, type LibrarySettlement, type LibrarySettlementIntent, type LibrarySettlementIntentRequest,
   type LibraryTransaction, type LibraryTransactionAction, type LibraryUnmatchedDeposit, type LibraryEventProof,
@@ -224,7 +224,8 @@ export class LibraryService {
     const chain = await this.reconciled();
     if (account.role !== "LIBRARIAN") throw new LibraryServiceError("FORBIDDEN", 403);
     const deployment = this.deploymentOrThrow();
-    if (account.wallet.toLowerCase() !== deployment.roles.librarian.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
+    const liveRoles = await this.liveEscrowRoles(chain.safeBlock);
+    if (account.wallet.toLowerCase() !== liveRoles.librarian.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
     let loan: ReturnType<LibraryRepository["loanForSettlement"]>;
     try { loan = this.repository.loanForSettlement(loanId); }
     catch (error) { throw serviceFailure(error); }
@@ -274,7 +275,7 @@ export class LibraryService {
     } catch (error) { throw serviceFailure(error); }
     return { intentId, requestId: loan.requestId as `0x${string}`, loanId: loan.loanId as `0x${string}`,
       borrower: loan.borrower as `0x${string}`, chainId: CAMPUS_CHAIN_ID, escrow: deployment.escrow.address as `0x${string}`,
-      treasury: deployment.treasury as `0x${string}`, walletCall: { to: deployment.escrow.address as `0x${string}`,
+      treasury: liveRoles.treasury as `0x${string}`, walletCall: { to: deployment.escrow.address as `0x${string}`,
         data, valueWei: "0" }, preview: outcome, outcome: input.outcome, chainTime: chain.chainTime } as LibrarySettlementIntent;
   }
 
@@ -293,7 +294,8 @@ export class LibraryService {
     const librarianAction = ["approve", "reject", "confirmReturn", "return", "settle"].includes(action);
     if (librarianAction !== (account.role === "LIBRARIAN")) throw new LibraryServiceError("FORBIDDEN", 403);
     const deployment = this.deploymentOrThrow();
-    if (librarianAction && account.wallet.toLowerCase() !== deployment.roles.librarian.toLowerCase()) {
+    const liveRoles = librarianAction ? await this.liveEscrowRoles(chain.safeBlock) : null;
+    if (librarianAction && account.wallet.toLowerCase() !== liveRoles!.librarian.toLowerCase()) {
       throw new LibraryServiceError("FORBIDDEN", 403);
     }
     // Tracking proves an already-sent attempt independently of the current business state.
@@ -305,7 +307,7 @@ export class LibraryService {
         catch { throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2); }
         const expected = action === "refund" ? "claimExpiredRefund" : action;
         const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
-        const expectedFrom = librarianAction ? deployment.roles.librarian : record.wallet;
+        const expectedFrom = librarianAction ? liveRoles!.librarian : record.wallet;
         if (transaction && transaction.from.toLowerCase() !== expectedFrom.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
         if (!transaction || transaction.hash.toLowerCase() !== input.txHash.toLowerCase()
           || transaction.to?.toLowerCase() !== deployment.escrow.address.toLowerCase()
@@ -377,7 +379,7 @@ export class LibraryService {
     catch { throw new LibraryServiceError("CONFLICT", 409); }
     if (!parsed || parsed.name !== expectedFunctions[action] || tx.to?.toLowerCase() !== deployment.escrow.address.toLowerCase()
       || String(parsed.args[0]).toLowerCase() !== record.requestId.toLowerCase()) throw new LibraryServiceError("CONFLICT", 409);
-    const expectedFrom = librarianAction ? deployment.roles.librarian : record.wallet;
+    const expectedFrom = librarianAction ? liveRoles!.librarian : record.wallet;
     if (tx.from.toLowerCase() !== expectedFrom.toLowerCase()) throw new LibraryServiceError("FORBIDDEN", 403);
     let expectedValue = 0n;
     if (action === "deposit") {
@@ -474,6 +476,33 @@ export class LibraryService {
       if (error instanceof Error && error.message === "WRONG_CHAIN") throw new LibraryServiceError("WRONG_CHAIN", 503, true, 2);
       throw new LibraryConfigurationError();
     }
+  }
+
+  private async liveEscrowRoles(safeBlock: number): Promise<{ librarian: string; treasury: string }> {
+    const deployment = this.deploymentOrThrow();
+    const supports = libraryEscrowSupportsRoleUpdates(deployment.escrow.abi);
+    if (!supports.librarian && !supports.treasury) {
+      return { librarian: deployment.roles.librarian, treasury: deployment.treasury };
+    }
+    const iface = new Interface(deployment.escrow.abi as InterfaceAbi);
+    const rpc = this.rpcClient();
+    const readAddress = async (fn: "librarian" | "treasury", fallback: string): Promise<string> => {
+      try {
+        const raw = await rpc.call({ to: deployment.escrow.address, data: iface.encodeFunctionData(fn) }, safeBlock);
+        if (typeof raw === "string" && /^0x0{24}[0-9a-f]{40}$/i.test(raw) && !/^0x0{64}$/i.test(raw)) {
+          return String(iface.decodeFunctionResult(fn, raw)[0]);
+        }
+        return fallback;
+      } catch (error) {
+        if (error instanceof LibraryRpcError) throw new LibraryServiceError(error.code, 503, true, 2);
+        throw new LibraryServiceError("RPC_UNAVAILABLE", 503, true, 2);
+      }
+    };
+    const [librarian, treasury] = await Promise.all([
+      supports.librarian ? readAddress("librarian", deployment.roles.librarian) : Promise.resolve(deployment.roles.librarian),
+      supports.treasury ? readAddress("treasury", deployment.treasury) : Promise.resolve(deployment.treasury),
+    ]);
+    return { librarian, treasury };
   }
 
   private assertSeedMatchesDeployment(books: LibraryBookRecord[]): void {

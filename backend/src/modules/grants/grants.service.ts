@@ -3,7 +3,8 @@ import { CAMPUS_CHAIN_ID, requireDeployment } from "@intracampus/network";
 import { grantAddress, grantHash, GrantsReader } from "./grants.rpc.ts";
 import { GrantError } from "./grants.types.ts";
 import type { GrantLookup } from "./grants.types.ts";
-export type GrantsConfig = { rpcUrl?: string; deployment?: unknown; allowLocal?: boolean; provider?: JsonRpcProvider };
+export type GrantsConfig = { rpcUrl?: string; deployment?: unknown; allowLocal?: boolean; provider?: JsonRpcProvider;
+  resolveCanteenMerchant?: () => string | undefined };
 export class GrantsService {
   private readonly config: GrantsConfig;
   private provider?: JsonRpcProvider;
@@ -13,7 +14,7 @@ export class GrantsService {
     this.closed = true;
     if (!this.config.provider) this.provider?.destroy();
   }
-  async lookup(beneficiary: string, txHash?: string): Promise<GrantLookup> {
+  async lookup(beneficiary: string, txHash?: string, merchantOverride?: string): Promise<GrantLookup> {
     if (this.closed) throw new GrantError("RPC_UNAVAILABLE");
     beneficiary = grantAddress(beneficiary);
     if (txHash !== undefined && !grantHash(txHash)) throw new GrantError("INVALID_REQUEST");
@@ -29,15 +30,16 @@ export class GrantsService {
         this.provider = new JsonRpcProvider(request, CAMPUS_CHAIN_ID, { staticNetwork: true, cacheTimeout: -1, batchMaxCount: 1 });
       } catch { throw new GrantError("RPC_UNAVAILABLE"); }
     }
+    const canteenMerchant = merchantOverride ?? this.config.resolveCanteenMerchant?.() ?? deployment.merchants.canteen.address;
     const reader = new GrantsReader(this.provider, deployment);
     // Verify the transaction first so the balance snapshot is at least as recent as its receipt.
     const events = txHash ? await reader.verifyReceipt(txHash, beneficiary) : null;
-    const snapshot = await reader.snapshot(beneficiary, events ?? []);
+    const snapshot = await reader.snapshot(beneficiary, events ?? [], canteenMerchant);
     return { schemaVersion: 1, status: "verified", chainId: CAMPUS_CHAIN_ID, beneficiary,
       vaultAddress: deployment.contracts.PurposeBoundGrantVault.address,
       category: { id: deployment.merchants.canteen.category, label: "FOOD" }, balanceWei: snapshot.balanceWei.toString(),
       block: { number: snapshot.blockNumber, hash: snapshot.blockHash },
-      allowedMerchants: [{ id: "canteen", address: deployment.merchants.canteen.address, allowed: snapshot.merchantAllowed }],
+      allowedMerchants: [{ id: "canteen", address: canteenMerchant, allowed: snapshot.merchantAllowed }],
       transaction: txHash ? { hash: txHash, status: events ? "verified" : "pending", events: events ?? [] } : null };
   }
 }

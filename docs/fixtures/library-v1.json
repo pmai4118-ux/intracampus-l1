@@ -171,6 +171,30 @@
     },
     {
       "type": "function",
+      "name": "setTreasury",
+      "inputs": [
+        {
+          "name": "newTreasury",
+          "type": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setLibrarian",
+      "inputs": [
+        {
+          "name": "newLibrarian",
+          "type": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "seedBookTerms",
       "inputs": [
         {
@@ -773,6 +797,40 @@
         {
           "name": "bookId",
           "type": "bytes32",
+          "indexed": true
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TreasuryUpdated",
+      "inputs": [
+        {
+          "name": "previousTreasury",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newTreasury",
+          "type": "address",
+          "indexed": true
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LibrarianUpdated",
+      "inputs": [
+        {
+          "name": "previousLibrarian",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newLibrarian",
+          "type": "address",
           "indexed": true
         }
       ],

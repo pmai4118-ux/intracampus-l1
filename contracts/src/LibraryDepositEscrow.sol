@@ -68,6 +68,8 @@ contract LibraryDepositEscrow {
     event ShortfallPaid(bytes32 indexed requestId, address indexed borrower, uint256 amount);
     event BookTermsSeeded(bytes32 indexed bookId, uint256 depositWei, uint256 replacementPriceWei);
     event BookTermsSealed(bytes32 indexed bookId);
+    event TreasuryUpdated(address indexed previousTreasury, address indexed newTreasury);
+    event LibrarianUpdated(address indexed previousLibrarian, address indexed newLibrarian);
 
     error InvalidConfiguration();
     error UnauthorizedAdministrator();
@@ -95,8 +97,8 @@ contract LibraryDepositEscrow {
     uint64 public constant FULL_DEPOSIT_RETENTION_AFTER = 2_592_000;
 
     address public immutable administrator;
-    address public immutable librarian;
-    address public immutable treasury;
+    address public librarian;
+    address public treasury;
 
     mapping(bytes32 bookId => BookTerms terms) private _bookTerms;
     mapping(bytes32 requestId => RequestRecord record) private _requests;
@@ -119,6 +121,31 @@ contract LibraryDepositEscrow {
         entered = true;
         _;
         entered = false;
+    }
+
+    /// @notice Updates the treasury wallet receiving retained deposits, fees, and loss shortfalls.
+    function setTreasury(address newTreasury) external {
+        if (msg.sender != administrator) revert UnauthorizedAdministrator();
+        if (
+            newTreasury == address(0) || newTreasury == address(this) || newTreasury == administrator
+                || newTreasury == librarian
+        ) {
+            revert InvalidConfiguration();
+        }
+        address previous = treasury;
+        treasury = newTreasury;
+        emit TreasuryUpdated(previous, newTreasury);
+    }
+
+    /// @notice Updates the librarian wallet authorized to approve, reject, confirm return, and settle loans.
+    function setLibrarian(address newLibrarian) external {
+        if (msg.sender != administrator) revert UnauthorizedAdministrator();
+        if (newLibrarian == address(0) || newLibrarian == address(this) || newLibrarian == treasury) {
+            revert InvalidConfiguration();
+        }
+        address previous = librarian;
+        librarian = newLibrarian;
+        emit LibrarianUpdated(previous, newLibrarian);
     }
 
     /// @notice Seeds or updates unsealed book terms with the fixed 50 CAMPUS deposit and positive replacement price.

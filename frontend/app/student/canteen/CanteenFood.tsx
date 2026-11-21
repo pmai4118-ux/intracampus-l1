@@ -3,6 +3,7 @@ import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { GrantController, grantConfig, grantMessage } from '../../../lib/grants';
+import { fetchRuntimeWalletConfig } from '../../../lib/runtime-config';
 import { browserWalletConfig, formatWalletBalance } from '../../../lib/chains';
 import { createWalletRpc } from '../../../lib/wallet';
 import { requireLibraryStudentNotHeld } from '../../../lib/library-session';
@@ -25,17 +26,24 @@ export default function CanteenFood({ order, onHash }: { order: CanteenOrder; on
   const [destination,setDestination] = useState<{ merchant: string; vault: string } | null>(null);
   const [controller,setController] = useState<GrantController | null>(null), [error,setError] = useState('');
   useEffect(() => {
+    let active = true;
     let session: GrantController | undefined;
-    try {
-      const url = browserWalletConfig().rpcUrl;
-      if (!url) throw Error('RPC_UNAVAILABLE');
-      setDestination(grantConfig());
-      session = new GrantController({ orderId: order.id, config: grantConfig(), rpc: createWalletRpc(url), wallet,
-        storage: window.localStorage, accountGuard: requireLibraryStudentNotHeld });
-      setController(session); void session.bindWallet(state.address);
-    } catch(e) { setError(grantMessage(e instanceof Error ? e.message : 'RPC_UNAVAILABLE')); }
-    return () => session?.dispose();
-  },[order.id,wallet,state.address]);
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        const url = browserWalletConfig().rpcUrl;
+        if (!url) throw Error('RPC_UNAVAILABLE');
+        const runtime = order.merchantAddress ? null : await fetchRuntimeWalletConfig(fetch, abort.signal);
+        if (!active) return;
+        const config = grantConfig(undefined, order.merchantAddress ?? runtime?.canteenMerchant);
+        setDestination(config);
+        session = new GrantController({ orderId: order.id, config, rpc: createWalletRpc(url), wallet,
+          storage: window.localStorage, accountGuard: requireLibraryStudentNotHeld });
+        setController(session); void session.bindWallet(state.address);
+      } catch(e) { if (active) setError(grantMessage(e instanceof Error ? e.message : 'RPC_UNAVAILABLE')); }
+    })();
+    return () => { active = false; abort.abort(); session?.dispose(); };
+  },[order.id,order.merchantAddress,wallet,state.address]);
   return <>{destination ? <dl className="library-details"><dt>Mạng</dt><dd>IntraCampus L1 · {CAMPUS_CHAIN_ID}</dd><dt>Căn-tin nhận</dt><dd><HashChip value={destination.merchant} copyLabel="Sao chép địa chỉ căn-tin" /></dd><dt>Vault FOOD</dt><dd><HashChip value={destination.vault} copyLabel="Sao chép địa chỉ vault FOOD" /></dd></dl> : null}{error ? <p role="alert">{error}</p> : controller ? <FoodView controller={controller} order={order} onHash={onHash} /> : <p role="status">Đang đọc học bổng FOOD…</p>}</>;
 }
 function FoodView({ controller, order, onHash }: { controller: GrantController; order: CanteenOrder; onHash: (hash: string) => Promise<CanteenOrder | undefined> }) {

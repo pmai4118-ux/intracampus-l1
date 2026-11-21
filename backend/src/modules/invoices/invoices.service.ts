@@ -53,18 +53,20 @@ export class InvoiceCreationService {
   private rpc: InvoiceRpc;
   private deployment?: InvoiceDeployment;
   private config: InvoiceCreationConfig;
+  private resolveParkingMerchant?: () => string | undefined;
   private now: () => number;
   private chainFreshness: InvoiceChainFreshness;
   constructor(options: { repository: InvoiceRepository; rpc: InvoiceRpc; deployment?: InvoiceDeployment; config: InvoiceCreationConfig;
-    now?: () => number; chainFreshness?: InvoiceChainFreshness }) {
+    resolveParkingMerchant?: () => string | undefined; now?: () => number; chainFreshness?: InvoiceChainFreshness }) {
     this.repository = options.repository; this.rpc = options.rpc;
     this.deployment = options.deployment; this.config = options.config;
+    this.resolveParkingMerchant = options.resolveParkingMerchant;
     this.now = options.now ?? Date.now; this.chainFreshness = options.chainFreshness ?? defaultInvoiceChainFreshness;
   }
 
   async create(request: unknown) {
     validateInvoiceRequest(request);
-    return this.createForService(parkingService, this.config.merchant);
+    return this.createForService(parkingService, this.resolveParkingMerchant?.() ?? this.config.merchant);
   }
 
   /** Internal trusted catalog entry; never pass request JSON as a service. */

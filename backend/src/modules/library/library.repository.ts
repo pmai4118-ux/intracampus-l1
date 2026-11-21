@@ -321,6 +321,73 @@ export class LibraryRepository {
     if (!account?.enabled || account.role !== "STUDENT") throw new Error("LIBRARY_ACCOUNT_NOT_ALLOWED");
   }
 
+  /** Registers/activates a new LIBRARIAN operator and disables previous librarians while preserving FK audit history. */
+  registerLibrarianOperator(wallet: string, changedAt = Math.floor(Date.now() / 1000)): void {
+    const normalized = canonicalWallet(wallet);
+    safeInteger(changedAt, "INVALID_LIBRARY_TIMESTAMP");
+    beginImmediate(this.db);
+    try {
+      const existing = this.accountForWallet(normalized);
+      if (existing && existing.role !== "LIBRARIAN") throw new Error("LIBRARIAN_OPERATOR_ROLE_CONFLICT");
+      this.db.prepare(`UPDATE auth_sessions SET revoked_at = ?
+        WHERE revoked_at IS NULL AND account_id IN (SELECT account_id FROM accounts WHERE role = 'LIBRARIAN' AND wallet <> ? COLLATE NOCASE)`)
+        .run(changedAt, normalized);
+      this.db.prepare("UPDATE accounts SET enabled = 0 WHERE role = 'LIBRARIAN' AND wallet <> ? COLLATE NOCASE").run(normalized);
+      this.db.prepare(`INSERT INTO accounts(wallet, role, enabled, created_at) VALUES (?, 'LIBRARIAN', 1, ?)
+        ON CONFLICT(wallet) DO UPDATE SET enabled = 1`).run(normalized, changedAt);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      rollback(this.db);
+      throw error;
+    }
+  }
+
+  upsertAccountEnabled(wallet: string, enabled: boolean, defaultRole: CampusAuthRole, changedAt = Math.floor(Date.now() / 1000)): {
+    wallet: string; role: CampusAuthRole; enabled: boolean;
+  } {
+    const normalized = canonicalWallet(wallet);
+    safeInteger(changedAt, "INVALID_LIBRARY_TIMESTAMP");
+    const existing = this.accountForWallet(normalized);
+    if (!existing) {
+      this.db.prepare("INSERT INTO accounts(wallet, role, enabled, created_at) VALUES (?, ?, ?, ?)")
+        .run(normalized, defaultRole, enabled ? 1 : 0, changedAt);
+      return this.accountForWallet(normalized)!;
+    }
+    this.setAccountEnabled(normalized, enabled, changedAt);
+    return this.accountForWallet(normalized)!;
+  }
+
+  releaseActiveHolds(wallet: string, releasedAt = Math.floor(Date.now() / 1000)): number {
+    const normalized = canonicalWallet(wallet);
+    safeInteger(releasedAt, "INVALID_LIBRARY_TIMESTAMP");
+    const result = this.db.prepare(`UPDATE account_holds SET released_at = ?
+      WHERE account_id = (SELECT account_id FROM accounts WHERE wallet = ? COLLATE NOCASE) AND released_at IS NULL`)
+      .run(releasedAt, normalized);
+    return Number(result.changes);
+  }
+
+  listAccountsWithHolds(): Array<{ wallet: string; role: CampusAuthRole; enabled: boolean; held: boolean; blockingLoanIds: string[] }> {
+    const accounts = this.db.prepare("SELECT account_id, wallet, role, enabled FROM accounts ORDER BY account_id DESC LIMIT 300").all();
+    const holdRows = this.db.prepare("SELECT account_id, loan_id FROM account_holds WHERE released_at IS NULL ORDER BY started_at ASC").all();
+    const holdsByAccount = new Map<number, string[]>();
+    for (const row of holdRows) {
+      const accountId = Number(row.account_id);
+      const list = holdsByAccount.get(accountId) ?? [];
+      list.push(String(row.loan_id));
+      holdsByAccount.set(accountId, list);
+    }
+    return accounts.map((row) => {
+      const blockingLoanIds = holdsByAccount.get(Number(row.account_id)) ?? [];
+      return {
+        wallet: String(row.wallet),
+        role: String(row.role) as CampusAuthRole,
+        enabled: Number(row.enabled) === 1,
+        held: blockingLoanIds.length > 0,
+        blockingLoanIds,
+      };
+    });
+  }
+
   createDepositRequest(input: { requestId: string; wallet: string; bookId: string; idempotencyKey: string; createdAt: number;
     chainTime: number; holdAfterSeconds: number }): LibraryRequestRecord {
     const requestId = canonicalBytes32(input.requestId, "INVALID_LIBRARY_REQUEST_ID");

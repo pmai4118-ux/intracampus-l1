@@ -2,7 +2,7 @@ import { CanteenRepository, demoDishes } from './modules/canteen/canteen.reposit
 import { CanteenService } from './modules/canteen/canteen.service.ts';
 import { createApp } from "./app.ts";
 import { fileURLToPath } from "node:url";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { SqliteInvoiceRepository } from "./modules/invoices/invoices.repository.ts";
 import { HttpInvoiceRpc } from "./modules/invoices/invoices.rpc.ts";
 import { readInvoiceDeployment } from "./modules/invoices/receipt.config.ts";
@@ -21,6 +21,9 @@ import { LibraryService } from "./modules/library/library.service.ts";
 import { CAMPUS_CHAIN_ID, CLOUD_CAMPUS_CHAIN_ID, selectedDeploymentManifest as libraryManifest } from "@intracampus/network";
 import { CampusRepository } from "./modules/campus/campus.repository.ts";
 import { CampusService } from "./modules/campus/campus.service.ts";
+import { readAdminConfig, type AdminConfig } from "./modules/admin/admin.config.ts";
+import { AdminRepository } from "./modules/admin/admin.repository.ts";
+import { AdminService } from "./modules/admin/admin.service.ts";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4000);
@@ -34,6 +37,11 @@ if (CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID) {
   }
 }
 
+const adminDbPath = process.env.ADMIN_DB_PATH?.trim()
+  || (CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID && process.env.CAMPUS_DB_PATH?.trim()
+    ? resolve(dirname(process.env.CAMPUS_DB_PATH.trim()), "admin.sqlite")
+    : fileURLToPath(new URL("../data/admin.sqlite", import.meta.url)));
+
 const deployment = readInvoiceDeployment(process.env);
 const repository = new SqliteInvoiceRepository(process.env.INVOICES_DB_PATH?.trim()
   || fileURLToPath(new URL("../data/invoices.sqlite", import.meta.url)));
@@ -42,11 +50,30 @@ const invoiceChainFreshness = readInvoiceChainFreshness(process.env);
 const receiptService = new ReceiptService({ repository, deployment,
   rpc, chainFreshness: invoiceChainFreshness, log: (entry) => console.log(JSON.stringify(entry)) });
 const invoiceConfig = readInvoiceCreationConfig(process.env);
-const creationService = new InvoiceCreationService({ repository, deployment, rpc, chainFreshness: invoiceChainFreshness,
-  config: invoiceConfig });
-const grantsService = new GrantsService({ rpcUrl: process.env.INTRACAMPUS_RPC_URL });
 const libraryRepository = new LibraryRepository(process.env.LIBRARY_DB_PATH?.trim()
   || fileURLToPath(new URL("../data/library.sqlite", import.meta.url)));
+const campusRepository = new CampusRepository(process.env.CAMPUS_DB_PATH?.trim()
+  || fileURLToPath(new URL('../data/campus.sqlite', import.meta.url)));
+const adminRepository = new AdminRepository(adminDbPath);
+let adminConfig: AdminConfig | undefined;
+try { adminConfig = readAdminConfig(process.env); }
+catch { /* Admin endpoints fail closed until ADMIN_ACCESS_KEY and origin are configured. */ }
+const adminService = new AdminService({
+  config: adminConfig,
+  repository: adminRepository,
+  libraryRepository,
+  campusRepository,
+  rpcUrl: process.env.INTRACAMPUS_RPC_URL?.trim() || undefined,
+  allowLocal: process.env.ADMIN_ALLOW_LOCAL_ANVIL === "true"
+    || process.env.CAMPUS_ALLOW_LOCAL_ANVIL === "true"
+    || process.env.LIBRARY_ALLOW_LOCAL_ANVIL === "true",
+  deployment: libraryManifest,
+});
+
+const creationService = new InvoiceCreationService({ repository, deployment, rpc, chainFreshness: invoiceChainFreshness,
+  config: invoiceConfig, resolveParkingMerchant: () => adminService.activeParkingMerchant() });
+const grantsService = new GrantsService({ rpcUrl: process.env.INTRACAMPUS_RPC_URL,
+  resolveCanteenMerchant: () => adminService.activeCanteenMerchant() });
 let libraryService = new LibraryService(libraryRepository);
 try { libraryService = new LibraryService(libraryRepository, readLibraryConfig(process.env, libraryManifest)); }
 catch {
@@ -60,28 +87,28 @@ try {
 } catch {
   // Keep unrelated API modules available; auth endpoints fail closed with CONFIGURATION_ERROR.
 }
-let parkingWallet: string | undefined;
-if (authService && isAddress(invoiceConfig.merchant)) {
+const activeParkingAtStart = adminService.activeParkingMerchant() ?? invoiceConfig.merchant;
+if (authService && isAddress(activeParkingAtStart)) {
   try {
-    libraryRepository.registerParkingOperator(invoiceConfig.merchant);
-    parkingWallet = invoiceConfig.merchant;
+    libraryRepository.registerParkingOperator(activeParkingAtStart);
   } catch {
     console.error("Parking checkout is disabled: could not register the configured Parking wallet.");
   }
 }
 const canteenRepository = new CanteenRepository(process.env.CANTEEN_DB_PATH?.trim() || fileURLToPath(new URL('../data/canteen.sqlite',import.meta.url)));
 canteenRepository.syncCatalogPrices(demoDishes);
-const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService, grants: grantsService });
-const campusRepository = new CampusRepository(process.env.CAMPUS_DB_PATH?.trim()
-  || fileURLToPath(new URL('../data/campus.sqlite', import.meta.url)));
+const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService,
+  grants: grantsService, resolveCanteenMerchant: () => adminService.activeCanteenMerchant() });
 let campusService: CampusService | undefined;
-try { campusService = new CampusService(campusRepository, process.env); }
+try { campusService = new CampusService(campusRepository, process.env, rpc, undefined, () => adminService.campusOverrides()); }
 catch { /* Campus endpoints fail closed until origin and authority configuration are valid. */ }
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
-  authService, libraryAuthConfig, libraryService, canteenService, repository, parkingWallet, campusService, libraryRepository).listen(port, host, () => {
+  authService, libraryAuthConfig, libraryService, canteenService, repository,
+  () => adminService.activeParkingMerchant() ?? invoiceConfig.merchant,
+  campusService, libraryRepository, adminService).listen(port, host, () => {
   console.log(`IntraCampus API listening at http://${host}:${port}`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => server.close(() => { campusRepository.close(); canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
+  process.once(signal, () => server.close(() => { adminService.close(); adminRepository.close(); campusRepository.close(); canteenRepository.close(); grantsService.close(); libraryService.close(); libraryRepository.close(); repository.close(); process.exit(0); }));
 }
