@@ -29,7 +29,7 @@ function Portal({ mode }: { mode: Mode }) {
   const { state: wallet, controller } = useCampusWallet();
   const [me, setMe] = useState<CampusMe | null>(null), [profiles, setProfiles] = useState<CampusProfile[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
-  const [studentCode, setCode] = useState(""), [program, setProgram] = useState(""), [category, setCategory] = useState("MERIT");
+  const [studentCode, setCode] = useState(""), [program, setProgram] = useState("");
   const [payout, setPayout] = useState<CampusPayout | null>(null), [recoveryHash, setRecoveryHash] = useState("");
   const [recoveries, setRecoveries] = useState<Record<string, CampusPayoutRecovery>>({});
   const active = useRef(true), running = useRef(false);
@@ -134,7 +134,7 @@ function Portal({ mode }: { mode: Mode }) {
       </section>
       <section className="surface-panel"><span className="panel-eyebrow">03 · HỌC BỔNG FOOD</span><h2>Đăng ký xét học bổng</h2><p>Nhà trường xét điều kiện, sau đó ví có quyền cấp học bổng giải ngân vào vault FOOD.</p>
         {own?.scholarship ? <p className="network-pill">{campusStatus[own.scholarship.status]} · {own.payouts.some(p => p.kind === "SCHOLARSHIP" && p.status === "CONFIRMED") ? "Đã giải ngân" : "Chưa xác nhận giải ngân"}</p> : null}
-        {!own?.scholarship || own.scholarship.status === "REJECTED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await campusApi("scholarships", { category }); await refresh(); }); }}><label htmlFor="scholarship-category">Diện xét học bổng</label><select id="scholarship-category" value={category} onChange={e => setCategory(e.target.value)}><option value="MERIT">Khuyến khích học tập</option><option value="SUPPORT">Hỗ trợ sinh viên</option></select><button className="primary-cta-btn" disabled={busy || own?.application?.status !== "APPROVED"}>Gửi đăng ký học bổng</button></form> : null}
+        {!own?.scholarship || own.scholarship.status === "REJECTED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await campusApi("scholarships", { category: "SUPPORT" }); await refresh(); }); }}><button type="submit" className="primary-cta-btn" disabled={busy || own?.application?.status !== "APPROVED"}>Gửi đăng ký học bổng</button></form> : null}
       </section>
     </div> : null}
     {me && mode === "school" ? !me.school ? <section className="surface-panel"><h2>Chưa có quyền nhà trường</h2><p>Đường dẫn này không cấp quyền duyệt. Đăng nhập bằng ví do nhà trường phân quyền.</p></section> : <section className="surface-panel"><h2>Hồ sơ cần đối chiếu</h2><p>Đối chiếu dữ liệu chính thức của trường và xác nhận sinh viên sở hữu ví trước khi duyệt. Phê duyệt học bổng là bước riêng.</p>

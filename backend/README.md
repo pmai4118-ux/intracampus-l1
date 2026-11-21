@@ -31,6 +31,7 @@ flowchart LR
 | `scripts/` | Chứa lệnh seed cho ví, thẻ và học bổng demo. | `B03`, `B05` |
 | `src/modules/grants/` | Đọc dữ liệu học bổng cho demo. | `B05` |
 | `src/modules/campus/` | Đăng nhập ví, hồ sơ sinh viên, xét học bổng và đối chiếu khoản cấp do ví nhà trường ký. | Phạm vi bổ sung theo yêu cầu người dùng, chưa gắn mã sprint |
+| `src/modules/admin/` | Trang quản trị test ẩn `/admin` (key cố định, đổi ví đích động, duyệt SV/SBT, giải ngân học bổng FOOD) và `GET /api/config/runtime`. | [Bàn giao `/admin`](../docs/admin-console.md) |
 | `src/modules/copilot/` | Tra cứu số dư và chi tiêu từ dữ liệu đã xác minh. Xem trước giao dịch thuộc phần mở rộng. | `B06`, `X02` |
 
 B05 cung cấp `GET /api/grants/:beneficiary[?txHash=...]` và CLI `pnpm --filter @intracampus/backend seed:grants` (mặc định dry-run). [Giao kèo U05 và runbook B05](../docs/b05-grants.md) mô tả chuỗi wei, receipt đã xác minh, seed chống cấp trùng, journal bền vững và bước người giữ issuer thực hiện.
