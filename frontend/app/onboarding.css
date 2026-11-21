@@ -34,7 +34,88 @@
 .campus-payout-review { border: 2px solid var(--accent-emerald); margin-block: 1.5rem; }
 .campus-payout-review dl { display: grid; grid-template-columns: minmax(8rem,.3fr) minmax(0,1fr); gap: .7rem 1rem; }
 .campus-payout-review dd { margin: 0; overflow-wrap: anywhere; }
-.campus-auth-link { text-decoration: none; font-size: .8rem; margin-left: auto; padding: .65rem; border: 1px solid var(--border-hairline); border-radius: .5rem; white-space: nowrap; flex-shrink: 0; }
+.app-topbar-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; flex-shrink: 0; }
+.app-guide-link, .campus-auth-link { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.75rem; padding: .5rem .75rem; border-radius: .55rem; text-decoration: none; font-size: .78rem; font-weight: 650; white-space: nowrap; flex-shrink: 0; }
+.app-guide-link { color: #fff; background: var(--accent-emerald); border: 1px solid var(--accent-emerald); }
+.app-guide-link:hover { color: #fff; background: var(--accent-emerald-hover); border-color: var(--accent-emerald-hover); }
+.app-guide-link[aria-current="page"] { box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--accent-emerald); }
+.app-guide-link svg { width: 1rem; height: 1rem; }
+.campus-auth-link { color: var(--ink-primary); border: 1px solid var(--border-hairline); }
+.app-topbar > .environment-badge { margin-left: .25rem; flex-shrink: 0; }
+
+/* Setup and first-use guide */
+.campus-guide { display: grid; gap: 1.5rem; max-width: 76rem; margin-inline: auto; }
+.guide-network-panel { padding: clamp(1.1rem, 2.4vw, 1.65rem); }
+.guide-section-head, .guide-usage-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.2rem; }
+.guide-section-head h2, .guide-usage-heading h2 { margin: .3rem 0; font-size: 1.25rem; line-height: 1.4; letter-spacing: -.02em; }
+.guide-section-head p, .guide-usage-heading > p { margin: .35rem 0 0; color: var(--ink-muted); font-size: .82rem; line-height: 1.65; }
+.guide-chain-badge { display: inline-flex; align-items: center; gap: .45rem; flex: 0 0 auto; padding: .55rem .7rem; border: 1px solid var(--verified-border); border-radius: 999px; background: var(--verified-bg); color: var(--verified-ink); font-size: .75rem; font-weight: 650; white-space: nowrap; }
+.guide-chain-badge svg { width: 1rem; height: 1rem; }
+.guide-network-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.guide-network-field { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; padding: .8rem; border: 1px solid var(--border-hairline); border-radius: .7rem; background: var(--bg-subtle); }
+.guide-field-rpc { grid-column: 1 / -1; }
+.guide-field-copy { min-width: 0; }
+.guide-network-field dt { margin-bottom: .25rem; color: var(--ink-muted); font-size: .71rem; font-weight: 600; }
+.guide-network-field dd { margin: 0; min-width: 0; color: var(--ink-primary); font-size: .88rem; font-weight: 650; }
+.guide-network-field code { overflow-wrap: anywhere; word-break: break-word; font-family: var(--font-mono); font-size: .82rem; }
+.guide-copy-btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.75rem; flex: 0 0 auto; padding: .45rem .65rem; border: 1px solid var(--border-hairline); border-radius: .5rem; background: #fff; color: var(--ink-secondary); font: inherit; font-size: .7rem; font-weight: 650; cursor: pointer; transition: background 180ms ease, border-color 180ms ease, color 180ms ease; }
+.guide-copy-btn:hover:not(:disabled) { background: var(--accent-emerald-soft); border-color: var(--accent-emerald); color: var(--accent-emerald); }
+.guide-copy-btn:disabled { cursor: wait; opacity: .7; }
+.guide-copy-btn svg { width: .95rem; height: .95rem; }
+.guide-network-panel .copy-control { display: inline-flex; flex: 0 0 auto; }
+.guide-network-panel .copy-feedback { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.guide-optional-fields, .guide-rpc-note, .guide-demo-note { display: flex; align-items: flex-start; gap: .55rem; margin: .9rem 0 0; color: var(--ink-secondary); font-size: .78rem; line-height: 1.65; }
+.guide-optional-fields svg, .guide-rpc-note svg, .guide-demo-note svg { width: 1rem; height: 1rem; flex: 0 0 auto; margin-top: .1rem; color: var(--accent-emerald); }
+.guide-setup-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; margin: 1.25rem 0 0; padding: 1.2rem 0 0; border-top: 1px solid var(--border-hairline); list-style: none; }
+.guide-setup-steps li { display: flex; align-items: flex-start; gap: .7rem; min-width: 0; }
+.guide-step-number { display: grid; place-items: center; width: 2rem; height: 2rem; flex: 0 0 auto; border-radius: 50%; background: var(--accent-emerald-soft); color: var(--accent-emerald); font-size: .7rem; font-weight: 750; }
+.guide-setup-steps h3 { margin: .1rem 0 .25rem; font-size: .82rem; line-height: 1.45; }
+.guide-setup-steps p { margin: 0; color: var(--ink-muted); font-size: .75rem; line-height: 1.65; }
+.guide-rpc-note { padding: .75rem .85rem; border: 1px solid var(--warning-border); border-radius: .6rem; background: var(--warning-bg); color: var(--warning-ink); }
+.guide-rpc-note svg { color: var(--warning-ink); }
+.guide-usage-section { display: grid; gap: .9rem; }
+.guide-usage-heading { align-items: end; margin-bottom: .15rem; }
+.guide-usage-heading h2 { margin-bottom: 0; }
+.guide-usage-heading > p { max-width: 28rem; text-align: right; }
+.guide-usage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+.guide-usage-card { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 1.15rem; border: 1px solid var(--border-hairline); border-radius: .85rem; background: #fff; box-shadow: var(--shadow-soft); }
+.guide-usage-step { color: var(--accent-emerald); font-size: .65rem; font-weight: 750; letter-spacing: .08em; }
+.guide-usage-card h3 { margin: .55rem 0 .45rem; font-size: 1rem; line-height: 1.4; }
+.guide-usage-card p { flex: 1; margin: 0 0 1rem; color: var(--ink-muted); font-size: .8rem; line-height: 1.75; }
+.guide-usage-card .button-primary { min-height: 2.75rem; gap: .5rem; font-size: .75rem; }
+.guide-usage-card .button-primary svg { width: 1rem; height: 1rem; }
+.guide-demo-note { margin-top: .15rem; }
+
+@media(max-width:52rem) {
+  .guide-usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guide-usage-heading { align-items: flex-start; }
+}
+@media(max-width:36rem) {
+  .app-topbar-actions { gap: .3rem; }
+  .app-guide-link, .campus-auth-link { padding-inline: .5rem; font-size: .68rem; }
+  .app-topbar > .environment-badge { display: none; }
+  .brand-l1 { display: none; }
+  .guide-network-field { align-items: flex-start; }
+  .guide-field-rpc { flex-direction: column; align-items: stretch; }
+  .guide-field-rpc .copy-control { align-self: flex-start; }
+  .guide-setup-steps { grid-template-columns: minmax(0, 1fr); gap: .9rem; }
+  .guide-usage-grid { grid-template-columns: minmax(0, 1fr); }
+  .guide-usage-heading { flex-direction: column; gap: .3rem; }
+  .guide-usage-heading > p { text-align: left; }
+}
+@media(max-width:30rem) {
+  .guide-network-fields { grid-template-columns: minmax(0, 1fr); }
+  .guide-field-rpc { grid-column: auto; }
+}
+@media(max-width:22rem) {
+  .app-topbar { gap: .3rem; }
+  .brand { gap: .35rem; font-size: .83rem; }
+  .brand-symbol { width: 1.75rem; height: 1.75rem; }
+  .brand-symbol svg { width: 1.2rem; height: 1.2rem; }
+  .app-topbar-actions { gap: .25rem; }
+  .app-guide-link, .app-topbar-actions .campus-auth-link { padding-inline: .4rem; font-size: .65rem; }
+  .app-guide-link svg { display: none; }
+}
 @media(max-width:55rem) { .campus-application-grid { grid-template-columns: 1fr; } .campus-onboarding-grid { grid-template-columns: 1fr; } .campus-review-list { grid-template-columns: 1fr; } .campus-session-bar { align-items: stretch; flex-direction: column; gap: .75rem; } .campus-login-card { grid-row: 1; } }
 @media(max-width:44rem) { .app-nav { grid-template-columns: repeat(5,minmax(0,1fr)); } }
 @media(max-width:36rem) { .campus-welcome-card { padding: 1.5rem; } .campus-payout-review dl { grid-template-columns: 1fr; gap: .35rem; } .campus-payout-review dd { margin-bottom: .7rem; } .campus-onboarding-grid { gap: 1rem; } .campus-auth-link { font-size: .7rem; } }
