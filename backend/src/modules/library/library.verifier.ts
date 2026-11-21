@@ -1,6 +1,5 @@
-import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, libraryEscrowSupportsRoleUpdates, type DeployedLibraryDeployment } from "@intracampus/network";
 import { Interface, type InterfaceAbi, type Log } from "ethers";
-import type { DeployedLibraryDeployment } from "@intracampus/network";
 import type { LibraryVerifiedChainEvent } from "./library.types.ts";
 import { LibraryRpcError, type LibraryRpcClient } from "./library.rpc.ts";
 
@@ -47,6 +46,31 @@ export class LibraryReceiptVerifier {
     this.rpc = rpc;
     this.deployment = deployment;
     this.iface = new Interface(deployment.escrow.abi as InterfaceAbi);
+  }
+
+  private async expectedLibrarianAt(blockNumber: number, actor: string): Promise<string> {
+    const fallback = this.deployment.roles.librarian.toLowerCase();
+    if (!libraryEscrowSupportsRoleUpdates(this.deployment.escrow.abi).librarian) return fallback;
+    const readAt = async (tag: number): Promise<string | null> => {
+      try {
+        const raw = await this.rpc.call({ to: this.deployment.escrow.address, data: this.iface.encodeFunctionData("librarian") }, tag);
+        if (typeof raw === "string" && /^0x0{24}[0-9a-f]{40}$/i.test(raw) && !/^0x0{64}$/i.test(raw)) {
+          return String(this.iface.decodeFunctionResult("librarian", raw)[0]).toLowerCase();
+        }
+        return null;
+      } catch {
+        throw new LibraryRpcError();
+      }
+    };
+    const atBlock = await readAt(blockNumber);
+    if (atBlock === null) return fallback;
+    if (atBlock === actor) return atBlock;
+    // Handle a librarian rotation mined in the same block after a lifecycle transaction.
+    if (blockNumber > this.deployment.escrow.blockNumber) {
+      const prior = await readAt(blockNumber - 1);
+      if (prior === actor) return prior;
+    }
+    return atBlock;
   }
 
   lifecycleTopics(): string[] {
@@ -99,8 +123,10 @@ export class LibraryReceiptVerifier {
     const requestId = String(parsedLog.args[0]).toLowerCase();
     const borrower = String(parsedLog.args[1]).toLowerCase();
     const actor = tx.from.toLowerCase();
-    if (["LoanApproved", "RequestRejected", "PhysicalReturnConfirmed", "ReturnSettled", "LostSettled"].includes(parsedLog.name)
-      && actor !== this.deployment.roles.librarian.toLowerCase()) throw new LibraryRpcError();
+    if (["LoanApproved", "RequestRejected", "PhysicalReturnConfirmed", "ReturnSettled", "LostSettled"].includes(parsedLog.name)) {
+      const expectedLibrarian = await this.expectedLibrarianAt(log.blockNumber, actor);
+      if (actor !== expectedLibrarian) throw new LibraryRpcError();
+    }
     if (["DepositReceived", "ShortfallPaid"].includes(parsedLog.name) && actor !== borrower) throw new LibraryRpcError();
 
     const common = { chainId: CAMPUS_CHAIN_ID, contractAddress: escrow, txHash: log.transactionHash.toLowerCase(),

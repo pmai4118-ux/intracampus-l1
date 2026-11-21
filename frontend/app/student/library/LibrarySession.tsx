@@ -7,6 +7,7 @@ import { formatWalletBalance, formatWalletBalanceCompact } from '../../../lib/ch
 import { LibraryApi, LibraryUiError, check } from '../../../lib/library-api';
 import { signInLibraryStudent } from '../../../lib/library-session';
 import { LibraryTransactions, type LibraryCall, type StudentAction } from '../../../lib/library-transactions';
+import { fetchRuntimeWalletConfig } from '../../../lib/runtime-config';
 import { libraryError, libraryLabels } from '../../../lib/library';
 import LibraryCatalog from './LibraryCatalog';
 import LibraryLoans from './LibraryLoans';
@@ -126,13 +127,23 @@ function LibraryWorkspace({ onOpenDemo }: { onOpenDemo: () => void }) {
   const query = useRef(''), active = useRef(true), operation = useRef(false);
   const reviewRef = useRef<HTMLElement>(null);
   const deployment = useMemo(() => { try { return getLibraryDeployment(); } catch { return null; } }, []);
+  const [runtimeTreasury, setRuntimeTreasury] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    const abort = new AbortController();
+    void fetchRuntimeWalletConfig(fetch, abort.signal).then((cfg) => {
+      if (!mounted) return;
+      if (cfg?.libraryTreasury) setRuntimeTreasury(cfg.libraryTreasury);
+    });
+    return () => { mounted = false; abort.abort(); };
+  }, []);
   const transactions = useMemo(() => {
     if (!deployment || deployment.status !== 'deployed' || !wallet.address) return null;
-    return new LibraryTransactions({ deployment, account: wallet.address, api, wallet: controller, storage: {
+    return new LibraryTransactions({ deployment, account: wallet.address, treasuryOverride: runtimeTreasury, api, wallet: controller, storage: {
       getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value), removeItem: key => window.localStorage.removeItem(key),
     },
       lock: async (key, run) => { if (!navigator.locks) throw new LibraryUiError('LOCK_UNAVAILABLE'); await navigator.locks.request(key, run); } });
-  }, [deployment, wallet.address, api, controller]);
+  }, [deployment, wallet.address, runtimeTreasury, api, controller]);
   async function refresh() {
     if (!wallet.address) return;
     await api.session(wallet.address);

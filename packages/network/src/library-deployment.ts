@@ -169,12 +169,31 @@ function abiParameters(value: unknown): Record<string, unknown>[] {
   });
 }
 
+const adminRotationAbiNames = new Set(["setTreasury", "setLibrarian", "TreasuryUpdated", "LibrarianUpdated"]);
 const expectedLibraryAbi = fixture.abi.map(libraryAbiEntry).sort();
+const legacyLibraryAbi = fixture.abi
+  .filter((entry) => !adminRotationAbiNames.has(String(entry.name ?? "")))
+  .map(libraryAbiEntry)
+  .sort();
+
+function abiMatches(actual: readonly string[], expected: readonly string[]): boolean {
+  return actual.length === expected.length && !actual.some((entry, index) => entry !== expected[index]);
+}
 
 function validateLibraryAbi(value: unknown): void {
-  if (!Array.isArray(value) || value.length !== expectedLibraryAbi.length) throw new Error("INVALID_DEPLOYMENT");
+  if (!Array.isArray(value)) throw new Error("INVALID_DEPLOYMENT");
   const actual = value.map(libraryAbiEntry).sort();
-  if (actual.some((entry, index) => entry !== expectedLibraryAbi[index])) throw new Error("INVALID_DEPLOYMENT");
+  if (!abiMatches(actual, expectedLibraryAbi) && !abiMatches(actual, legacyLibraryAbi)) {
+    throw new Error("INVALID_DEPLOYMENT");
+  }
+}
+
+export function libraryEscrowSupportsRoleUpdates(abi: readonly Record<string, unknown>[]): {
+  treasury: boolean;
+  librarian: boolean;
+} {
+  const names = new Set(abi.filter((entry) => entry.type === "function").map((entry) => String(entry.name ?? "")));
+  return { treasury: names.has("setTreasury"), librarian: names.has("setLibrarian") };
 }
 
 function validatePolicy(value: unknown): LibraryDeploymentPolicy {

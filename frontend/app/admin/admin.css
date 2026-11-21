@@ -1,0 +1,569 @@
+/* Internal Admin Console — aligned with IntraCampus editorial light palette */
+
+.admin-gate-wrap {
+  min-height: calc(100dvh - 6rem);
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.admin-gate-card {
+  width: min(100%, 26rem);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.25rem;
+  padding: 2rem;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 1.15rem;
+}
+
+.admin-gate-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.admin-gate-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  background: var(--accent-emerald-soft);
+  color: var(--accent-emerald);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.admin-gate-head h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.admin-gate-head p {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+.admin-key-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-key-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Authenticated Workspace */
+
+.admin-shell {
+  width: min(100%, 76rem);
+  margin-inline: auto;
+  padding: 1.25rem 0 4rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.admin-topbar {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.15rem;
+  padding: 1rem 1.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.admin-brand-badge {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.8rem;
+  background: var(--accent-emerald);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.admin-brand-group h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.admin-brand-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* KPI Ribbon */
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.admin-kpi-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1rem;
+  padding: 1rem 1.15rem;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 0.35rem;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.admin-kpi-card:hover {
+  border-color: var(--accent-emerald);
+  transform: translateY(-1px);
+}
+
+.admin-kpi-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.admin-kpi-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.admin-kpi-note {
+  font-size: 0.82rem;
+  color: var(--ink-secondary);
+}
+
+/* Tabs */
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.95rem;
+  padding: 0.35rem;
+}
+
+.admin-tab-btn {
+  flex: 1 1 11rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.65rem 1rem;
+  border-radius: 0.7rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.admin-tab-btn:hover {
+  color: var(--ink-primary);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.admin-tab-btn.active {
+  background: var(--bg-surface);
+  color: var(--accent-emerald);
+  border-color: var(--border-hairline);
+  box-shadow: 0 2px 8px -4px rgba(15, 38, 30, 0.14);
+}
+
+/* Notices & Live Tx Tracker */
+
+.admin-banner {
+  border-radius: 0.95rem;
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.admin-banner-ok {
+  background: var(--verified-bg);
+  border: 1px solid var(--verified-border);
+  color: var(--verified-ink);
+}
+
+.admin-banner-error {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-ink);
+}
+
+.admin-banner-pending {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-ink);
+}
+
+/* Cards & Grids */
+
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.admin-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.1rem;
+  padding: 1.35rem;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.admin-card-head h2,
+.admin-card-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-card-desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.86rem;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.admin-kv {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.85rem 0.95rem;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.8rem;
+}
+
+.admin-kv-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.admin-kv-row dt {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.admin-kv-row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Badges */
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 650;
+  padding: 0.24rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-hairline);
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.admin-pill-ok {
+  background: var(--verified-bg);
+  border-color: var(--verified-border);
+  color: var(--verified-ink);
+}
+
+.admin-pill-warn {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning-ink);
+}
+
+.admin-pill-danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger-ink);
+}
+
+/* Forms */
+
+.admin-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-field label {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.admin-input,
+.admin-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.7rem;
+  padding: 0.62rem 0.8rem;
+  font-size: 0.92rem;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-family: inherit;
+}
+
+.admin-input-mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.admin-input:focus,
+.admin-select:focus {
+  outline: 2px solid var(--accent-emerald);
+  outline-offset: 1px;
+}
+
+.admin-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.admin-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.admin-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-preset-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--bg-canvas);
+  color: var(--ink-secondary);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-preset-btn:hover {
+  border-color: var(--accent-emerald);
+  color: var(--accent-emerald);
+  background: var(--accent-emerald-soft);
+}
+
+/* Student Directory & Cards */
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-student-list {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.admin-student-card {
+  border: 1px solid var(--border-hairline);
+  border-radius: 1rem;
+  padding: 1.1rem 1.2rem;
+  background: var(--bg-surface);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-student-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.admin-student-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-student-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.75rem;
+  background: var(--bg-canvas);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-hairline);
+}
+
+.admin-metric-cell {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.admin-metric-cell span {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.admin-metric-cell strong {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Signers & Audit Table */
+
+.admin-signer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.85rem;
+}
+
+.admin-signer-card {
+  border: 1px solid var(--border-hairline);
+  border-radius: 0.95rem;
+  padding: 1rem;
+  background: var(--bg-canvas);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.7rem 0.65rem;
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: top;
+}
+
+.admin-table th {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  font-weight: 650;
+}
+
+.admin-danger-btn {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.admin-danger-btn:hover:not(:disabled) {
+  background: #f9e1dd;
+}
+
+.admin-danger-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .admin-kpi-grid,
+  .admin-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-student-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-kpi-grid,
+  .admin-grid-2,
+  .admin-student-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

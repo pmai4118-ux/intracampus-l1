@@ -25,6 +25,8 @@ function normalizedAbiEntry(entry) {
 
 const EXPECTED_ABI_SURFACE = [
   "constructor constructor(address,address,address):nonpayable:inputs(administrator_:address|librarian_:address|treasury_:address)",
+  "function setTreasury(address):nonpayable:inputs(newTreasury:address):outputs(-)",
+  "function setLibrarian(address):nonpayable:inputs(newLibrarian:address):outputs(-)",
   "function seedBookTerms(bytes32,uint256,uint256):nonpayable:inputs(bookId:bytes32|depositWei:uint256|replacementPriceWei:uint256):outputs(-)",
   "function sealBookTerms(bytes32):nonpayable:inputs(bookId:bytes32):outputs(-)",
   "function bookTerms(bytes32):view:inputs(bookId:bytes32):outputs(depositWei:uint256|replacementPriceWei:uint256|isSealed:bool)",
@@ -57,6 +59,8 @@ const EXPECTED_ABI_SURFACE = [
   "event ShortfallPaid(bytes32,address,uint256):anonymous=false:inputs(requestId:bytes32:indexed|borrower:address:indexed|amount:uint256)",
   "event BookTermsSeeded(bytes32,uint256,uint256):anonymous=false:inputs(bookId:bytes32:indexed|depositWei:uint256|replacementPriceWei:uint256)",
   "event BookTermsSealed(bytes32):anonymous=false:inputs(bookId:bytes32:indexed)",
+  "event TreasuryUpdated(address,address):anonymous=false:inputs(previousTreasury:address:indexed|newTreasury:address:indexed)",
+  "event LibrarianUpdated(address,address):anonymous=false:inputs(previousLibrarian:address:indexed|newLibrarian:address:indexed)",
   "error InvalidConfiguration():inputs()",
   "error UnauthorizedAdministrator():inputs()",
   "error UnauthorizedLibrarian():inputs()",

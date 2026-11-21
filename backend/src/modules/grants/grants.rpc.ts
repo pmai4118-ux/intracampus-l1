@@ -93,13 +93,14 @@ export class GrantsReader {
     if (typeof result !== "boolean") throw new GrantError("RPC_UNAVAILABLE");
     return result;
   }
-  async snapshot(beneficiary: string, verifiedEvents: readonly VerifiedGrantEvent[] = []): Promise<GrantSnapshot> {
+  async snapshot(beneficiary: string, verifiedEvents: readonly VerifiedGrantEvent[] = [], merchantOverride?: string): Promise<GrantSnapshot> {
     return this.safe(async () => {
       beneficiary = grantAddress(beneficiary);
+      const merchant = merchantOverride ? grantAddress(merchantOverride) : this.deployment.merchants.canteen.address;
       const block = await this.context("latest");
       const [balance, merchantAllowed] = await Promise.all([
         this.call(this.vault, this.deployment.contracts.PurposeBoundGrantVault.address, "balances", [beneficiary, FOOD], block.number),
-        this.allowed(this.deployment.merchants.canteen.address, block.number),
+        this.allowed(merchant, block.number),
       ]);
       if (typeof balance !== "bigint" || balance < 0n) throw new GrantError("RPC_UNAVAILABLE");
       for (const event of verifiedEvents) {

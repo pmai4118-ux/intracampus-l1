@@ -26,10 +26,11 @@ export class GrantUiError extends Error {
 }
 export type GrantConfig = { vault: string; registry: string; issuer: string; merchant: string; category: string; deploymentHash: string };
 /** The full L05 ABI is validated by the shared L06 loader before using these static selectors. */
-export function grantConfig(manifest?: unknown): GrantConfig {
+export function grantConfig(manifest?: unknown, merchantOverride?: string | null): GrantConfig {
   const data: DeployedManifest = requireDeployment(manifest);
+  const merchant = isWalletAddress(merchantOverride) ? merchantOverride : data.merchants.canteen.address;
   return { vault: data.contracts.PurposeBoundGrantVault.address, registry: data.contracts.CampusPaymentRegistry.address,
-    issuer: data.roles.grantIssuer, merchant: data.merchants.canteen.address, category: data.merchants.canteen.category,
+    issuer: data.roles.grantIssuer, merchant, category: data.merchants.canteen.category,
     deploymentHash: data.contracts.PurposeBoundGrantVault.transactionHash };
 }
 export function parseGrantAmount(input: string): bigint {

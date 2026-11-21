@@ -19,11 +19,14 @@ export class CampusService {
   private rpc: InvoiceRpc;
   private treasury?: string;
   private scholarshipWei: bigint;
+  private resolveOverrides?: () => { welcomeTreasury?: string | null; scholarshipWei?: string | null };
   repository: CampusRepository;
   private env: Record<string, string | undefined>;
   private deployment?: unknown;
-  constructor(repository: CampusRepository, env: Record<string, string | undefined>, rpc?: InvoiceRpc, deployment?: unknown) {
+  constructor(repository: CampusRepository, env: Record<string, string | undefined>, rpc?: InvoiceRpc, deployment?: unknown,
+    resolveOverrides?: () => { welcomeTreasury?: string | null; scholarshipWei?: string | null }) {
     this.repository = repository; this.env = env; this.deployment = deployment;
+    this.resolveOverrides = resolveOverrides;
     this.chainId = resolveCampusChainId(env.NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID);
     this.authConfig = { ...readLibraryAuthConfig({ ...env,
       LIBRARY_AUTH_ORIGIN: env.CAMPUS_AUTH_ORIGIN ?? env.LIBRARY_AUTH_ORIGIN,
@@ -54,9 +57,13 @@ export class CampusService {
     if (kind === "SCHOLARSHIP" && profile.scholarship?.status !== "APPROVED") throw new CampusError("SCHOLARSHIP_NOT_APPROVED", 403);
     const prior = profile.payouts.find(p => p.kind === kind); if (prior) return prior;
     const block = await this.freshBlock();
+    const overrides = this.resolveOverrides?.();
+    const activeTreasury = overrides?.welcomeTreasury ? address(overrides.welcomeTreasury) : this.treasury;
+    const activeScholarshipWei = overrides?.scholarshipWei && /^[1-9][0-9]*$/.test(overrides.scholarshipWei)
+      ? BigInt(overrides.scholarshipWei) : this.scholarshipWei;
     let to = wallet, value = welcomeWei, data = (id: string) => hexlify(toUtf8Bytes(`IntraCampus:welcome:${id}`));
     if (kind === "WELCOME") {
-      if (!this.treasury || actor !== this.treasury) throw new CampusError("TREASURY_ONLY", 403);
+      if (!activeTreasury || actor !== activeTreasury) throw new CampusError("TREASURY_ONLY", 403);
       if (await this.rpc.call("eth_getCode", [actor, block.tag]) !== "0x") throw new CampusError("EOA_TREASURY_REQUIRED", 503);
     } else {
       let manifest;
@@ -65,7 +72,7 @@ export class CampusService {
         if (local && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(this.env.INTRACAMPUS_RPC_URL ?? "").hostname)) throw Error();
         manifest = requireDeployment(this.deployment, { allowLocal: local });
       } catch { throw new CampusError("DEPLOYMENT_NOT_CONFIGURED", 503); }
-      to = manifest.contracts.PurposeBoundGrantVault.address.toLowerCase(); value = this.scholarshipWei;
+      to = manifest.contracts.PurposeBoundGrantVault.address.toLowerCase(); value = activeScholarshipWei;
       if (actor !== manifest.roles.grantIssuer.toLowerCase()) throw new CampusError("GRANT_ISSUER_ONLY", 403);
       const code = await this.rpc.call("eth_getCode", [to, block.tag]);
       if (typeof code !== "string" || keccak256(code) !== manifest.contracts.PurposeBoundGrantVault.runtimeCodeHash.toLowerCase()) throw new CampusError("INVALID_DEPLOYMENT", 503);

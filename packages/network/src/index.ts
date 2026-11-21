@@ -1,7 +1,7 @@
 export { selectedDeploymentManifest } from "./deployment-profile.ts";
 export { CAMPUS_CHAIN_ID, CLOUD_CAMPUS_CHAIN_ID, LOCAL_CAMPUS_CHAIN_ID, campusNetwork, resolveCampusChainId, type CampusChainId } from "./chain.ts";
 export { getDeployment, requireDeployment, deploymentResponse } from "./deployment.ts";
-export { getLibraryDeployment, requireLibraryDeployment } from "./library-deployment.ts";
+export { getLibraryDeployment, requireLibraryDeployment, libraryEscrowSupportsRoleUpdates } from "./library-deployment.ts";
 export type {
   DeployedLibraryDeployment,
   LibraryBookTerms,
@@ -64,3 +64,4 @@ export type {
 
 export type { CanteenDish, CanteenItem, CanteenOrder } from './canteen.ts';
 export * from "./campus.ts";
+export * from "./admin.ts";

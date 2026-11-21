@@ -1,5 +1,13 @@
 # Nhật ký quyết định
 
+## Admin Test Console & Đổi ví đích động · 2026-11-21
+
+Bổ sung trang nội bộ `/admin` ẩn khỏi điều hướng công khai (màn hình nhập key cố định `ADMIN_ACCESS_KEY` tối giản, `noindex, nofollow`, cookie `HttpOnly` lưu trên SQLite của GCP VM để dùng chung nhiều máy mà không khóa theo ví trình duyệt) và module `backend/src/modules/admin/`.
+
+- **LibraryDepositEscrow**: bỏ `immutable` ở `treasury` và `librarian`, thêm `setTreasury(address)` và `setLibrarian(address)` chỉ `administrator` gọi được kèm event `TreasuryUpdated`/`LibrarianUpdated`. Loader `@intracampus/network` chấp nhận cả ABI v1 trước đó (tương thích `deployments/intracampus-cloud.json` hiện hữu trước khi redeploy) lẫn ABI mới có rotation. `LibraryService` đọc `treasury()`/`librarian()` on-chain tại `safeBlock`, `LibraryReceiptVerifier` kiểm tra `librarian()` tại đúng `log.blockNumber` để không làm gãy sự kiện lịch sử sau khi đổi thủ thư.
+- **Ví đích động (Bãi xe, Nhà ăn, Thư viện, Campus)**: `admin.sqlite` lưu runtime override cho `PARKING`/`FOOD`/Campus settings và công khai cấu hình chỉ đọc qua `GET /api/config/runtime` (`Cache-Control: no-store`). `CanteenOrder` lưu `merchantAddress` gắn theo đơn lúc `prepare` để không bị lệch đối chiếu nếu admin đổi ví giữa chừng; `parking.routes.ts` và `/staff/library` đọc ví đang hoạt động động thay vì địa chỉ tĩnh lúc startup/build.
+- **Ký on-chain & tránh timeout Vercel**: Backend trên GCP VM giữ operator signer keys trong `.env` nội bộ, xếp hàng tuần tự theo signer address để tránh xung đột nonce, trả ngay `202` kèm `txHash` để UI `/admin` poll qua `GET /api/admin/tx/:txHash`. Học bổng trên `/admin` giới hạn ở danh mục `FOOD`.
+
 ## N-812 · Đóng băng phí trễ tại xác nhận nhận sách vật lý · 2026-11-14
 
 Peer review phát hiện settleReturn gộp xác nhận nhận sách và chuyển tiền nên độ trễ giữa nhận vật lý và settlement có thể đổi số tiền trả; điều này không đáp ứng yêu cầu plan rằng lúc xác nhận nhận sách đóng băng phí. Thêm confirmPhysicalReturn(requestId) do LIBRARIAN ký, lưu chain timestamp và phát PhysicalReturnConfirmed; trạng thái escrow chuyển sang RETURN_RECEIVED. settleReturn chỉ chạy sau receipt này và dùng timestamp đã lưu, không dùng thời điểm settlement. Bản sách ở RETURN_REVIEW đến receipt quyết toán; sau receipt mới thành AVAILABLE hoặc MAINTENANCE. API action confirmReturn và LibraryLoan.returnReceivedAt chuyển cùng mốc timestamp sang backend/UI. ABI fixture và caller matrix Phase 1 được cập nhật trước khi Phase 2 tiếp tục; ABI thay đổi chỉ trong module thư viện, không ảnh hưởng payment/grants.

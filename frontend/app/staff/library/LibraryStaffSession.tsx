@@ -6,6 +6,7 @@ import { WalletSession, useCampusWallet } from '../../student/WalletPanel';
 import { formatWalletBalance } from '../../../lib/chains';
 import { LibraryApi, LibraryUiError, libraryTransactionProof, wei } from '../../../lib/library-api';
 import { LibraryTransactions, type LibraryCall, type StaffAction, type LibraryJournal, type LibraryJournalEntry } from '../../../lib/library-transactions';
+import { fetchRuntimeWalletConfig } from '../../../lib/runtime-config';
 import { signInLibraryWallet } from '../../../lib/library-session';
 import { libraryError, libraryLabels, libraryJournalLabel, libraryJournalHint } from '../../../lib/library';
 import LibraryWalletSummary from '../../student/library/LibraryWalletSummary';
@@ -118,6 +119,24 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
   const { state: wallet, controller } = useCampusWallet();
   const api = useMemo(() => new LibraryApi(), []);
   const deployment = useMemo(() => { try { return getLibraryDeployment(); } catch { return null; } }, []);
+  const [runtimeLibrarian, setRuntimeLibrarian] = useState<string | null>(null);
+  const [runtimeTreasury, setRuntimeTreasury] = useState<string | null>(null);
+  const [runtimeLoaded, setRuntimeLoaded] = useState(false);
+  const activeLibrarian = runtimeLibrarian ?? (deployment?.status === 'deployed' ? deployment.roles.librarian : '');
+  const activeTreasury = runtimeTreasury ?? (deployment?.status === 'deployed' ? deployment.treasury : '');
+  const activeLibrarianRef = useRef(activeLibrarian);
+  activeLibrarianRef.current = activeLibrarian;
+  useEffect(() => {
+    let mounted = true;
+    const abort = new AbortController();
+    void fetchRuntimeWalletConfig(fetch, abort.signal).then((cfg) => {
+      if (!mounted) return;
+      if (cfg?.libraryLibrarian) setRuntimeLibrarian(cfg.libraryLibrarian);
+      if (cfg?.libraryTreasury) setRuntimeTreasury(cfg.libraryTreasury);
+      setRuntimeLoaded(true);
+    });
+    return () => { mounted = false; abort.abort(); };
+  }, []);
   const [authenticated, setAuthenticated] = useState(false), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [books, setBooks] = useState<LibraryBook[]>([]), [requests, setRequests] = useState<LibraryRequest[]>([]), [loans, setLoans] = useState<LibraryLoan[]>([]), [journals, setJournals] = useState<LibraryJournalEntry[]>([]);
@@ -134,13 +153,13 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
   const active = useRef(true), operation = useRef(false), operationVersion = useRef(0), previewInFlight = useRef(false), previewAbort = useRef<AbortController | null>(null), review = useRef<HTMLElement>(null), settlementForm = useRef<HTMLElement>(null), trigger = useRef<HTMLElement | null>(null), previewVersion = useRef(0);
   const transactions = useMemo(() => {
     if (!deployment || deployment.status !== 'deployed' || !wallet.address) return null;
-    return new LibraryTransactions({ deployment, account: wallet.address, role: 'LIBRARIAN', api, wallet: controller, storage: {
+    return new LibraryTransactions({ deployment, account: wallet.address, role: 'LIBRARIAN', librarianOverride: activeLibrarian || null, treasuryOverride: activeTreasury || null, api, wallet: controller, storage: {
       getItem: k => window.localStorage.getItem(k), setItem: (k, v) => window.localStorage.setItem(k, v), removeItem: k => window.localStorage.removeItem(k), key: i => window.localStorage.key(i), get length() { return window.localStorage.length; },
     }, lock: async (key, run, signal) => {
       if (!navigator.locks) throw new LibraryUiError('LOCK_UNAVAILABLE');
       await navigator.locks.request(key, signal ? { signal } : {}, run);
     } });
-  }, [deployment, wallet.address, api, controller]);
+  }, [deployment, wallet.address, activeLibrarian, activeTreasury, api, controller]);
   const clear = () => {
     previewVersion.current++;
     previewAbort.current?.abort();
@@ -157,7 +176,8 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
     setSelected(null);
   };
   async function refresh(walletOverride?: string | null) {
-    if (!wallet.address || !deployment || deployment.status !== 'deployed' || !same(wallet.address, deployment.roles.librarian)) throw new LibraryUiError('FORBIDDEN');
+    const librarianAddr = activeLibrarianRef.current;
+    if (!wallet.address || !deployment || deployment.status !== 'deployed' || !librarianAddr || !same(wallet.address, librarianAddr)) throw new LibraryUiError('FORBIDDEN');
     await api.session(wallet.address, 'LIBRARIAN');
     setLoading(true); setCall(null); setIntent(null);
     const activeFilter = walletOverride !== undefined ? walletOverride : serverBorrowerRef.current;
@@ -182,8 +202,8 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
     try { await work(); } catch (e) { const code = (e as {code?: string}).code; const authError = ['UNAUTHENTICATED','WALLET_SESSION_CHANGED','FORBIDDEN'].includes(code ?? ''); if (active.current && version === operationVersion.current && (isCurrent() || authError)) { if (authError) clear(); setError(code === 'INVALID_AMOUNT' ? 'Số tiền sửa chữa không hợp lệ.' : code === 'FORBIDDEN' ? 'Ví này không có quyền thủ thư hoặc session đã hết hạn.' : libraryError(e)); } }
     finally { if (version === operationVersion.current) { operation.current = false; previewInFlight.current = false; previewAbort.current = null; if (active.current) { setBusy(false); setLoading(false); } } }
   }
-  useEffect(() => { active.current = true; if (wallet.address) void run(refresh); const focus = () => { if (wallet.address && !operation.current) void run(refresh); }; window.addEventListener('focus', focus); return () => { active.current = false; previewAbort.current?.abort(); window.removeEventListener('focus', focus); }; /* remounted per account */ // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { active.current = true; if (wallet.address && runtimeLoaded) void run(refresh); const focus = () => { if (wallet.address && runtimeLoaded && !operation.current) void run(refresh); }; window.addEventListener('focus', focus); return () => { active.current = false; previewAbort.current?.abort(); window.removeEventListener('focus', focus); }; /* remounted per account */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtimeLoaded, activeLibrarian]);
   useEffect(() => { if (call) review.current?.focus(); }, [call]);
   useEffect(() => { if (selected) settlementForm.current?.focus(); }, [selected]);
   const prepare = (id: string, action: StaffAction, preview?: LibrarySettlementIntent) => { trigger.current = document.activeElement as HTMLElement | null; void run(async () => { if (!transactions) throw new LibraryUiError('CONFIGURATION_ERROR'); const next = await transactions.prepare(id, action, preview); if (active.current) { setIntent(preview ?? null); setCall(next); } }); };
@@ -226,7 +246,7 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
     }, current);
   }
   async function signIn() {
-    if (!wallet.address || deployment?.status !== 'deployed' || !same(wallet.address, deployment.roles.librarian)) {
+    if (!wallet.address || deployment?.status !== 'deployed' || !activeLibrarian || !same(wallet.address, activeLibrarian)) {
       throw new LibraryUiError('FORBIDDEN');
     }
     await signInLibraryWallet(wallet.address, 'LIBRARIAN', (account, message) => controller.signMessage(account, message), api.fetcher);
@@ -235,7 +255,7 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
   const bookMap = useMemo(() => new Map<string, LibraryBook>(books.map(b => [b.bookId, b])), [books]);
   const title = (id: string) => bookMap.get(id)?.title ?? id;
   const escrow = deployment?.status === 'deployed' ? deployment.escrow.address : '';
-  const wrongRoleWallet = Boolean(wallet.address && deployment?.status === 'deployed' && !same(wallet.address, deployment.roles.librarian));
+  const wrongRoleWallet = Boolean(runtimeLoaded && wallet.address && deployment?.status === 'deployed' && activeLibrarian && !same(wallet.address, activeLibrarian));
   const filteredBooks = useMemo(() => books.filter(b => matchesStaffQuery(search, b, [])), [books, search]);
   const filteredRequests = useMemo(
     () =>
@@ -265,7 +285,7 @@ function Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
 
   return <>
     <section className="surface-panel library-section" aria-label="Đăng nhập thủ thư" aria-busy={busy}><h2>Đăng nhập thủ thư</h2><p>Chữ ký đăng nhập xác nhận ví, không chuyển tiền.</p>
-      {wrongRoleWallet ? <p className="wallet-warning">Ví đang kết nối không trùng địa chỉ thủ thư trong manifest (<code>{deployment?.status === 'deployed' ? deployment.roles.librarian : ''}</code>). Hãy đổi tài khoản trong Core trước khi ký.</p> : null}
+      {wrongRoleWallet ? <p className="wallet-warning">Ví đang kết nối không trùng địa chỉ thủ thư đang hoạt động (<code>{activeLibrarian}</code>). Hãy đổi tài khoản trong Core trước khi ký.</p> : null}
       {!authenticated ? <div className="library-actions">
         <button type="button" className="primary-cta-btn" disabled={busy || !wallet.address || wallet.chainId !== BigInt(campusNetwork.chainId)} onClick={() => void run(signIn)}>Ký đăng nhập thủ thư</button>
         <button type="button" className="secondary-btn" onClick={onOpenDemo}>Xem thử bàn điều phối thủ thư mẫu</button>
