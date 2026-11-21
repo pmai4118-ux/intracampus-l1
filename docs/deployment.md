@@ -1,13 +1,15 @@
 # L06 · Deploy và bộ ABI dùng chung
 
-`deployments/intracampus.json` là nguồn công khai duy nhất cho ABI, địa chỉ,
-chain ID và receipt deploy. File trong Git hiện có `status: unconfigured`:
-chưa có endpoint/receipt Avalanche L1 để điền địa chỉ thật. Không dùng địa chỉ
-fixture hoặc địa chỉ Anvil thay cho địa chỉ L1. Các ABI được xuất từ build
-Solidity 0.8.24 hiện tại; `abiVersion: 1` phân biệt với schema của manifest.
+Repo có hai manifest theo profile: `deployments/intracampus.json` cho chain local
+`20261` và `deployments/intracampus-cloud.json` cho online demo chain `20261120`.
+Cloud manifest hiện có `status: deployed`; local manifest vẫn là profile riêng.
+Không dùng địa chỉ fixture hoặc địa chỉ Anvil thay cho địa chỉ cloud. ABI được
+xuất từ build Solidity 0.8.24 hiện tại; `abiVersion: 1` phân biệt với schema
+của manifest. Chọn profile bằng `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID`; để trống
+thì dùng local `20261`.
 
-`@intracampus/network` xuất `getDeployment`, `requireDeployment` và
-`deploymentResponse`. Express và Next.js cùng dùng loader này cho
+`@intracampus/network` chọn manifest theo chain ID rồi xuất `getDeployment`,
+`requireDeployment` và `deploymentResponse`. Express và Next.js cùng dùng loader này cho
 `GET /api/deployment`, `Cache-Control: no-store`. Chưa cấu hình, sai chain,
 metadata thiếu hoặc manifest `local-anvil` thì endpoint trả 503
 `DEPLOYMENT_NOT_READY`. Bộ dữ liệu đã kiểm chứng trên L1 mới trả 200.
@@ -15,10 +17,19 @@ Module thanh toán sau này dùng `requireDeployment()` lấy verifier/ABI; khô
 lấy địa chỉ tin cậy từ QR. B01/B02/U03/U04 vẫn phải kiểm tra RPC, mô phỏng và
 receipt theo P02. L06 không tự bật luồng thanh toán của các task đó.
 
-## 1. Chuẩn bị máy giữ node
+> **Vận hành online:** deploy frontend/backend không cần chạy lại hợp đồng.
+> Cloud demo đã có manifest riêng trên chain `20261120`; chỉ chạy script
+> Foundry/exporter khi có thay đổi hợp đồng được duyệt. RPC, Vercel và VM setup
+> không nằm trong các bước deploy hợp đồng bên dưới; xem
+> [runbook cloud](cloud-deployment.md).
 
-L1 của hwng và HTTPS theo [L02](../infra/rpc.md) phải đang hoạt động, trả chain
-`20261` (`0x4f25`). Dùng Node 24, pnpm 11.25.0, Foundry 1.7.1:
+## 1. Chuẩn bị máy giữ node (profile local 20261)
+
+Quy trình dưới đây giữ các bước dựng/deploy local `20261` đã dùng cho L06. Với
+chain cloud `20261120`, dùng cùng chain ID cho frontend/backend/Foundry và RPC
+cloud, xuất sang manifest cloud mặc định, rồi theo [runbook cloud](cloud-deployment.md).
+Không lấy local RPC từ L02 để deploy hoặc nghiệm thu cloud. Dùng Node 24,
+pnpm 11.25.0, Foundry 1.7.1:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -132,15 +143,16 @@ lệch metadata do build cache cũ, chạy `forge build --force` trước mô ph
 không bỏ qua kiểm tra bytecode. Không thay file `deployed` bằng template trong một bản phát hành
 đang dùng. Test artifact cũ, sai chain/receipt/cấu hình phải fail closed.
 
-Nghiệm thu thực tế còn cần RPC công khai đang hoạt động và operator ký trên
-máy hwng. Test Foundry/Anvil ở đây không xác nhận Avalanche L1 đã deploy.
+Nghiệm thu profile local 20261 còn cần RPC công khai hoạt động và operator ký
+trên máy giữ node. Test Foundry/Anvil ở đây không xác nhận Avalanche L1 đã deploy.
 
 ## 5. Triển khai và xuất evidence cho `LibraryDepositEscrow`
 
-Module thư viện dùng script và exporter tách riêng với L06 để không tự ý thay
-đổi `deployments/intracampus.json` khi triển khai thử hoặc chạy cục bộ. Hiện tại
-**chưa thực hiện deploy lên Avalanche L1**; mọi chạy thử Anvil chỉ tạo bằng
-chứng `environment: "local-anvil"`.
+Module thư viện dùng script và exporter riêng với L06. Manifest cloud
+`deployments/intracampus-cloud.json` hiện có `LibraryDepositEscrow` đã deploy
+trên Avalanche L1 chain `20261120`; manifest local `deployments/intracampus.json`
+vẫn độc lập. Các lệnh Anvil bên dưới chỉ tạo bằng chứng
+`environment: "local-anvil"`.
 
 ### Biến môi trường và script Foundry
 
@@ -156,7 +168,8 @@ chứng `environment: "local-anvil"`.
   `seedBookTerms` và `sealBookTerms` cùng dùng một signer hợp lệ; nếu hai địa
   chỉ khác nhau script sẽ fail-fast trước broadcast với lỗi
   `DistinctDeployerAndAdministratorUnsupported`. Script cũng từ chối
-  `block.chainid != 20261` trước broadcast, deploy `LibraryDepositEscrow`, gọi
+  chain được chọn qua `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` (mặc định `20261`, cloud
+  `20261120`) trước broadcast, deploy `LibraryDepositEscrow`, gọi
   cặp `seedBookTerms` (với `DEPOSIT_WEI = 50 ether`) rồi `sealBookTerms` cho
   từng sách bằng `LIBRARY_ADMIN_ADDRESS`, và đọc kiểm tra lại toàn bộ role,
   hằng số policy cùng `bookTerms(bookId)` (`isSealed == true`).

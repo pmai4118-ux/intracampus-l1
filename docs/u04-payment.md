@@ -8,10 +8,11 @@ viên. Biên nhận dùng GET B02/B04, không suy ra thành công chỉ từ tx 
 
 1. Dùng Node 24, pnpm 11.25.0 và source có B01/B02/B04, U02/U03, L04/L06.
    Từ gốc chạy `pnpm install --frozen-lockfile`.
-2. Operator bàn giao RPC HTTPS chain `20261` cùng manifest L06 đã kiểm chứng,
-   `status: deployed`, `environment: avalanche-l1`. File canonical còn
-   `unconfigured` thì chưa bật thanh toán. Không thay bằng địa chỉ Anvil để
-   nghiệm thu L1. Xem [L06](deployment.md) và [B04](b04-integration.md).
+2. Chọn một profile nhất quán: local `20261` với manifest `deployments/intracampus.json`,
+   hoặc online demo `20261120` với RPC HTTPS cloud và manifest
+   `deployments/intracampus-cloud.json`. Manifest của profile phải được xác minh
+   (`status: deployed`, `environment: avalanche-l1`); không thay bằng địa chỉ
+   Anvil để nghiệm thu L1. Xem [L06](deployment.md) và [runbook cloud](cloud-deployment.md).
    Trình duyệt phải có Web Locks và lưu trữ local hoạt động; mở trang HTTPS
    trong Core/Chromium để khóa yêu cầu giữa các tab.
 3. Đặt RPC công khai ở `frontend/.env.local`, RPC và POS signer riêng ở backend
@@ -25,9 +26,10 @@ viên. Biên nhận dùng GET B02/B04, không suy ra thành công chỉ từ tx 
 
 ## Thao tác hai thiết bị
 
-Trên laptop mở `/pos`, tạo một invoice bãi xe mới. Trên điện thoại mở
-`/student` trong phiên Core đã kết nối, kiểm tra chain 20261 rồi quét hoặc
-dán nguyên payload từ POS. Camera bị từ chối vẫn có đường dán payload.
+Trên laptop mở `/pos`, tạo một invoice bãi xe mới. Trên điện thoại mở `/student`
+trong phiên Core đã kết nối cùng chain đã chọn (`20261` local hoặc `20261120`
+cloud), rồi quét hoặc dán nguyên payload từ POS. Camera bị từ chối vẫn có đường
+dán payload.
 
 Đọc merchant, mạng, giá gốc, ưu đãi và số phải trả. Khi bấm thanh toán, U04
 đọc lại account/chain, hóa đơn backend, signer, thời gian chain và paid flag;

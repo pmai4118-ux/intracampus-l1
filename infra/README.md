@@ -1,6 +1,8 @@
 # L01 · IntraCampus L1 local
 
-RPC HTTPS cho thiết bị khác tiếp tục ở [runbook L02](rpc.md), gồm gateway chỉ mở RPC cần dùng, script kiểm tra và checklist Wi-Fi/4G. Tunnel phải chạy trên máy đang giữ node L01.
+Tài liệu này chỉ dựng và vận hành chain local `20261`. RPC HTTPS/tunnel L02 bên dưới vẫn dành cho node local; demo online dùng chain cloud `20261120` trên GCP và frontend Vercel, xem [runbook deploy cloud](../docs/cloud-deployment.md). Không dùng URL RPC hoặc manifest local cho mạng online.
+
+RPC HTTPS cho thiết bị khác của node local tiếp tục ở [runbook L02](rpc.md), gồm gateway chỉ mở RPC cần dùng, script kiểm tra và checklist Wi-Fi/4G. Tunnel L02 phải chạy trên máy đang giữ node L01.
 
 | Thông số | Giá trị |
 | --- | --- |

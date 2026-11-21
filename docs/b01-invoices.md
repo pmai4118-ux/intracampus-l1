@@ -1,5 +1,9 @@
 # B01 · Tạo hóa đơn và ký QR
 
+Khi chạy online, dùng profile cloud `20261120`, RPC backend nội bộ GCP và
+manifest `deployments/intracampus-cloud.json`; cấu hình Vercel/GCP ở
+[runbook cloud](cloud-deployment.md). RPC L02/local `20261` chỉ dành cho dev.
+
 `POST /api/invoices` nhận hai trường `merchantId` và `serviceId`. Menu hiện có là `parking-demo` / `parking-single`: giá gốc 3.000 CAMPUS, tier 1 xem trước 2.700 CAMPUS. Server từ chối trường ngoài schema, kể cả `amount` và `signer`; giá cuối vẫn do contract quyết định khi thanh toán.
 
 ## Cấu hình và chạy thử
@@ -8,7 +12,8 @@ Dùng Node 24, pnpm 11.25.0. Tạo `backend/.env` theo `.env.example`, cấu hì
 
 | Biến | Nguồn / trách nhiệm |
 | --- | --- |
-| `INTRACAMPUS_RPC_URL` | RPC L02, phải trả chain 20261 |
+| `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` | `20261` local hoặc `20261120` cloud; phải khớp RPC và manifest |
+| `INTRACAMPUS_RPC_URL` | RPC backend tin cậy; phải trả chain của profile đã chọn |
 | `CAMPUS_PAYMENT_REGISTRY_ADDRESS` | Verifier thật từ L06 |
 | `CAMPUS_PAYMENT_DEPLOYMENT_BLOCK` | Block triển khai của cùng verifier, B02 dùng để quét receipt |
 | `PARKING_MERCHANT_ADDRESS` | Ví merchant demo nhận CAMPUS; L06/admin L04 phải cho phép cặp merchant / `keccak256("PARKING")` |
@@ -62,4 +67,4 @@ Script chỉ chấp nhận endpoint loopback cố định có client version Anv
 - B01 được phát triển trên PR B02 #9 (`f8b905c`), dùng nguyên `InvoiceRepository.create(envelope)`, `HttpInvoiceRpc` và GET của B02. Không merge PR phụ thuộc. Khi đưa lên review, so diff B01 với nhánh B02; nếu B02 đổi repository/router cần cập nhật điểm nối trước khi tích hợp main.
 - U03 gọi POST, hiển thị QR từ `qrPayload`; kiểm tra signer/verifier tin cậy và preflight theo P02. Metadata có thể bị sửa độc lập chữ ký nên frontend không được coi QR là nguồn tin cậy cho tên/giá ngoài các trường được ký.
 - B04 dùng cùng DB và deployment cho POST/GET; giữ lịch poll/backoff và hash chưa xác minh. B01 không thực hiện thanh toán, không tự gửi lại giao dịch.
-- Chưa có RPC/deployment L06 được bàn giao cho phiên này: chưa nghiệm thu trên Avalanche L1. Chữ ký/thanh toán/expiry đã kiểm chứng với L04 trên Anvil local; cần chạy tiếp trên deployment thật khi tích hợp.
+- **Bằng chứng lịch sử lúc viết B01:** chưa có RPC/deployment L06 được bàn giao cho phiên đó. Chữ ký/thanh toán/expiry đã kiểm chứng với L04 trên Anvil local. Demo cloud hiện dùng profile `20261120`; không suy ra nghiệm thu B01 L1 từ các test local, xem runbook cloud và receipt thật nếu có.

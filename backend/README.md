@@ -2,6 +2,8 @@
 
 Tạo invoice và QR đã ký: xem [hướng dẫn B01](../docs/b01-invoices.md) cho cấu hình, POST mẫu và điểm nối kho receipt B02.
 
+Kết nối online Vercel → GCP, chọn chain `20261120`, cấu hình RPC và SQLite: xem [runbook cloud](../docs/cloud-deployment.md). Local mặc định vẫn là chain `20261`.
+
 Ghép POS và deployment: xem [B04](../docs/b04-integration.md) cho polling/khôi phục invoice, HTTPS cùng origin, volume SQLite và bằng chứng restart.
 
 IntraCampus dùng **modular monolith** cho MVP. Mỗi nhóm nghiệp vụ có module riêng dưới `src/modules/`, và tất cả chạy trong một ứng dụng Express. Nhóm có thể phát triển theo task và vẫn chạy cả API bằng một lệnh.
@@ -45,7 +47,8 @@ Cấu hình trong `backend/.env`:
 
 | Biến | Nguồn / hành vi |
 | --- | --- |
-| `INTRACAMPUS_RPC_URL` | RPC tin cậy L02; mỗi lookup chưa paid xác minh chain `20261` |
+| `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` | Profile dùng chung: `20261` local (mặc định) hoặc `20261120` cloud; cần khớp RPC và manifest đã chọn |
+| `INTRACAMPUS_RPC_URL` | RPC tin cậy mà backend truy cập được; mỗi lookup chưa paid xác minh chain đã chọn (`20261` local hoặc `20261120` cloud) |
 | `CAMPUS_PAYMENT_REGISTRY_ADDRESS` | Địa chỉ verifier thật do L06 bàn giao |
 | `CAMPUS_PAYMENT_DEPLOYMENT_BLOCK` | Block triển khai của cùng verifier, số nguyên thập phân |
 | `INVOICES_DB_PATH` | Tùy chọn; nên dùng absolute path trên volume bền vững |

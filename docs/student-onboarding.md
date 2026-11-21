@@ -31,21 +31,21 @@ Dùng Node 24, `pnpm install --frozen-lockfile` và cấu hình web/API theo [ru
 
 Campus dùng `CAMPUS_AUTH_ORIGIN`, dự phòng `LIBRARY_AUTH_ORIGIN`. Thiếu/sai origin làm endpoint Campus trả 503, không mở quyền tạm. Challenge có hạn 5 phút, phiên 1 giờ; giới hạn challenge 10 và verify 20 yêu cầu mỗi 60 giây theo cơ chế auth hiện có. Cookie Campus tách khỏi cookie dịch vụ cũ. Frontend proxy `/api/campus/*` theo `BACKEND_URL`; không có biến frontend nào chứa private key.
 
-Học bổng dùng canonical `deployments/intracampus.json`: địa chỉ, runtime code hash, grantIssuer và category căn-tin từ cùng manifest L06; không lấy đích hợp đồng từ form. Chưa có deployment đã xác minh thì vẫn đăng nhập/duyệt được nhưng không giải ngân. Chạy `pnpm rpc:check` trước thao tác trên L1. Không dùng faucet Fuji hoặc nhầm AVAX với CAMPUS.
+Học bổng lấy địa chỉ, runtime code hash, grantIssuer và category căn-tin từ manifest được chọn theo chain: `20261` dùng `deployments/intracampus.json`, `20261120` dùng `deployments/intracampus-cloud.json`. Không lấy đích hợp đồng từ form. Chưa có deployment đã xác minh thì vẫn đăng nhập/duyệt được nhưng không giải ngân. Chạy `pnpm rpc:check` trước thao tác trên L1. Không dùng faucet Fuji hoặc nhầm AVAX với CAMPUS.
 
 ## Đưa demo cloud lên Vercel và GCP
 
-Vercel chỉ chạy frontend. Các API nghiệp vụ, RPC gateway và SQLite hiện chạy ở backend trên VM GCP; không đặt SQLite trên filesystem của Vercel.
+Vercel chạy frontend. Backend/API, RPC gateway và SQLite chạy trên VM GCP; node cloud có RPC nội bộ riêng. Ví Core và trình duyệt dùng RPC HTTPS công khai của gateway. Không đặt SQLite trên filesystem của Vercel. Chi tiết luồng và kiểm tra ở [runbook cloud](cloud-deployment.md).
 
 Trên Vercel, cấu hình ở đúng scope Preview/Production rồi redeploy vì `NEXT_PUBLIC_*` được nhúng lúc build và `BACKEND_URL` được đọc khi tạo rewrite:
 
-- `BACKEND_URL`: URL HTTPS ổn định của backend cloud. Các rewrite cùng origin chuyển `/api/campus/*`, `/api/auth/*`, `/api/library/*`, `/api/invoices/*`, `/api/grants/*`, `/api/canteen/*` và `/api/parking/*` tới backend.
-- `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` và `NEXT_PUBLIC_INTRACAMPUS_RPC_URL`: phải cùng trỏ tới chain cloud. RPC cần cho phép origin Vercel chính xác qua CORS.
+- `BACKEND_URL`: origin HTTPS của backend cloud. Các rewrite cùng origin chuyển `/api/campus/*`, `/api/auth/*`, `/api/library/*`, `/api/invoices/*`, `/api/grants/*`, `/api/canteen/*` và `/api/parking/*` tới backend. Biến này không phải RPC URL.
+- `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` và `NEXT_PUBLIC_INTRACAMPUS_RPC_URL`: RPC HTTPS công khai của gateway mà trình duyệt/Core truy cập được. Gateway cần allowlist CORS đúng origin web và origin extension Core; RPC nội bộ backend cấu hình riêng qua `INTRACAMPUS_RPC_URL`.
 - Các địa chỉ public `NEXT_PUBLIC_STUDENT_SBT_ADDRESS`, `NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS` và `NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS` phải khớp manifest cloud. Giữ `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=false`; không đưa khóa hoặc RPC token bí mật vào `NEXT_PUBLIC_*`.
 
-Trên backend GCP, dùng cùng chain ID `20261120`, `INTRACAMPUS_RPC_URL` của cloud, manifest cloud, `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` khớp origin Vercel, cùng các ví public trong `CAMPUS_SCHOOL_WALLETS`, `CAMPUS_TREASURY_ADDRESS` và `PARKING_MERCHANT_ADDRESS`. `CAMPUS_ALLOW_LOCAL_ANVIL` phải là `false`. Một backend chỉ chấp nhận origin được cấu hình; URL Preview ngẫu nhiên có thể không đăng nhập được nếu khác origin đó, nên dùng alias ổn định hoặc cấu hình đúng origin cho môi trường đang nghiệm thu.
+Trên backend GCP, đặt `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120`, `INTRACAMPUS_RPC_URL` nội bộ của cloud, manifest cloud, `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` khớp origin Vercel, cùng các ví public trong `CAMPUS_SCHOOL_WALLETS`, `CAMPUS_TREASURY_ADDRESS` và `PARKING_MERCHANT_ADDRESS`. `CAMPUS_ALLOW_LOCAL_ANVIL` phải là `false`. Một backend chỉ chấp nhận origin được cấu hình; URL Preview ngẫu nhiên có thể không đăng nhập được nếu khác origin đó, nên dùng alias ổn định hoặc cấu hình đúng origin cho môi trường đang nghiệm thu.
 
-Cloud yêu cầu bốn SQLite path tuyệt đối, khác nhau và bền vững: invoices, library, canteen và `CAMPUS_DB_PATH`. Đặt chúng trên persistent disk của VM; nếu thiếu hoặc trùng, backend dừng thay vì chạy Campus với DB tạm. Trước khi Production hoạt động đầy đủ, redeploy backend từ commit mới và kiểm tra `/api/network`, `/api/campus/me`, đăng nhập, cấp tiền và các route POS trên cùng origin HTTPS.
+Cloud yêu cầu bốn SQLite path tuyệt đối, khác nhau và bền vững: invoices, library, canteen và `CAMPUS_DB_PATH`. Đặt chúng trên persistent disk của VM; nếu thiếu hoặc trùng, backend dừng thay vì chạy Campus với DB tạm. Demo không yêu cầu bật backup riêng; tạo lại VM/đĩa có thể làm mất dữ liệu. Trước khi dùng Production, kiểm tra `/api/network`, `/api/deployment`, `/api/campus/me`, đăng nhập, cấp tiền và các route POS trên cùng origin HTTPS.
 
 ## Quy trình
 

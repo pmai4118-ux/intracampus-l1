@@ -1,5 +1,11 @@
 # Q02 · Checklist chạy demo IntraCampus L1
 
+> **Môi trường hiện hành (2026-11-21):** buổi chạy online dùng frontend Vercel,
+> backend/RPC trên GCP và chain cloud `20261120`. Dùng
+> [runbook cloud](cloud-deployment.md) để cấu hình. Kết quả Anvil và dòng
+> `not-configured` ở phần kiểm chứng bên dưới là snapshot local ngày 14/11/2026,
+> không phải trạng thái RPC online hiện tại.
+
 Phạm vi nghiệm thu là QR, ưu đãi SBT, receipt thanh toán trên Student/POS và học
 bổng FOOD. B06/U06 đã dừng theo ghi chú trên sprint và tài liệu dự án. Demo
 animation trên ChatGPT Sites dùng để giới thiệu. Kiểm thử nghiệp vụ thư viện
@@ -7,15 +13,15 @@ thuộc N-75E965E5. Xem [kịch bản P01](demo-flow.md) và [ghi chú Q02](ment
 
 ## Phiếu chuẩn bị cho buổi chạy Core/L1
 
-Điền phiếu trên máy nhóm. Chỉ đưa giá trị công khai vào Git. L02/L06 đã merge
-mã và hướng dẫn, còn phiên Q02 ngày 14/11/2026 chưa có bộ cấu hình của bản chạy
-thật. Kết quả Anvil ở cuối tài liệu có thể tái hiện độc lập.
+Điền phiếu trên máy nhóm. Chỉ đưa giá trị công khai vào Git. Dùng URL deployment
+Vercel hiện hành, API backend và RPC gateway HTTPS trên GCP; không dùng RPC L02
+local làm endpoint online. Kết quả Anvil ở cuối tài liệu có thể tái hiện độc lập.
 
 | Trước khi bắt đầu | Ghi nhận tại buổi chạy | Xác nhận |
 | --- | --- | --- |
 | Phiên chạy, giờ UTC+7, commit frontend/backend | … | Hai màn hình trỏ cùng phiên deploy |
 | `APP_URL` HTTPS, URL backend từ máy operator | … | Laptop mở `/pos`; điện thoại mở `/student` trong Core |
-| RPC HTTPS chính/dự phòng và chain | … | `pnpm rpc:check` trả `ready`, chain 20261; kiểm tra đọc receipt trên Wi-Fi và 4G/5G |
+| RPC HTTPS public, RPC nội bộ backend và chain | … | Chain cloud `20261120`; RPC public dùng bởi trình duyệt/Core, RPC nội bộ dùng bởi backend; kiểm tra `/api/network` và `/api/deployment` |
 | Manifest L06, deployment hash, SBT, registry, vault | … | Hai `/api/deployment` trả 200 và cùng manifest đã xác minh; gọi URL backend nội bộ từ máy operator nếu cần |
 | Phiên bản Core, OS, trình duyệt, camera, mạng hai thiết bị | … | Camera/clipboard hoạt động, quyền ví đúng, thử chuyển hotspot |
 | Người vận hành POS, người giữ ví, người ghi kết quả | … | Chỉ người giữ ví demo xác nhận trong Core |
@@ -23,7 +29,8 @@ thật. Kết quả Anvil ở cuối tài liệu có thể tái hiện độc l�
 | Grant trước khi chạy | … | Ghi giá trị thực tế. Dùng beneficiary đã seed 5.000 nếu cần chứng minh 5.000 → 4.000 |
 | Thư mục bản ghi trước | … | File MP4, ảnh receipt và ghi chú deploy mở được khi tắt mạng |
 
-Hướng dẫn cấu hình là [L02](../infra/rpc.md), [L06](deployment.md),
+Hướng dẫn cấu hình online là [runbook cloud](cloud-deployment.md); [L02](../infra/rpc.md)
+chỉ áp dụng cho node local `20261`. Các hướng dẫn nghiệp vụ là [L06](deployment.md),
 [B03](demo-accounts.md), [B04](b04-integration.md), [B05](b05-grants.md),
 [U04](u04-payment.md) và [U05](u05-grants.md). Operator chuẩn bị manifest và
 seed theo runbook với tài khoản demo. Ghi số dư thật nếu ví đã chi. Tạo invoice
@@ -74,7 +81,7 @@ chỉ có số đo Anvil trong lượt đã review; số Q01 không thay kết q
    dùng bản ghi để xác nhận giao dịch đang chờ. Sau buổi demo, đối chiếu giao
    dịch cũ trên đúng mạng rồi ghi kết quả tiếp nối.
 
-## Lượt kiểm chứng local ngày 14/11/2026
+## Lượt kiểm chứng local ngày 14/11/2026 (bằng chứng lịch sử)
 
 Người chạy Codex. App `14b4a62`, Windows, Edge headless, HTTP loopback. Hai
 trình duyệt là viewport desktop/mobile trên một máy. Anvil 20261 dùng provider

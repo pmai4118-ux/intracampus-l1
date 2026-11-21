@@ -1,5 +1,10 @@
 # L02 · RPC HTTPS cho hai thiết bị demo
 
+> Runbook này mô tả tunnel của node local chain `20261`, không phải RPC cloud
+> hiện dùng cho demo online. Cloud dùng chain `20261120`, node/backend/RPC gateway
+> trên VM GCP và frontend Vercel; xem [runbook deploy cloud](../docs/cloud-deployment.md).
+> Giữ các bước dưới đây cho môi trường local L01.
+
 Trạng thái ngày 08/11/2026: đã chuẩn bị gateway, script và hướng dẫn; chưa mở tunnel trên máy hwng, chưa có bằng chứng Wi-Fi/4G hoặc endpoint HTTPS hoạt động. Task chưa đủ điều kiện nghiệm thu.
 
 Node L01 đang ở máy hwng, Ubuntu/WSL2. Node, gateway và tunnel bên dưới phải chạy trong cùng môi trường truy cập được RPC đó. Máy của BaoBao và điện thoại dùng URL HTTPS do hwng bàn giao, không dùng `127.0.0.1` của máy hwng.

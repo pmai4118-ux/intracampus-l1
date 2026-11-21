@@ -1,6 +1,6 @@
 # IntraCampus L1
 
-Dự án UniHack 2026 cho thanh toán và định danh trong khuôn viên trường. IntraCampus dùng Avalanche L1 với chain ID `20261`, đồng gốc `CAMPUS` dùng cho gas và thanh toán thử nghiệm. Luồng demo ưu tiên: POS tạo hóa đơn QR → sinh viên xem số tiền và ký → hợp đồng áp dụng ưu đãi theo thẻ SBT → POS nhận biên nhận.
+Dự án UniHack 2026 cho thanh toán và định danh trong khuôn viên trường. IntraCampus có hai profile Avalanche L1: local `20261` để phát triển và cloud demo `20261120` đang chạy với frontend Vercel cùng backend/RPC gateway trên VM Google Cloud. Cả hai dùng đồng gốc `CAMPUS`; ví, hợp đồng, RPC và receipt thuộc riêng từng chain. Xem [runbook deploy cloud](docs/cloud-deployment.md).
 
 | Thư mục | Vai trò |
 | --- | --- |
@@ -27,13 +27,13 @@ pnpm dev
 - Điểm thu và công cụ vận hành: <http://127.0.0.1:3000/pos>.
 - API: <http://127.0.0.1:4000/healthz> và <http://127.0.0.1:4000/api/network>.
 
-Web và API khởi động được khi chưa có L1. Để kiểm tra L1 thật, lấy RPC của IntraCampus từ nhóm, đặt chain ID `20261` và đồng gốc `CAMPUS`, rồi chạy `pnpm rpc:check`. Không dùng RPC Fuji C-Chain `43113` cho cấu hình dự án. Xem [hướng dẫn L1](infra/README.md) và [quyết định về mạng/ví](docs/decisions.md#d014--giữ-intracampus-l1-và-tách-quyền-ký-theo-người-khởi-tạo) trước khi cấu hình.
+Web và API có thể khởi động khi chưa có RPC. Khi phát triển local, để `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` trống hoặc đặt `20261`; chạy `pnpm rpc:check` với RPC local. Khi chạy cloud, đặt `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` nhất quán ở build frontend và backend, dùng RPC cloud cùng manifest `deployments/intracampus-cloud.json`. Không dùng RPC Fuji C-Chain `43113` cho cấu hình dự án. Xem [hướng dẫn L1 local](infra/README.md), [runbook deploy cloud](docs/cloud-deployment.md) và [quyết định về mạng/ví](docs/decisions.md#d014--giữ-intracampus-l1-và-tách-quyền-ký-theo-người-khởi-tạo).
 
-Để tạo hóa đơn, backend cần cấu hình signer POS server-side theo `backend/.env.example`; khóa đó chỉ ký payload hóa đơn ngoài chain. Bản xem trước Student cần RPC, verifier và POS signer công khai đồng bộ với manifest L06; không lấy verifier tin cậy từ QR. Thanh toán do sinh viên khởi tạo phải được ví Core của sinh viên ký. `frontend/.env.local.example` chứa RPC/SBT/verifier/signer công khai và `BACKEND_URL` server-side cho Next.js proxy `/api/invoices`. Builder Hub chỉ cần khi tạo L1 hoặc lấy Data API key, không cần cho việc chạy ứng dụng với L1 đã có.
+Để tạo hóa đơn, backend cần cấu hình signer POS server-side theo `backend/.env.example`; khóa đó chỉ ký payload hóa đơn ngoài chain. Student cần RPC trình duyệt, verifier và POS signer đồng bộ với manifest L06; không lấy verifier tin cậy từ QR. Thanh toán do sinh viên khởi tạo phải được ví Core của sinh viên ký. `frontend/.env.local.example` chứa RPC/SBT/verifier/signer công khai và `BACKEND_URL` server-side cho Next.js API proxy; phân biệt API URL với cả hai RPC theo [runbook cloud](docs/cloud-deployment.md). Builder Hub chỉ cần khi tạo L1 hoặc lấy Data API key, không cần cho việc chạy ứng dụng với L1 đã có.
 
-Hướng dẫn chi tiết cài môi trường, điền `.env`, kiểm tra RPC và chạy luồng U03 trên Windows nằm ở [docs/run-local.md](docs/run-local.md).
+Hướng dẫn cài môi trường và kiểm tra chain local trên Windows nằm ở [docs/run-local.md](docs/run-local.md). Cấu hình Vercel, GCP, backend API và RPC gateway online nằm ở [docs/cloud-deployment.md](docs/cloud-deployment.md).
 
-B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) ghi cấu hình manifest chung, volume SQLite, đường HTTPS hai thiết bị, bằng chứng local và các bước nghiệm thu L1 còn thiếu.
+B04 nối POS với GET receipt B02: tự theo dõi trạng thái, giữ invoiceId/hash qua reload và hiển thị biên nhận đã xác minh. [Bàn giao B04](docs/b04-integration.md) lưu bằng chứng task lịch sử; trạng thái cloud hiện tại xem [runbook online](docs/cloud-deployment.md).
 
 ## Kiểm tra trước khi mở PR
 
@@ -62,20 +62,22 @@ U05 có [hướng dẫn voucher FOOD](docs/u05-grants.md), dùng API B05 và ch�
 
 B03/L05/L06 có [bàn giao và kết quả kiểm thử](docs/b03-l05-l06-handoff.md),
 [seed ví/thẻ](docs/demo-accounts.md), [vault học bổng](docs/l05-grants.md) và
-[deploy/xuất ABI](docs/deployment.md). Manifest L1 hiện chưa cấu hình; bằng chứng
-đi kèm là EVM local. Dùng `pnpm smoke:l06` sau `forge build --force` để tái hiện
-deploy → seed hai lần → chi học bổng trên Anvil.
+[deploy/xuất ABI](docs/deployment.md). Manifest local `deployments/intracampus.json`
+vẫn là profile riêng; cloud dùng `deployments/intracampus-cloud.json`.
+`pnpm smoke:l06` sau `forge build --force` tái hiện luồng hợp đồng trên Anvil,
+không thay thế bằng chứng của chain cloud.
 
 GitHub Actions chạy cùng các kiểm tra trên `main` và pull request. Xem [bảng sprint của nhóm](https://intracampus-l1-sprint.mphung2532.chatgpt.site) để chọn task và đọc tiêu chí nghiệm thu. Đặt mã task trong tiêu đề PR, ví dụ `[U01] Dựng khung Student và POS`. Thành viên đã đăng ký trên bảng sẽ thấy PR trong chi tiết task.
 
 Khi giao việc cho AI, nêu mã task, phạm vi file và tiêu chí nghiệm thu, ví dụ “Làm U01 theo AGENTS.md, giới hạn ở frontend và chạy build”. Quy tắc làm việc và lệnh kiểm tra nằm trong [AGENTS.md](AGENTS.md).
 
-## Việc triển khai tiếp theo
+## Môi trường và tài liệu vận hành
 
-Xem [phạm vi MVP và cách làm luân phiên của nhóm](docs/scope.md) cùng [kịch bản demo hai thiết bị](docs/demo-flow.md). Đây là bản đề xuất P01 chờ cả nhóm review; các tính năng và số liệu demo trong tài liệu chưa phải kết quả đã triển khai.
+Hai môi trường được cấu hình riêng; chọn chain ID trước khi chạy ứng dụng hoặc lệnh deploy:
 
-1. Lấy RPC từ L1 đang chạy của nhóm, xác minh `20261` và kiểm tra ví demo nhận CAMPUS.
-2. Xem [giao kèo hóa đơn EIP-712 và QR](docs/invoice-contract.md) cùng [giao kèo HTTP API và mã lỗi](docs/api-contract.md) (P02) để triển khai song song `L04`, `B01`, `B02` và `U03`. Sau đó làm luồng tạo QR → ký → biên nhận trước khi thêm voucher.
+- **Local:** `20261`, hướng dẫn ở [infra/README.md](infra/README.md) và [docs/run-local.md](docs/run-local.md).
+- **Online demo:** `20261120`, frontend Vercel và backend/RPC trên GCP, hướng dẫn ở [docs/cloud-deployment.md](docs/cloud-deployment.md).
+- [Phạm vi MVP và kịch bản demo hai thiết bị](docs/scope.md) là tài liệu thiết kế ban đầu; [giao kèo hóa đơn](docs/invoice-contract.md) và [giao kèo API](docs/api-contract.md) vẫn mô tả giao kèo dùng chung.
 
 Tham khảo: [Avalanche Starter Kit](https://github.com/ava-labs/avalanche-starter-kit) cho Foundry và cách nối RPC Avalanche L1; [Vercel App Router Playground](https://github.com/vercel/next-app-router-playground) cho tổ chức giao diện theo route; [chính sách hỗ trợ Next.js](https://nextjs.org/support-policy) cho lựa chọn phiên bản.
 

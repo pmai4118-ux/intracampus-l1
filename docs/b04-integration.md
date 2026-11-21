@@ -1,12 +1,22 @@
 # B04 · Ghép POS, invoice và receipt thật
 
+Đây là biên bản tích hợp và bằng chứng của task B04 tại thời điểm thực hiện.
+Các dòng “manifest unconfigured”, RPC unreachable và checklist L1 phía dưới là
+ảnh chụp trạng thái lịch sử của profile local `20261`, không mô tả deployment
+cloud hiện tại. Trạng thái online chain `20261120` và cách kiểm tra nằm trong
+[runbook cloud](cloud-deployment.md) và
+[bàn giao Vercel/GCP/Core ngày 21/11](handoffs/2026-11-21-vercel-gcp-core-wallet.md).
+
 B04 dùng POST B01, GET B02 và manifest L06 chung. U04 sở hữu việc ví Core sinh viên ký/gửi giao dịch; B04 không gửi thanh toán thay sinh viên. Giữ nguyên giao kèo P02 và dùng chuỗi wei trong JSON.
 
 ## Nguồn tích hợp
 
 Nhánh B04 bắt đầu từ main `3b1d136`, ghép source L05/L06 từ `05f9c98` (bao gồm `eba14b8`). L05/L06 chưa nằm trên main tại lúc ghép. Khi giải quyết conflict, giữ test frontend, P02, L04 và L06. Không merge hoặc deploy thay nhóm.
 
-Manifest canonical `deployments/intracampus.json` hiện là `unconfigured`; chưa có bằng chứng B04 trên L1. `http://127.0.0.1:3000` là web local, không phải RPC hay đường HTTPS cho hai thiết bị.
+Tại thời điểm chốt B04, manifest local `deployments/intracampus.json` là
+`unconfigured` và chưa có bằng chứng B04 trên L1. Đây là trạng thái lịch sử của
+task local; không áp dụng cho cloud manifest `deployments/intracampus-cloud.json`.
+`http://127.0.0.1:3000` là web local, không phải RPC hay đường HTTPS cho hai thiết bị.
 
 ## Phạm vi nghiệm thu
 
@@ -23,13 +33,13 @@ Manifest canonical `deployments/intracampus.json` hiện là `unconfigured`; ch�
 - Source cuối: `pnpm typecheck`, `pnpm build` đạt. `pnpm test`: 281 pass, 0 fail, 1 test Anvil B03 tùy chọn skip (backend 146, frontend 63, P02 35, L04 loader 5, L06 export 32). `pnpm test:rpc`: 18 pass khi dùng Git Bash; bash mặc định Windows trỏ WSL chưa bật virtualization nên hai Bash entry-point test ban đầu không chạy được. Không sửa source để che lỗi môi trường.
 - `forge fmt --check`, `forge build`, `forge test` đạt; 69 test Solidity. `pnpm smoke:l06` đạt deploy/export/seed hai lần/grant trên Anvil tạm, không thay manifest canonical. CI GitHub chưa chạy cho nhánh B04 vì chưa push.
 - Hai checkpoint review chỉ có self-review: lần 1 Codex không tạo được PATH alias trong sandbox; lần 2 sau khi người dùng cho phép gửi diff, reviewer dừng vì model mặc định `gpt-6-luna` không được tài khoản Codex ChatGPT hỗ trợ. Không có verdict APPROVE từ reviewer ngoài. Self-review bổ sung hai regression test cho phản hồi pending cũ không hạ trạng thái paid và lỗi transport/JSON không lộ nội dung exception. Có thể chạy lại review-impl sau khi chủ cấu hình chọn model reviewer được tài khoản hỗ trợ. Thành viên khác vẫn cần review/nghiệm thu theo AGENTS.md.
-- Các kết quả trên không xác nhận HTTPS hai thiết bị, ví Core hoặc L1 thật. RPC hiện trả unreachable; chưa publish, deploy hay cập nhật trạng thái bảng sprint.
+- Các kết quả trên không xác nhận HTTPS hai thiết bị, ví Core hoặc L1 thật ở thời điểm B04. RPC local khi đó trả unreachable; chưa publish/deploy trong phạm vi task B04. Trạng thái online hiện hành được ghi riêng trong [runbook cloud](cloud-deployment.md) và [bàn giao Vercel/GCP/Core](handoffs/2026-11-21-vercel-gcp-core-wallet.md).
 
 ## Cấu hình canonical
 
 Khi manifest đã deploy lên L1, backend lấy registry/block, merchant bãi xe, signer công khai và SBT từ manifest. Biến `PARKING_MERCHANT_ADDRESS` hoặc registry/block nếu còn đặt phải khớp. Trước phát hành, khóa POS phải đúng role signer; registry phải trả cùng signer/SBT và bật merchant/category PARKING tại cùng block. Khóa vẫn chỉ nằm trong `POS_SIGNER_PRIVATE_KEY` phía backend.
 
-U02/U03 lấy SBT, verifier và signer từ cùng manifest; `NEXT_PUBLIC_*` địa chỉ nếu còn đặt phải khớp. RPC công khai vẫn lấy từ môi trường và được kiểm tra chain 20261. Manifest unconfigured chỉ giữ đường cấu hình thủ công phục vụ phát triển/fixture, không xác nhận deployment L1.
+U02/U03 lấy SBT, verifier và signer từ manifest đã chọn; `NEXT_PUBLIC_*` địa chỉ nếu còn đặt phải khớp. Các kiểm thử B04 ở đây dùng profile local 20261. Khi chạy online, dùng RPC cloud và manifest `20261120` theo [runbook cloud](cloud-deployment.md).
 
 ## Điểm nối POS / U04
 
@@ -49,7 +59,7 @@ Deploy backend và build frontend từ cùng source/manifest. Các biến public
 
 ## Checklist nghiệm thu L1 còn lại
 
-- [ ] Operator L06 cung cấp manifest `status: deployed`, `environment: avalanche-l1`, địa chỉ/block/hash/ABI/role/merchant đã xác minh; RPC HTTPS truy cập được. Manifest trong repo hiện unconfigured, RPC kiểm tra hiện unreachable.
+- [ ] **Checklist lịch sử tại thời điểm B04:** operator L06 cung cấp manifest `status: deployed`, `environment: avalanche-l1`, địa chỉ/block/hash/ABI/role/merchant đã xác minh; RPC HTTPS truy cập được. Manifest local khi đó unconfigured và RPC kiểm tra unreachable. Không dùng dòng này làm trạng thái cloud hiện tại.
 - [ ] Triển khai web/API qua HTTPS và volume; thiết bị A mở POS, thiết bị B mở Student với Core. Xác nhận cả hai dùng cùng origin và chain 20261.
 - [ ] POS tạo invoice mới; Student/U04 xác nhận bằng Core. Lưu nguyên payload công khai, invoiceId, tx hash và receipt/event thật. Đối chiếu giá gốc/giảm/đã trả, merchant, verifier, signer, SBT và block triển khai.
 - [ ] Khi giao dịch đang chờ, ngắt RPC: POS không báo thất bại hay thành công giả; giữ hash, không trả lại. Khôi phục RPC rồi tra hash cũ.

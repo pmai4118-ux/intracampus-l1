@@ -40,7 +40,7 @@ event GrantSpent(
 );
 ```
 
-`balance` trong event là số dư của đúng beneficiary/category sau thao tác; không phải số dư ví cá nhân. Backend cần kiểm tra đúng chain `20261`, địa chỉ vault của L06, receipt thành công và event khớp beneficiary/merchant/category/amount trước khi báo đã chi. `GrantSpent` không phải `InvoicePaid`: không có chữ ký POS, invoiceId hay giảm giá SBT. B05/U05 cần dùng đúng ABI này và tự hiển thị gas trả từ ví cá nhân.
+`balance` trong event là số dư của đúng beneficiary/category sau thao tác; không phải số dư ví cá nhân. Backend cần kiểm tra đúng chain profile (`20261` local hoặc `20261120` cloud), địa chỉ vault từ manifest tương ứng, receipt thành công và event khớp beneficiary/merchant/category/amount trước khi báo đã chi. `GrantSpent` không phải `InvoicePaid`: không có chữ ký POS, invoiceId hay giảm giá SBT. B05/U05 cần dùng đúng ABI này và tự hiển thị gas trả từ ví cá nhân.
 
 Lỗi có thể xử lý theo selector: `UnauthorizedIssuer`, `InvalidBeneficiary`, `InvalidCategory`, `InvalidAmount`, `InvalidMerchant(address,bytes32)`, `InsufficientGrantBalance(uint256 available,uint256 requested)`, `MerchantTransferFailed(address,uint256)`, `ReentrantGrant`, `InvalidConfiguration`. Registry không đọc được thì giao dịch revert, không tự dùng allowlist cũ. Không có `receive`/fallback nhận tiền trực tiếp; cấp ngân sách qua `grant` để tiền luôn đi cùng người nhận và mục đích. CAMPUS ép gửi vào contract ngoài hàm cấp không tự tăng ngân sách.
 

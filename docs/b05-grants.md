@@ -6,11 +6,16 @@ B05 cấp một khoản **5.000 CAMPUS FOOD** cho `student.address` của cấu 
 
 Nhánh `codex/B05-demo-grants` đã cập nhật theo `main` tại `4ec299e` ngày 2026-11-13. Main hiện chứa B03/L05/L06 qua tích hợp B04; diff PR B05 chỉ còn module grants, seed, cấu hình tích hợp, test và tài liệu B05. Trước đó nhánh xếp trên L06 `eba14b8` do main cũ thiếu phụ thuộc; rào cản phạm vi đó đã được xử lý bằng cập nhật main, không tự merge PR phụ thuộc.
 
-Đã đọc B03 #10, L05 #11, L06 #12, tài liệu/ABI và loader manifest. Bảng sprint không truy cập được bằng công cụ đọc trong phiên này; tiêu chí triển khai theo yêu cầu B05 được giao. Manifest canonical `deployments/intracampus.json` vẫn `unconfigured`. Chưa có nghiệm thu Avalanche L1 của nhóm.
+Tại thời điểm ghi nhận B05, manifest local `deployments/intracampus.json` còn
+`unconfigured` và task chưa có nghiệm thu Avalanche L1. Cloud demo hiện dùng
+profile riêng chain `20261120`; xem [runbook cloud](cloud-deployment.md).
 
 ## Chuẩn bị địa chỉ và RPC
 
-- L02 cung cấp RPC đúng `20261`; L06 xuất manifest đã kiểm chứng từ cùng blockchain. Địa chỉ vault, registry, grant issuer, căn-tin FOOD, ABI, runtime hash và block deploy đều lấy từ manifest.
+- Dùng RPC và manifest cùng profile: local `20261` / `deployments/intracampus.json`
+  hoặc cloud `20261120` / `deployments/intracampus-cloud.json`. Địa chỉ vault,
+  registry, grant issuer, căn-tin FOOD, ABI, runtime hash và block deploy đều lấy
+  từ manifest.
 - Dùng lại file tài khoản công khai B03, ví dụ `backend/.env.demo-accounts.json`. Người nhận là `student.address`; không dùng địa chỉ mẫu nguyên trạng. Người nhận phải khác vai trò quản trị, merchant, các contract và ví thường/funder.
 - `backend/.env` chứa `INTRACAMPUS_RPC_URL`. Chỉ `--apply` mới cần `SEED_GRANT_ISSUER_PRIVATE_KEY`, tương ứng `roles.grantIssuer` và `vault.issuer()`. Issuer cần ít nhất 5.000 CAMPUS cộng gas. Không đặt khóa trong tham số dòng lệnh.
 - API production dùng manifest canonical qua loader L06. Sau thay deployment, build và khởi động lại backend/frontend. `--deployment` của CLI chọn file công khai riêng, không thay cấu hình API.
@@ -18,17 +23,22 @@ Nhánh `codex/B05-demo-grants` đã cập nhật theo `main` tại `4ec299e` ng�
 Từ gốc repo, Node 24 và pnpm 11.25.0:
 
 ```sh
+export NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120
 pnpm rpc:check
 pnpm --filter @intracampus/backend seed:grants --help
-pnpm --filter @intracampus/backend seed:grants --accounts .env.demo-accounts.json --deployment ../deployments/intracampus.json
+pnpm --filter @intracampus/backend seed:grants --accounts .env.demo-accounts.json --deployment ../deployments/intracampus-cloud.json
 ```
+
+Đây là lệnh cho online demo. Khi dùng local, chọn `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261`
+và `../deployments/intracampus.json`. RPC ở `backend/.env` phải khớp profile;
+không dùng endpoint internal của VM trên trình duyệt.
 
 Lệnh cuối là dry-run: kiểm tra chain, code/hash và block deploy canonical, issuer/registry liên kết, merchant/category, số dư và lịch sử cấp. Không cần khóa và không gửi giao dịch. Khi thiếu deployment hoặc RPC, dừng bằng mã lỗi, không giả lập khoản cấp.
 
 Người giữ ví issuer kiểm tra địa chỉ và kế hoạch rồi tự chạy:
 
 ```sh
-pnpm --filter @intracampus/backend seed:grants --accounts .env.demo-accounts.json --deployment ../deployments/intracampus.json --journal data/grant-seed.sqlite --apply
+pnpm --filter @intracampus/backend seed:grants --accounts .env.demo-accounts.json --deployment ../deployments/intracampus-cloud.json --journal data/grant-seed.sqlite --apply
 ```
 
 Đây là hướng dẫn bàn giao, không xác nhận đã chạy lệnh trên L1. `--allow-local` chỉ phục vụ manifest `local-anvil` với RPC loopback, không biến địa chỉ local thành deployment thật.
