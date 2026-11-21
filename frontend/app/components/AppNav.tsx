@@ -69,7 +69,12 @@ export default function AppNav() {
         <span>IntraCampus<span className="brand-l1">L1</span></span>
       </Link>
       <span className="app-tagline">{provider ? "Không gian cung cấp dịch vụ" : "Không gian sinh viên"}</span>
-      <Link className="campus-auth-link" href="/login">Đăng nhập</Link>
+      <div className="app-topbar-actions">
+        <Link className="app-guide-link" href="/guide" aria-current={pathname === "/guide" ? "page" : undefined}>
+          <Icon name="book" />Hướng dẫn
+        </Link>
+        <Link className="campus-auth-link" href="/login">Đăng nhập</Link>
+      </div>
       <span className="environment-badge"><span />UniHack 2026 · Demo</span>
     </div>
     <nav className="app-nav" aria-label="Điều hướng chính">
