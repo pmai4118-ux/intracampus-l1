@@ -1,3 +1,4 @@
+import { type CampusAuthRole, type CampusChainId } from "@intracampus/network";
 export type LibraryDbRole = "STUDENT" | "LIBRARIAN";
 export type LibraryCopyStatus = "AVAILABLE" | "PENDING_APPROVAL" | "ON_LOAN" | "RETURN_REVIEW" | "MAINTENANCE" | "LOST";
 export type LibraryDbRequestStatus =
@@ -48,7 +49,7 @@ export type LibraryVerifiedDeposit = {
   bookId: string;
   depositWei: string;
   approvalDeadline: number;
-  chainId: 20261;
+  chainId: CampusChainId;
   contractAddress: string;
   txHash: string;
   logIndex: number;
@@ -59,7 +60,7 @@ export type LibraryVerifiedDeposit = {
 };
 
 export type LibraryVerifiedChainEventBase = {
-  chainId: 20261;
+  chainId: CampusChainId;
   contractAddress: string;
   txHash: string;
   logIndex: number;
@@ -134,7 +135,7 @@ export type LibraryRequestRecord = {
 export type LibrarySessionRecord = {
   tokenHash: string;
   wallet: string;
-  role: LibraryDbRole;
+  role: CampusAuthRole;
   createdAt: number;
   expiresAt: number;
 };

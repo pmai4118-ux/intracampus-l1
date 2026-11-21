@@ -18,10 +18,11 @@ const env = { CAMPUS_AUTH_ORIGIN: "http://localhost:3000", LIBRARY_ALLOW_INSECUR
   CAMPUS_SCHOOL_WALLETS: school.address, CAMPUS_TREASURY_ADDRESS: school.address };
 const token = () => randomBytes(32).toString("hex");
 const begin = (service: CampusService, id: string, actor = school.address, attemptToken = token()) => service.begin(id, actor, attemptToken);
-function setup() {
+function setup(chainId = 20261) {
   const repository = new CampusRepository(":memory:");
+  const chainHex = `0x${BigInt(chainId).toString(16)}`;
   const state: { receipt: any; transaction: any; chain: string; unavailable: boolean; stale: boolean; reorg: boolean; estimateFails: boolean; beforeEstimate?: () => Promise<void> } =
-    { receipt: null, transaction: null, chain: "0x4f25", unavailable: false, stale: false, reorg: false, estimateFails: false };
+    { receipt: null, transaction: null, chain: chainHex, unavailable: false, stale: false, reorg: false, estimateFails: false };
   const manifest = JSON.parse(readFileSync(new URL("../../docs/fixtures/b03-l05-l06-local.json", import.meta.url), "utf8")).manifest;
   manifest.environment = "avalanche-l1"; manifest.roles.grantIssuer = school.address;
   manifest.contracts.PurposeBoundGrantVault.runtimeCodeHash = keccak256("0x6000");
@@ -37,11 +38,11 @@ function setup() {
     if (method === "eth_getTransactionByHash") return state.transaction;
     throw Error(method);
   } };
-  const service = new CampusService(repository, env, rpc, manifest);
+  const service = new CampusService(repository, { ...env, NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID: String(chainId) }, rpc, manifest);
   const approve = () => { repository.submit(lower(student), "DEMO-1001", "CNTT"); repository.review(lower(school), lower(student), "STUDENT", true, "VERIFIED"); };
   const proof = (p: ReturnType<CampusRepository["payout"]>) => {
     state.receipt = { status: "0x1", transactionHash: hash, blockNumber: "0x65", blockHash, logs: [] };
-    state.transaction = { hash, from: p.from, to: p.to, input: p.data, value: p.value, blockNumber: "0x65", blockHash, chainId: "0x4f25" };
+    state.transaction = { hash, from: p.from, to: p.to, input: p.data, value: p.value, blockNumber: "0x65", blockHash: blockHash, chainId: chainHex };
   };
   return { repository, service, state, approve, proof };
 }
@@ -60,6 +61,19 @@ test("wallet authentication does not approve a student; nonce replay, wrong sign
     for (let i = 0; i < 9; i++) s.auth.createChallenge({ wallet: student.address, remoteAddress: "127.0.0.1" });
     assert.throws(() => s.auth.createChallenge({ wallet: student.address, remoteAddress: "127.0.0.1" }), /RATE_LIMITED/);
   } finally { r.close(); }
+});
+test("Campus auth, payout preflight and receipt reconciliation use the configured cloud chain", async () => {
+  const { repository, service, approve, proof } = setup(20261120);
+  try {
+    assert.equal(service.authConfig.chainId, 20261120);
+    const challenge = service.auth.createChallenge({ wallet: school.address, remoteAddress: "127.0.0.1" });
+    assert.match(challenge.message, /Chain ID: 20261120/);
+    approve();
+    const payout = await service.prepare(school.address, student.address, "WELCOME");
+    await begin(service, payout.id);
+    proof(payout);
+    assert.equal((await service.reconcile(payout.id, hash)).status, "CONFIRMED");
+  } finally { repository.close(); }
 });
 test("manual review, immutable approvals and unique student identity prevent multiple wallet rewards", () => {
   const { repository: r, service: s, approve } = setup();

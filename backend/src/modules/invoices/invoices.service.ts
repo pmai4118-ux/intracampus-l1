@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Interface, Wallet, id } from "ethers";
-import { campusNetwork, type SignedInvoiceEnvelope } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, campusNetwork, type SignedInvoiceEnvelope } from "@intracampus/network";
 import { parkingService, type InvoiceCreationConfig } from "./invoice.config.ts";
 import type { InvoiceRepository } from "./invoices.repository.ts";
 import type { InvoiceRpc } from "./invoices.rpc.ts";
@@ -22,7 +22,7 @@ const errors: Record<CreationErrorCode, [number, string, string]> = {
   UNKNOWN_SERVICE_OR_MERCHANT: [400, "Điểm thu hoặc dịch vụ không nằm trong danh sách được phép.", "Chọn dịch vụ hợp lệ từ menu demo trên POS."],
   INVALID_SIGNATURE: [400, "Chữ ký hóa đơn không hợp lệ hoặc dữ liệu đã bị thay đổi.", "Không ký giao dịch; yêu cầu POS kiểm tra cấu hình signer và tạo hóa đơn mới."],
   RPC_UNAVAILABLE: [503, "Không kết nối được tới nút mạng IntraCampus L1 để xác minh dữ liệu.", "Giữ nguyên trạng thái hiện tại, kiểm tra kết nối RPC và thử đọc lại."],
-  WRONG_CHAIN: [503, "Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261).", "Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (20261) rồi thử lại."],
+  WRONG_CHAIN: [503, `Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID ${CAMPUS_CHAIN_ID}).`, `Chuyển ví hoặc cấu hình RPC về mạng IntraCampus L1 (${CAMPUS_CHAIN_ID}) rồi thử lại.`],
   STALE_CHAIN_STATE: [503, "Block mới nhất của IntraCampus L1 đã quá cũ để tạo hóa đơn an toàn.", "Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tạo hóa đơn mới."],
   INTERNAL_ERROR: [500, "Không thể lưu hoặc đọc dữ liệu hóa đơn.", "Liên hệ người vận hành để kiểm tra kho hóa đơn."],
 };

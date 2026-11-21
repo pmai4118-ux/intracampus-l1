@@ -1,5 +1,5 @@
 import {
-  campusNetwork,
+  CAMPUS_CHAIN_ID, campusNetwork,
   type CanteenDish,
   type CanteenOrder,
   type LibraryBook,
@@ -294,9 +294,9 @@ export const demoErrorScenarios: Record<DemoErrorKind, DemoErrorScenario> = {
     studentTitle: "Ví đang ở sai mạng",
     posTitle: "RPC đang trỏ sai mạng",
     studentMessage:
-      "Mạng thanh toán yêu cầu là IntraCampus L1, chain ID 20261. Chưa thể yêu cầu ký.",
+      `Mạng thanh toán yêu cầu là IntraCampus L1, chain ID ${CAMPUS_CHAIN_ID}. Chưa thể yêu cầu ký.`,
     posMessage:
-      "Chain ID của RPC không khớp 20261. Tạm dừng tạo hóa đơn và xác nhận thanh toán.",
+      `Chain ID của RPC không khớp ${CAMPUS_CHAIN_ID}. Tạm dừng tạo hóa đơn và xác nhận thanh toán.`,
     nextStepStudent:
       "Chuyển ví sang IntraCampus L1 trước khi thanh toán. Nút dưới chỉ đặt lại tình huống mẫu.",
     nextStepPos:
@@ -752,7 +752,7 @@ export const demoLibraryRequests: LibraryRequest[] = [
         status: "CONFIRMED",
         submittedAt: 1794969600,
         proof: {
-          chainId: 20261,
+          chainId: CAMPUS_CHAIN_ID,
           contractAddress: DEMO_ESCROW_ADDRESS,
           txHash: "0x91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f01",
           blockNumber: 34,
@@ -783,7 +783,7 @@ export const demoLibraryRequests: LibraryRequest[] = [
         status: "CONFIRMED",
         submittedAt: 1794796800,
         proof: {
-          chainId: 20261,
+          chainId: CAMPUS_CHAIN_ID,
           contractAddress: DEMO_ESCROW_ADDRESS,
           txHash: "0x82b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8002",
           blockNumber: 19,
@@ -875,7 +875,7 @@ export const demoStaffRequests: LibraryRequest[] = [
         status: "CONFIRMED",
         submittedAt: 1794907200,
         proof: {
-          chainId: 20261,
+          chainId: CAMPUS_CHAIN_ID,
           contractAddress: DEMO_ESCROW_ADDRESS,
           txHash: "0x92a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f02",
           blockNumber: 35,
@@ -906,7 +906,7 @@ export const demoStaffRequests: LibraryRequest[] = [
         status: "CONFIRMED",
         submittedAt: 1794953600,
         proof: {
-          chainId: 20261,
+          chainId: CAMPUS_CHAIN_ID,
           contractAddress: DEMO_ESCROW_ADDRESS,
           txHash: "0x93a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f03",
           blockNumber: 36,

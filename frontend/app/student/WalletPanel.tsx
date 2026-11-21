@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { browserWalletConfig, campusNetwork, formatWalletBalanceCompact } from "../../lib/chains";
 import { LibrarySessionError, readLibraryStudentAccess, signInLibraryStudent, type LibraryStudentAccess } from "../../lib/library-session";
@@ -133,7 +135,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
       <div className="campus-live-pass" aria-hidden="true">
         <div className="live-pass-top">
           <span className="live-pass-brand"><Icon name="graduation" />IntraCampus Pass</span>
-          <span className="live-pass-chain">{correctChain ? "L1 · 20261" : "CHỜ MẠNG 20261"}</span>
+          <span className="live-pass-chain">{correctChain ? `L1 · ${CAMPUS_CHAIN_ID}` : `CHỜ MẠNG ${CAMPUS_CHAIN_ID}`}</span>
         </div>
         <div className="live-pass-body">
           <div className="pass-chip"><i /><i /><i /></div>
@@ -170,7 +172,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
       </div>
       {state.status === "no-wallet" ? <p>Mở trang trong trình duyệt của ví Core hoặc MetaMask, hoặc cài tiện ích ví trên máy tính, rồi tải lại trang.</p> : null}
       {state.status === "rejected" ? <p>Bạn đã từ chối kết nối. Bấm kết nối khi sẵn sàng.</p> : null}
-      {state.status === "wrong-chain" ? <p className="wallet-warning">Ví đang ở sai mạng. Hãy chuyển sang IntraCampus L1 · Chain 20261 trước khi tiếp tục.</p> : null}
+      {state.status === "wrong-chain" ? <p className="wallet-warning">Ví đang ở sai mạng. Hãy chuyển sang IntraCampus L1 · Chain {CAMPUS_CHAIN_ID} trước khi tiếp tục.</p> : null}
       {state.message ? <p className="wallet-warning">{state.message}</p> : null}
       <div className="wallet-summary-grid wallet-summary-compact">
         <div className="metric-block metric-block-wide">
@@ -201,7 +203,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
         <div className="metric-block metric-block-wide">
           <span className="metric-label">Mức ưu đãi hiện tại</span>
           <strong>{state.card.tier === 1 ? "Giảm 10% tự động" : state.card.tier === 0 ? "Giá niêm yết (0%)" : "Chưa xác định"}</strong>
-          <span className="metric-note">{state.card.tier === 1 ? "Áp dụng cho bãi xe & nhà ăn" : state.card.tier === 0 ? "Cần thẻ SBT còn hạn để giảm 10%" : "Kết nối mạng 20261 để tra cứu"}</span>
+          <span className="metric-note">{state.card.tier === 1 ? "Áp dụng cho bãi xe & nhà ăn" : state.card.tier === 0 ? "Cần thẻ SBT còn hạn để giảm 10%" : `Kết nối mạng ${CAMPUS_CHAIN_ID} để tra cứu`}</span>
         </div>
       </div>
       <div className={`sbt-banner ${state.card.status === "valid" ? "sbt-active" : "sbt-muted"}`}>
@@ -254,7 +256,7 @@ export function StudentWallet({ onOpenDemo }: { onOpenDemo?: () => void } = {}) 
       </div>
       <section className="surface-panel wallet-payment-gate" aria-labelledby="payment-gate-title" hidden={!showQr}>
         <div className="panel-heading-with-icon"><span className="panel-icon"><Icon name="qr" /></span><div><span className="panel-eyebrow">QUÉT & THANH TOÁN</span><h2 id="payment-gate-title">Thanh toán bằng QR</h2></div><span className="step-label">01 / 03</span></div>
-        <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : "Kết nối ví Core trên chain 20261 để xác minh hóa đơn và ưu đãi."}</p>
+        <p>{state.canProceed ? "Ví Core đã sẵn sàng. Quét hoặc dán hóa đơn để xem trước số CAMPUS cần trả." : `Kết nối ví Core trên chain ${CAMPUS_CHAIN_ID} để xác minh hóa đơn và ưu đãi.`}</p>
         <InvoicePreview wallet={state} />
       </section>
       <div className="student-panel-slot" hidden={!showFood}>

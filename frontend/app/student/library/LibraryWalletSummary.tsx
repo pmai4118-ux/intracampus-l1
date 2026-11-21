@@ -1,6 +1,6 @@
 'use client';
 
-import { campusNetwork } from '@intracampus/network';
+import { CAMPUS_CHAIN_ID, campusNetwork } from '@intracampus/network';
 import { useCampusWallet } from '../WalletPanel';
 import { CopyButton } from '../../demo-controls';
 import { formatWalletBalanceCompact } from '../../../lib/chains';
@@ -14,7 +14,7 @@ export default function LibraryWalletSummary() {
       <div className="library-wallet-account"><span className="library-meta-label">Tài khoản đang dùng</span>
         <strong className={state.address ? 'library-account-value' : 'library-account-empty'} translate={state.address ? 'no' : undefined}>{state.address ? `${state.address.slice(0, 6)}…${state.address.slice(-4)}` : 'Chưa kết nối'}</strong>
         <span className={correctChain ? 'library-network' : 'library-network library-network-warning'}>
-          {correctChain ? 'IntraCampus L1 · 20261' : state.chainId === null ? 'Chưa xác minh mạng' : `Sai mạng · cần IntraCampus 20261`}
+          {correctChain ? `IntraCampus L1 · ${CAMPUS_CHAIN_ID}` : state.chainId === null ? 'Chưa xác minh mạng' : `Sai mạng · cần IntraCampus ${CAMPUS_CHAIN_ID}`}
         </span>
       </div>
       <div className="library-wallet-balance"><span className="library-meta-label">Số dư ví</span>

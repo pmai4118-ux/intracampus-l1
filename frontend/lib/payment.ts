@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 import type { InvoiceLookupResponse, SignedInvoiceEnvelope, VerifiedInvoiceReceipt } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
 import { encodePayInvoiceSimulation, InvoicePreviewError, parseInvoicePayload, sameInvoiceEnvelope, type InvoicePreviewQuote } from "./invoice.ts";
@@ -44,7 +45,7 @@ const messageFor = (code: string) => ({
   INVOICE_EXPIRED: "Hóa đơn đã hết hạn. Yêu cầu POS tạo hóa đơn mới.",
   INVOICE_ALREADY_PAID: "Hóa đơn đã được thanh toán. Đối chiếu biên lai cũ, không trả thêm.",
   PAYMENT_IN_PROGRESS: "Backend đang đối chiếu một giao dịch của hóa đơn này. Tra cứu hash cũ, không mở yêu cầu thanh toán khác.",
-  WRONG_CHAIN: "Hãy chuyển ví và RPC về IntraCampus L1 · chain 20261.",
+  WRONG_CHAIN: `Hãy chuyển ví và RPC về IntraCampus L1 · chain ${CAMPUS_CHAIN_ID}.`,
   INVALID_SIGNATURE: "Chữ ký hóa đơn chưa hợp lệ. Yêu cầu POS kiểm tra và tạo lại.",
   WALLET_SESSION_CHANGED: "Tài khoản hoặc mạng đã đổi. Kiểm tra lại hóa đơn bằng ví muốn trả tiền.",
   UNAUTHENTICATED: "Đăng nhập bằng chữ ký ví sinh viên trước khi thanh toán.",
@@ -107,7 +108,7 @@ export class PaymentController {
   }
   private currentWallet() {
     const wallet = this.options.wallet.getSnapshot();
-    if (this.stopped || !wallet.canProceed || !wallet.address || !same(wallet.address, this.options.account) || wallet.chainId !== BigInt(20261)) {
+    if (this.stopped || !wallet.canProceed || !wallet.address || !same(wallet.address, this.options.account) || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID)) {
       throw new WalletTransactionError("WALLET_SESSION_CHANGED", "not-sent");
     }
   }
@@ -219,7 +220,7 @@ export class PaymentController {
       if (![200, 422, 503].includes(response.status)) throw Error();
       const lookup: InvoiceLookupResponse = parseInvoiceLookup(await response.json(), envelope.invoice.invoiceId, envelope);
       const wallet = this.options.wallet.getSnapshot();
-      if (this.stopped || !wallet.address || !same(wallet.address, this.options.account) || wallet.chainId !== BigInt(20261)
+      if (this.stopped || !wallet.address || !same(wallet.address, this.options.account) || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID)
         || JSON.stringify(this.record) !== expectedRecord) return;
       const stored = this.options.storage.getItem(this.key);
       if (stored !== expectedStorage) return;

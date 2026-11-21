@@ -1,5 +1,5 @@
 import { getAddress, hexlify, toUtf8Bytes, Interface, keccak256 } from "ethers";
-import { requireDeployment, type CampusPayout } from "@intracampus/network";
+import { requireDeployment, resolveCampusChainId, type CampusChainId, type CampusPayout } from "@intracampus/network";
 import { AuthService } from "../auth/auth.service.ts";
 import { readLibraryAuthConfig, type LibraryAuthConfig } from "../auth/auth.config.ts";
 import { HttpInvoiceRpc, type InvoiceRpc } from "../invoices/invoices.rpc.ts";
@@ -15,6 +15,7 @@ export class CampusService {
   auth: AuthService;
   authConfig: LibraryAuthConfig;
   schools: Set<string>;
+  readonly chainId: CampusChainId;
   private rpc: InvoiceRpc;
   private treasury?: string;
   private scholarshipWei: bigint;
@@ -23,12 +24,13 @@ export class CampusService {
   private deployment?: unknown;
   constructor(repository: CampusRepository, env: Record<string, string | undefined>, rpc?: InvoiceRpc, deployment?: unknown) {
     this.repository = repository; this.env = env; this.deployment = deployment;
+    this.chainId = resolveCampusChainId(env.NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID);
     this.authConfig = { ...readLibraryAuthConfig({ ...env,
       LIBRARY_AUTH_ORIGIN: env.CAMPUS_AUTH_ORIGIN ?? env.LIBRARY_AUTH_ORIGIN,
       LIBRARY_CHALLENGE_TTL_SECONDS: "300", LIBRARY_SESSION_TTL_SECONDS: "3600",
       LIBRARY_CHALLENGE_RATE_LIMIT_MAX_REQUESTS: "10", LIBRARY_CHALLENGE_RATE_LIMIT_WINDOW_SECONDS: "60",
       LIBRARY_VERIFY_RATE_LIMIT_MAX_REQUESTS: "20", LIBRARY_VERIFY_RATE_LIMIT_WINDOW_SECONDS: "60",
-    }), statement: "Sign in to IntraCampus. Signing does not verify student status or transfer funds." };
+    }), chainId: this.chainId, statement: "Sign in to IntraCampus. Signing does not verify student status or transfer funds." };
     this.authConfig.cookieName = this.authConfig.secureCookie ? "__Host-campus_session" : "campus_session";
     this.auth = new AuthService(repository, this.authConfig);
     this.schools = new Set((env.CAMPUS_SCHOOL_WALLETS ?? "").split(",").filter(s => s.trim()).map(s => address(s.trim())));
@@ -39,7 +41,7 @@ export class CampusService {
   }
   requireSchool(wallet: string) { if (!this.schools.has(wallet.toLowerCase())) throw new CampusError("SCHOOL_ONLY", 403); }
   async freshBlock() {
-    if (hex(await this.rpc.call("eth_chainId", [])) !== 20261n) throw new CampusError("WRONG_CHAIN", 503);
+    if (hex(await this.rpc.call("eth_chainId", [])) !== BigInt(this.chainId)) throw new CampusError("WRONG_CHAIN", 503);
     const block = object(await this.rpc.call("eth_getBlockByNumber", ["latest", false]));
     const number = Number(hex(block.number)), timestamp = Number(hex(block.timestamp));
     if (!Number.isSafeInteger(number) || !/^0x[0-9a-f]{64}$/i.test(block.hash) || !isFreshInvoiceChainTimestamp(timestamp, Date.now(), defaultInvoiceChainFreshness)) throw new CampusError("STALE_CHAIN_STATE", 503);
@@ -90,7 +92,7 @@ export class CampusService {
       || Number(hex(receipt.blockNumber)) <= p.afterBlock || Number(hex(tx.blockNumber)) !== Number(hex(receipt.blockNumber))
       || String(block.hash).toLowerCase() !== String(receipt.blockHash).toLowerCase() || String(tx.blockHash).toLowerCase() !== String(receipt.blockHash).toLowerCase()
       || String(tx.from).toLowerCase() !== p.from || String(tx.to).toLowerCase() !== p.to
-      || String(tx.input).toLowerCase() !== p.data.toLowerCase() || hex(tx.value) !== BigInt(p.value) || hex(tx.chainId) !== 20261n) throw new CampusError("RECEIPT_MISMATCH");
+      || String(tx.input).toLowerCase() !== p.data.toLowerCase() || hex(tx.value) !== BigInt(p.value) || hex(tx.chainId) !== BigInt(this.chainId)) throw new CampusError("RECEIPT_MISMATCH");
     if (receipt.status === "0x1" && p.kind === "SCHOLARSHIP") {
       const call = grantAbi.decodeFunctionData("grant", p.data);
       const found = Array.isArray(receipt.logs) && receipt.logs.some((log: any) => {

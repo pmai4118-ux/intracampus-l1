@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 import { Interface, type InterfaceAbi, type Log } from "ethers";
 import type { DeployedLibraryDeployment } from "@intracampus/network";
 import type { LibraryVerifiedChainEvent } from "./library.types.ts";
@@ -102,7 +103,7 @@ export class LibraryReceiptVerifier {
       && actor !== this.deployment.roles.librarian.toLowerCase()) throw new LibraryRpcError();
     if (["DepositReceived", "ShortfallPaid"].includes(parsedLog.name) && actor !== borrower) throw new LibraryRpcError();
 
-    const common = { chainId: 20261 as const, contractAddress: escrow, txHash: log.transactionHash.toLowerCase(),
+    const common = { chainId: CAMPUS_CHAIN_ID, contractAddress: escrow, txHash: log.transactionHash.toLowerCase(),
       logIndex: log.index, blockNumber: log.blockNumber, blockHash: log.blockHash.toLowerCase(), blockTimestamp: block.timestamp,
       transactionFrom: actor, observedAt };
     const args = parsedLog.args;

@@ -1,4 +1,4 @@
-import type { CampusProfile, CampusPayout, CampusPayoutAttempt } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, type CampusProfile, type CampusPayout, type CampusPayoutAttempt } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
 import { WalletTransactionError, type WalletTransaction } from "./wallet.ts";
 export type CampusMe = { wallet: string; school: boolean; profile: CampusProfile };
@@ -91,6 +91,6 @@ export function campusMessage(code: string) {
     TREASURY_ONLY: "Chuyển sang ví quỹ nhà trường để cấp CAMPUS.", GRANT_ISSUER_ONLY: "Chuyển sang ví có quyền cấp học bổng.", PAYOUT_LOCKED: "Lượt cấp đã bắt đầu. Đối chiếu hash cũ, không gửi thêm.",
     PAYOUT_ATTEMPT_RELEASED: "Lần gửi này đã được hủy. Làm mới trạng thái và kiểm tra lượt cấp trước khi thử lại.",
     RECEIPT_MISMATCH: "Giao dịch chưa khớp lượt cấp. Giữ hash và nhờ người vận hành đối chiếu; chưa cấp lại.", HASH_ALREADY_ATTACHED: "Lượt cấp đã gắn một hash. Tiếp tục đối chiếu hash đó.",
-    WRONG_CHAIN: "Chuyển ví và RPC sang IntraCampus L1 (20261).", STALE_CHAIN_STATE: "Dữ liệu mạng chưa đủ mới. Chưa mở giao dịch.", INVALID_REQUEST: "Kiểm tra lại mã sinh viên và thông tin đã nhập.",
+    WRONG_CHAIN: `Chuyển ví và RPC sang IntraCampus L1 (${CAMPUS_CHAIN_ID}).`, STALE_CHAIN_STATE: "Dữ liệu mạng chưa đủ mới. Chưa mở giao dịch.", INVALID_REQUEST: "Kiểm tra lại mã sinh viên và thông tin đã nhập.",
     RPC_UNAVAILABLE: "Chưa đọc được mạng. Giữ hash và thử đối chiếu lại.", RATE_LIMITED: "Bạn thao tác quá nhanh. Đợi một phút rồi thử lại." } as Record<string, string>)[code] ?? "Chưa hoàn tất thao tác. Kiểm tra kết nối, ví và thử lại; không gửi lại khoản cấp chưa rõ kết quả.";
 }

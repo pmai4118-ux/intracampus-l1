@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID, type CampusAuthRole } from "@intracampus/network";
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -150,8 +151,13 @@ export function applyLibraryMigrations(db: DatabaseSync, migrations: readonly Li
   if (versions.some((version, index) => !Number.isSafeInteger(version) || version < 1 || (index > 0 && version <= versions[index - 1]))) {
     throw new Error("INVALID_LIBRARY_MIGRATION_SEQUENCE");
   }
-  beginImmediate(db);
+  const startingVersion = Number(db.prepare("PRAGMA user_version").get()?.user_version);
+  const rebuildsReferencedTable = migrations.some((migration) =>
+    migration.rebuildsReferencedTable && migration.version > startingVersion);
+  const foreignKeysEnabled = db.prepare("PRAGMA foreign_keys").get()?.foreign_keys === 1;
+  if (rebuildsReferencedTable) db.exec("PRAGMA foreign_keys = OFF");
   try {
+    beginImmediate(db);
     const appliedVersion = db.prepare("PRAGMA user_version").get()?.user_version;
     if (typeof appliedVersion !== "number" || !Number.isSafeInteger(appliedVersion) || appliedVersion < 0) throw new Error("INVALID_LIBRARY_SCHEMA_VERSION");
     if (appliedVersion > (migrations.at(-1)?.version ?? 0)) throw new Error("LIBRARY_SCHEMA_NEWER_THAN_CODE");
@@ -163,10 +169,15 @@ export function applyLibraryMigrations(db: DatabaseSync, migrations: readonly Li
       db.exec(`PRAGMA user_version = ${migration.version}`);
       currentVersion = migration.version;
     }
+    if (rebuildsReferencedTable && db.prepare("PRAGMA foreign_key_check").get()) {
+      throw new Error("LIBRARY_MIGRATION_FOREIGN_KEY_VIOLATION");
+    }
     db.exec("COMMIT");
   } catch (error) {
     rollback(db);
     throw error;
+  } finally {
+    if (rebuildsReferencedTable && foreignKeysEnabled) db.exec("PRAGMA foreign_keys = ON");
   }
 }
 
@@ -288,11 +299,18 @@ export class LibraryRepository {
     }));
   }
 
-  accountForWallet(wallet: string): { wallet: string; role: "STUDENT" | "LIBRARIAN"; enabled: boolean } | undefined {
+  accountForWallet(wallet: string): { wallet: string; role: CampusAuthRole; enabled: boolean } | undefined {
     const normalized = canonicalWallet(wallet);
     const row = this.db.prepare("SELECT wallet, role, enabled FROM accounts WHERE wallet = ? COLLATE NOCASE").get(normalized);
     if (!row) return undefined;
-    return { wallet: String(row.wallet), role: String(row.role) as "STUDENT" | "LIBRARIAN", enabled: Number(row.enabled) === 1 };
+    return { wallet: String(row.wallet), role: String(row.role) as CampusAuthRole, enabled: Number(row.enabled) === 1 };
+  }
+
+  registerParkingOperator(wallet: string): void {
+    const normalized = canonicalWallet(wallet);
+    this.db.prepare(`INSERT INTO accounts(wallet, role, created_at) VALUES (?, 'PARKING', ?)
+      ON CONFLICT(wallet) DO NOTHING`).run(normalized, Math.floor(Date.now() / 1000));
+    if (this.accountForWallet(normalized)?.role !== "PARKING") throw new Error("PARKING_OPERATOR_ROLE_CONFLICT");
   }
 
   /** Campus approval is checked by the caller; never re-enables a disabled account. */
@@ -378,11 +396,11 @@ export class LibraryRepository {
       eventName: input.eventName,
       occurredAt: safeInteger(input.occurredAt, "INVALID_LIBRARY_TIMESTAMP", 1),
     };
-    if (event.chainId !== 20261 || event.eventName !== "DepositReceived" || event.approvalDeadline <= event.occurredAt) {
+    if (event.chainId !== CAMPUS_CHAIN_ID || event.eventName !== "DepositReceived" || event.approvalDeadline <= event.occurredAt) {
       throw new Error("INVALID_LIBRARY_VERIFIED_DEPOSIT");
     }
     const chainEvent: LibraryVerifiedChainEvent = {
-      chainId: 20261, contractAddress: event.contractAddress, txHash: event.txHash, logIndex: event.logIndex,
+      chainId: CAMPUS_CHAIN_ID, contractAddress: event.contractAddress, txHash: event.txHash, logIndex: event.logIndex,
       blockNumber: event.blockNumber, blockHash: event.blockHash, blockTimestamp: event.occurredAt,
       transactionFrom: event.borrower, observedAt: event.occurredAt, eventName: "DepositReceived",
       requestId: event.requestId, borrower: event.borrower, bookId: event.bookId, amountWei: event.depositWei,
@@ -479,7 +497,7 @@ export class LibraryRepository {
         safeInteger(event.blockNumber, "INVALID_LIBRARY_BLOCK_NUMBER");
         safeInteger(event.blockTimestamp, "INVALID_LIBRARY_TIMESTAMP", 1);
         safeInteger(event.observedAt, "INVALID_LIBRARY_TIMESTAMP");
-        if (event.chainId !== 20261 || (advanceCursor && event.blockNumber > cursorBlock)) throw new Error("INVALID_LIBRARY_VERIFIED_EVENT");
+        if (event.chainId !== CAMPUS_CHAIN_ID || (advanceCursor && event.blockNumber > cursorBlock)) throw new Error("INVALID_LIBRARY_VERIFIED_EVENT");
         if (event.eventName === "DepositReceived") {
           event.bookId = canonicalBytes32(event.bookId, "INVALID_LIBRARY_BOOK_ID");
           canonicalWei(event.amountWei, true);
@@ -1320,7 +1338,7 @@ export class LibraryRepository {
       this.db.prepare("INSERT INTO auth_sessions(token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
         .run(tokenHash, Number(challenge.account_id), input.now, input.expiresAt);
       this.db.exec("COMMIT");
-      return { tokenHash, wallet: String(challenge.wallet), role: String(challenge.role) as "STUDENT" | "LIBRARIAN",
+      return { tokenHash, wallet: String(challenge.wallet), role: String(challenge.role) as CampusAuthRole,
         createdAt: input.now, expiresAt: input.expiresAt };
     } catch (error) {
       rollback(this.db);
@@ -1391,7 +1409,7 @@ export class LibraryRepository {
       FROM auth_sessions s JOIN accounts a USING(account_id)
       WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND a.enabled = 1`).get(normalizedHash, now);
     if (!row) return undefined;
-    return { tokenHash: String(row.token_hash), wallet: String(row.wallet), role: String(row.role) as "STUDENT" | "LIBRARIAN",
+    return { tokenHash: String(row.token_hash), wallet: String(row.wallet), role: String(row.role) as CampusAuthRole,
       createdAt: Number(row.created_at), expiresAt: Number(row.expires_at) };
   }
 

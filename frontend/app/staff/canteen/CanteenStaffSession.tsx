@@ -1,4 +1,6 @@
 'use client';
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -43,7 +45,7 @@ export default function CanteenStaffSession() {
         <div className="mode-switch-wrapper">
           <span className="mode-switch-kicker">
             <span className={`mode-status-dot ${mode === 'live' ? 'dot-live' : 'dot-demo'}`} aria-hidden="true" />
-            {mode === 'live' ? 'Avalanche L1 · Chain 20261' : 'Bản minh họa'}
+            {mode === 'live' ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : 'Bản minh họa'}
           </span>
           <div className="student-mode-switch" role="group" aria-label="Chế độ quầy nhà ăn">
             <button type="button" className="secondary-btn" aria-pressed={mode === 'live'} onClick={() => setMode('live')}>
@@ -465,7 +467,7 @@ function CanteenCounterUI({
                 Ví căn-tin nhận tự động:{' '}
                 <HashChip value={merchantWallet} start={8} end={6} copyLabel="Sao chép địa chỉ ví nhà ăn" />
               </span>
-              <span>Mạng: IntraCampus L1 · Chain 20261</span>
+              <span>Mạng: IntraCampus L1 · Chain {CAMPUS_CHAIN_ID}</span>
             </div>
           </details>
         </div>

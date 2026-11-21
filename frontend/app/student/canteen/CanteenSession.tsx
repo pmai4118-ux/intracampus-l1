@@ -1,4 +1,6 @@
 'use client';
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CanteenDish, CanteenOrder } from '@intracampus/network';
@@ -53,7 +55,7 @@ async function api(path: string, body?: unknown) {
 const labels: Record<string, string> = {
   RPC_UNAVAILABLE: 'Chưa kết nối được mạng. Giữ hash cũ và thử đối chiếu lại.',
   SERVICE_UNAVAILABLE: 'Chưa đọc được dịch vụ nhà ăn. Thử lại sau.',
-  WRONG_CHAIN: 'Chuyển ví sang IntraCampus L1, chain 20261.',
+  WRONG_CHAIN: `Chuyển ví sang IntraCampus L1, chain ${CAMPUS_CHAIN_ID}.`,
   DISH_UNAVAILABLE: 'Món đã chọn hiện không có trong thực đơn. Hãy tải lại thực đơn.',
   FORBIDDEN: 'Ví đang kết nối là tài khoản Thủ thư hoặc chưa đăng ký sinh viên. Hãy đổi sang ví sinh viên trong Core hoặc mở Xem bản minh họa.',
   IDEMPOTENCY_CONFLICT: 'Lượt tạo đơn cũ có nội dung khác. Khôi phục đơn chưa rõ kết quả trước.',
@@ -90,7 +92,7 @@ function Canteen() {
         <div className="mode-switch-wrapper">
           <span className="mode-switch-kicker">
             <span className={`mode-status-dot ${mode === 'live' ? 'dot-live' : 'dot-demo'}`} aria-hidden="true" />
-            {mode === 'live' ? 'Avalanche L1 · Chain 20261' : 'Bản minh họa'}
+            {mode === 'live' ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : 'Bản minh họa'}
           </span>
           <div className="student-mode-switch" role="group" aria-label="Chế độ nhà ăn">
             <button type="button" className="secondary-btn" aria-pressed={mode === 'live'} onClick={() => setMode('live')}>
@@ -724,7 +726,7 @@ function Workspace({
                 ? 'Thẻ SBT hợp lệ · Tự động giảm 10% khi thanh toán.'
                 : tier === 0
                   ? 'Tài khoản tiêu chuẩn · Áp dụng đúng giá niêm yết.'
-                  : 'Kết nối mạng IntraCampus 20261 để kiểm tra ưu đãi SBT.'
+                  : `Kết nối mạng IntraCampus ${CAMPUS_CHAIN_ID} để kiểm tra ưu đãi SBT.`
               : 'FOOD chi đúng tổng món; gas trả bằng CAMPUS trong ví.'}
           </p>
           <div className="canteen-cart-actions">

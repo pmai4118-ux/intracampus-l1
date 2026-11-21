@@ -124,7 +124,7 @@ export class LibraryApi {
   }
   async session(wallet: string, role: LibraryRole = 'STUDENT'): Promise<LibrarySession> {
     const s = object(await this.request('/api/auth/session'));
-    check(address(s.account?.wallet) && ['STUDENT','LIBRARIAN'].includes(s.account.role) && timestamp(s.expiresAt));
+    check(address(s.account?.wallet) && ['STUDENT','LIBRARIAN','PARKING'].includes(s.account.role) && timestamp(s.expiresAt));
     if (s.account.wallet.toLowerCase() !== wallet.toLowerCase() || s.account.role !== role) throw new LibraryUiError('WALLET_SESSION_CHANGED');
     return s as LibrarySession;
   }

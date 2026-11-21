@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { formatWalletBalance } from "../../lib/chains";
@@ -207,7 +209,7 @@ function InvoiceWorkspace({ tracker }: { tracker: InvoiceStatusController }) {
     <section className="surface-panel invoice-form-panel" aria-labelledby="invoice-form-title" aria-busy={busy}>
       <div className="panel-top-row"><div><span className="panel-eyebrow">01 · PHÁT HÀNH HÓA ĐƠN</span><h2 id="invoice-form-title" className="screen-title">Tạo hóa đơn POS</h2>
         <p className="screen-subtitle">Bãi xe demo · Một lượt gửi xe · giá gốc 3 CAMPUS (SBT 2,7 CAMPUS)</p></div>
-        <span className="network-pill">IntraCampus L1 · Chain 20261</span></div>
+        <span className="network-pill">IntraCampus L1 · Chain {CAMPUS_CHAIN_ID}</span></div>
       <div className="invoice-form-actions">
         <div className="invoice-form-copy">
           <p>Backend ấn định giá và ký hóa đơn. Sinh viên xác nhận thanh toán bằng ví Core.</p>

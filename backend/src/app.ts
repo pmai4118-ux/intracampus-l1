@@ -28,6 +28,7 @@ export function createApp(
   libraryService?: LibraryService,
   canteenService?: CanteenService,
   parkingRepository?: SqliteInvoiceRepository,
+  parkingWallet?: string,
   campusService?: CampusService,
   libraryRepository?: LibraryRepository,
 ) {
@@ -40,7 +41,7 @@ export function createApp(
 
   app.use(createNetworkRouter(rpcUrl));
   app.use(createInvoicesRouter(receiptService, creationService));
-  app.use(createParkingRouter(parkingRepository, authService, authConfig));
+  app.use(createParkingRouter(parkingRepository, authService, authConfig, parkingWallet));
   app.use(createGrantsRouter(grantsService, authService, authConfig, libraryService));
   app.use(createLibraryRouter(libraryService, authService, authConfig));
   app.use(createCanteenRouter(canteenService, authService, authConfig, libraryService));

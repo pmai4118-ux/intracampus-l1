@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getDeployment, requireDeployment } from "@intracampus/network";
 import { parkingInvoiceId } from "../../../../../lib/parking";
+import { isWalletAddress } from "../../../../../lib/chains";
 import Icon from "../../../../components/Icon";
 import PageHeading from "../../../../components/PageHeading";
 import { WalletSession } from "../../../../student/WalletPanel";
@@ -9,6 +11,10 @@ import ParkingGateCheckout from "./ParkingGateCheckout";
 export default async function CheckoutPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = await params;
   if (!parkingInvoiceId.test(invoiceId)) notFound();
+  const deployment = getDeployment();
+  const parkingWallet = deployment.status === "deployed"
+    ? requireDeployment(deployment).merchants.parking.address
+    : process.env.PARKING_MERCHANT_ADDRESS?.trim();
 
   return <>
     <PageHeading
@@ -28,7 +34,8 @@ export default async function CheckoutPage({ params }: { params: Promise<{ invoi
       </div>
     </PageHeading>
     <WalletSession>
-      <ParkingGateCheckout key={invoiceId} invoiceId={invoiceId} />
+      <ParkingGateCheckout key={invoiceId} invoiceId={invoiceId}
+        parkingWallet={isWalletAddress(parkingWallet) ? parkingWallet : undefined} />
     </WalletSession>
   </>;
 }

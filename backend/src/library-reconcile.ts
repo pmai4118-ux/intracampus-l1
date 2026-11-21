@@ -1,4 +1,4 @@
-import manifest from "../../deployments/intracampus.json" with { type: "json" };
+import { selectedDeploymentManifest as manifest } from "@intracampus/network";
 import { fileURLToPath } from "node:url";
 import { requireLibraryDeployment } from "@intracampus/network";
 import { LibraryRepository } from "./modules/library/library.repository.ts";

@@ -47,13 +47,14 @@
       require(location.protocol === 'https:', 'Bằng chứng L02 cần mở trang qua HTTPS');
       const chain = await rpc(1, 'eth_chainId', []);
       require(typeof chain === 'string' && /^0x[0-9a-f]+$/i.test(chain), 'Chain ID không hợp lệ');
-      require(BigInt(chain) === 20261n, 'Sai mạng, cần chain 20261');
+      const expectedChainId = 20261;
+      require(BigInt(chain) === BigInt(expectedChainId), "Sai mạng, cần chain " + expectedChainId);
       const receipt = await rpc(2, 'eth_getTransactionReceipt', [txHash]);
       require(receipt && receipt.transactionHash?.toLowerCase() === txHash.toLowerCase(), 'Không có receipt khớp hash trên mạng hiện tại');
       require(receipt.status === '0x1', 'Giao dịch không thành công');
       require(/^0x[0-9a-f]{64}$/i.test(receipt.blockHash ?? ''), 'Thiếu block hash');
       for (const field of ['blockNumber', 'gasUsed', 'effectiveGasPrice']) require(/^0x[0-9a-f]+$/i.test(receipt[field] ?? ''), `Thiếu ${field}`);
-      output.textContent = JSON.stringify({ result: 'PASS', ...context, chainId: 20261,
+      output.textContent = JSON.stringify({ result: 'PASS', ...context, chainId: expectedChainId,
         receipt: { transactionHash: receipt.transactionHash, status: receipt.status, blockNumber: receipt.blockNumber,
           gasUsed: receipt.gasUsed, effectiveGasPrice: receipt.effectiveGasPrice } }, null, 2);
     } catch (error) {

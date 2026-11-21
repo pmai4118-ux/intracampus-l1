@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 import { keccak256 } from "ethers";
 import type { DeployedLibraryDeployment } from "@intracampus/network";
 import type { LibraryChainFreshness } from "./library.config.ts";
@@ -56,7 +57,7 @@ export class LibraryReconciler {
   async trustedChain(): Promise<TrustedLibraryChain> {
     try {
       const network = await this.rpc.getNetwork();
-      if (network.chainId !== 20261n) throw new LibraryChainError("WRONG_CHAIN");
+      if (network.chainId !== BigInt(CAMPUS_CHAIN_ID)) throw new LibraryChainError("WRONG_CHAIN");
       const latest = await this.rpc.getBlock("latest");
       if (!latest || !Number.isSafeInteger(latest.number) || latest.number < 0) throw new LibraryChainError("RPC_UNAVAILABLE");
       const safeNumber = latest.number - (this.freshness.minConfirmations - 1);

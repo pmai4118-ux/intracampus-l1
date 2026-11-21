@@ -6,7 +6,7 @@ Phạm vi bổ sung theo yêu cầu người dùng ngày 2026-11-20, chưa có m
 
 | Đường dẫn cùng host `http://127.0.0.1:3000` | Chức năng |
 | --- | --- |
-| `/login` | Kết nối Core/MetaMask, chuyển chain 20261 và ký đăng nhập không tốn gas |
+| `/login` | Kết nối Core/MetaMask và ký đăng nhập không tốn gas trên chain đã chọn: `20261` local hoặc `20261120` cloud |
 | `/student/verification` | Gửi hồ sơ, xem kết quả, đăng ký học bổng và theo dõi khoản cấp |
 | `/staff/students` | Ví được nhà trường phân quyền duyệt hồ sơ và mở ví cấp tiền |
 | `/student`, `/student/canteen`, `/student/library` | Ví và các dịch vụ sinh viên hiện có |
@@ -18,18 +18,34 @@ Dùng Node 24, `pnpm install --frozen-lockfile` và cấu hình web/API theo [ru
 
 | Biến | Ý nghĩa |
 | --- | --- |
-| `CAMPUS_AUTH_ORIGIN` | Origin frontend chính xác, ví dụ `http://127.0.0.1:3000`, không kèm path |
+| `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` | Chọn chain nhất quán cho frontend và backend: `20261` local hoặc `20261120` cloud |
+| `CAMPUS_AUTH_ORIGIN` | Origin frontend chính xác, ví dụ `http://127.0.0.1:3000`, không kèm path; cloud dùng origin Vercel đang chạy |
+| `LIBRARY_AUTH_ORIGIN` | Origin chính xác cho đăng nhập dịch vụ sinh viên; cấu hình cùng origin với Campus |
 | `LIBRARY_ALLOW_INSECURE_LOCALHOST=true` | Chỉ cho HTTP loopback local; môi trường khác bắt buộc HTTPS |
 | `CAMPUS_SCHOOL_WALLETS` | Danh sách địa chỉ ví duyệt, ngăn bằng dấu phẩy. Có cả ví quỹ và grantIssuer nếu họ cần cấp tiền |
 | `CAMPUS_TREASURY_ADDRESS` | Ví EOA được phép trả quà chào mừng; phải có ít nhất 20 CAMPUS và gas mỗi lượt |
-| `CAMPUS_DB_PATH` | Đường dẫn SQLite bền vững; mặc định `backend/data/campus.sqlite` |
+| `CAMPUS_DB_PATH` | Đường dẫn SQLite bền vững; cloud bắt buộc đường dẫn tuyệt đối, khác ba DB còn lại và nằm trên volume persistent |
 | `CAMPUS_SCHOLARSHIP_WEI` | Số tiền một học bổng, số nguyên wei dương; mặc định `1000000000000000000000` (1000 CAMPUS) |
-| `INTRACAMPUS_RPC_URL` | RPC đúng chain 20261, có head mới |
+| `INTRACAMPUS_RPC_URL` | RPC có head mới và đúng chain được chọn bởi `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` |
 | `CAMPUS_ALLOW_LOCAL_ANVIL` | Mặc định false. Chỉ bật cho manifest local và RPC loopback tường minh |
 
 Campus dùng `CAMPUS_AUTH_ORIGIN`, dự phòng `LIBRARY_AUTH_ORIGIN`. Thiếu/sai origin làm endpoint Campus trả 503, không mở quyền tạm. Challenge có hạn 5 phút, phiên 1 giờ; giới hạn challenge 10 và verify 20 yêu cầu mỗi 60 giây theo cơ chế auth hiện có. Cookie Campus tách khỏi cookie dịch vụ cũ. Frontend proxy `/api/campus/*` theo `BACKEND_URL`; không có biến frontend nào chứa private key.
 
 Học bổng dùng canonical `deployments/intracampus.json`: địa chỉ, runtime code hash, grantIssuer và category căn-tin từ cùng manifest L06; không lấy đích hợp đồng từ form. Chưa có deployment đã xác minh thì vẫn đăng nhập/duyệt được nhưng không giải ngân. Chạy `pnpm rpc:check` trước thao tác trên L1. Không dùng faucet Fuji hoặc nhầm AVAX với CAMPUS.
+
+## Đưa demo cloud lên Vercel và GCP
+
+Vercel chỉ chạy frontend. Các API nghiệp vụ, RPC gateway và SQLite hiện chạy ở backend trên VM GCP; không đặt SQLite trên filesystem của Vercel.
+
+Trên Vercel, cấu hình ở đúng scope Preview/Production rồi redeploy vì `NEXT_PUBLIC_*` được nhúng lúc build và `BACKEND_URL` được đọc khi tạo rewrite:
+
+- `BACKEND_URL`: URL HTTPS ổn định của backend cloud. Các rewrite cùng origin chuyển `/api/campus/*`, `/api/auth/*`, `/api/library/*`, `/api/invoices/*`, `/api/grants/*`, `/api/canteen/*` và `/api/parking/*` tới backend.
+- `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` và `NEXT_PUBLIC_INTRACAMPUS_RPC_URL`: phải cùng trỏ tới chain cloud. RPC cần cho phép origin Vercel chính xác qua CORS.
+- Các địa chỉ public `NEXT_PUBLIC_STUDENT_SBT_ADDRESS`, `NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS` và `NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS` phải khớp manifest cloud. Giữ `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=false`; không đưa khóa hoặc RPC token bí mật vào `NEXT_PUBLIC_*`.
+
+Trên backend GCP, dùng cùng chain ID `20261120`, `INTRACAMPUS_RPC_URL` của cloud, manifest cloud, `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` khớp origin Vercel, cùng các ví public trong `CAMPUS_SCHOOL_WALLETS`, `CAMPUS_TREASURY_ADDRESS` và `PARKING_MERCHANT_ADDRESS`. `CAMPUS_ALLOW_LOCAL_ANVIL` phải là `false`. Một backend chỉ chấp nhận origin được cấu hình; URL Preview ngẫu nhiên có thể không đăng nhập được nếu khác origin đó, nên dùng alias ổn định hoặc cấu hình đúng origin cho môi trường đang nghiệm thu.
+
+Cloud yêu cầu bốn SQLite path tuyệt đối, khác nhau và bền vững: invoices, library, canteen và `CAMPUS_DB_PATH`. Đặt chúng trên persistent disk của VM; nếu thiếu hoặc trùng, backend dừng thay vì chạy Campus với DB tạm. Trước khi Production hoạt động đầy đủ, redeploy backend từ commit mới và kiểm tra `/api/network`, `/api/campus/me`, đăng nhập, cấp tiền và các route POS trên cùng origin HTTPS.
 
 ## Quy trình
 

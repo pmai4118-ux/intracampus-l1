@@ -1,6 +1,6 @@
 "use client";
 
-import { campusNetwork } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, campusNetwork } from "@intracampus/network";
 import { useEffect, useState, type ClipboardEvent, type FormEvent } from "react";
 import { parseGrantAmount } from "../../lib/grants";
 import { decodeQrImage, pastedQrImage } from "../../lib/qr-image";
@@ -212,7 +212,7 @@ export default function StudentDemo({
                   IntraCampus Pass
                 </span>
                 <span className="live-pass-chain">
-                  {isWrongChain ? "CHỜ MẠNG 20261" : "L1 · 20261 (MẪU)"}
+                  {isWrongChain ? `CHỜ MẠNG ${CAMPUS_CHAIN_ID}` : `L1 · ${CAMPUS_CHAIN_ID} (MẪU)`}
                 </span>
               </div>
               <div className="live-pass-body">

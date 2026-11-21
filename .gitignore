@@ -28,3 +28,6 @@ backend/data/
 /sites/
 .DS_Store
 Thumbs.db
+
+.vercel
+.env*

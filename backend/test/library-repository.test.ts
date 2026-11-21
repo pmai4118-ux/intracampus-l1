@@ -151,13 +151,13 @@ test("migrates a new DB, reruns safely, and preserves rows and schema after rest
   const env = setup();
   t.after(env.cleanup);
   let repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 6);
+  assert.equal(repository.schemaVersion(), 7);
   assert.deepEqual(repository.sqliteSettings(), { foreignKeys: 1, journalMode: "wal", synchronous: 2, busyTimeoutMs: 5000 });
   assert.equal(repository.seedDemo(env.seed), "inserted");
   repository.close();
 
   repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 6);
+  assert.equal(repository.schemaVersion(), 7);
   assert.equal(repository.seedDemo(env.seed), "unchanged");
   assert.deepEqual(repository.listBooks()[0], {
     bookId, title: "Demo book", author: "Demo author", isbn: null, depositWei, replacementPriceWei: priceWei,
@@ -224,7 +224,7 @@ test("version 5 backfills existing transaction state into attempt history", (t) 
 
   const repository = new LibraryRepository(env.path);
   t.after(() => { repository.close(); env.cleanup(); });
-  assert.equal(repository.schemaVersion(), 6);
+  assert.equal(repository.schemaVersion(), 7);
   const migrated = new DatabaseSync(env.path);
   try {
     const attempt = migrated.prepare(`SELECT tx_hash, request_id, action, status, block_number, block_hash
@@ -242,9 +242,9 @@ test("two independent startup processes migrate a new file database once", async
     initializeDatabaseInWorker(env.path),
     initializeDatabaseInWorker(env.path),
   ]);
-  assert.deepEqual(versions, [6, 6]);
+  assert.deepEqual(versions, [7, 7]);
   const repository = new LibraryRepository(env.path);
-  assert.equal(repository.schemaVersion(), 6);
+  assert.equal(repository.schemaVersion(), 7);
   const db = new DatabaseSync(env.path);
   try {
     for (const table of ["library_reconcile_state", "library_transactions", "library_transaction_attempts", "library_event_canonicality"]) {

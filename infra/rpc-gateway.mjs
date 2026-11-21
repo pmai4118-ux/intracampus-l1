@@ -66,12 +66,18 @@ export async function verifyChain(upstream, timeoutMs = 8000) {
 
 export function createRpcGateway({ upstream, origins = [], timeoutMs = 8000 }) {
   const target = validateUpstream(upstream);
-  const checkPage = readFileSync(new URL("./rpc-check.html", import.meta.url));
+  const checkPage = readFileSync(new URL("./rpc-check.html", import.meta.url), "utf8")
+    .replace("const expectedChainId = 20261;", "const expectedChainId = " + campusNetwork.chainId + ";");
   const acceptedOrigins = new Set(origins);
   for (const origin of acceptedOrigins) {
-    const parsed = new URL(origin);
-    if (!["http:", "https:"].includes(parsed.protocol) || parsed.origin !== origin) {
-      throw new Error("RPC_ALLOWED_ORIGINS must contain exact HTTP(S) origins without paths/trailing slashes");
+    const isChromeExtensionOrigin = /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+    let isWebOrigin = false;
+    try {
+      const parsed = new URL(origin);
+      isWebOrigin = ["http:", "https:"].includes(parsed.protocol) && parsed.origin === origin;
+    } catch {}
+    if (!isWebOrigin && !isChromeExtensionOrigin) {
+      throw new Error("RPC_ALLOWED_ORIGINS must contain exact HTTP(S) origins or exact Chrome extension origins");
     }
   }
   let activeRequests = 0;

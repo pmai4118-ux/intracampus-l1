@@ -1,4 +1,4 @@
-import { requireDeployment, type DeployedManifest } from "@intracampus/network";
+import { type CampusChainId, CAMPUS_CHAIN_ID, requireDeployment, type DeployedManifest } from "@intracampus/network";
 import { isWalletAddress } from "./chains.ts";
 import type { WalletRpc } from "./wallet.ts";
 
@@ -47,14 +47,14 @@ export type GrantEvent = { event: "GrantSpent"; transactionHash: string; blockNu
   beneficiary: string; merchant: string; category: string; amountWei: string; balanceWei: string };
 export type GrantLookup = { balanceWei: string; block: { number: number; hash: string }; allowed: boolean;
   transaction: null | { hash: string; status: "pending" | "verified"; event: GrantEvent | null } };
-export type GrantIntent = { orderId?: string; schemaVersion: 1; id: string; chainId: 20261; beneficiary: string; vault: string; deploymentHash: string;
+export type GrantIntent = { orderId?: string; schemaVersion: 1; id: string; chainId: CampusChainId; beneficiary: string; vault: string; deploymentHash: string;
   merchant: string; category: string; amountWei: string; afterBlock: number; recoveredHash: boolean;
   phase: "prepared" | "unknown" | "pending" | "confirmed" | "reverted"; hash: string | null };
 
 /** B05 remains the chain/receipt verifier; this parser binds its trusted response to this exact wallet and spend. */
 export function parseGrantLookup(value: unknown, config: GrantConfig, beneficiary: string, intent?: GrantIntent | null): GrantLookup {
   const data = object(value), category = object(data.category), block = object(data.block);
-  check(data.schemaVersion === 1 && data.status === "verified" && data.chainId === 20261
+  check(data.schemaVersion === 1 && data.status === "verified" && data.chainId === CAMPUS_CHAIN_ID
     && same(data.beneficiary, beneficiary) && same(data.vaultAddress, config.vault)
     && same(category.id, config.category) && category.label === "FOOD" && money(data.balanceWei)
     && integer(block.number) && hash(block.hash));
@@ -97,7 +97,7 @@ export async function lookupGrant(fetcher: typeof fetch, config: GrantConfig, be
   } catch (error) { if (error instanceof GrantUiError) throw error; throw new GrantUiError("RPC_UNAVAILABLE"); }
   if (!response.ok) {
     const body = object(data), error = object(body.error);
-    check(body.status === "unverified" && body.chainId === 20261 && body.balanceWei === null && typeof error.retryable === "boolean");
+    check(body.status === "unverified" && body.chainId === CAMPUS_CHAIN_ID && body.balanceWei === null && typeof error.retryable === "boolean");
     const known = ["TX_REVERTED", "RECEIPT_MISMATCH", "DEPLOYMENT_NOT_CONFIGURED", "INVALID_DEPLOYMENT", "DEPLOYMENT_MISMATCH",
       "WRONG_CHAIN", "RPC_UNAVAILABLE", "CHAIN_CHANGED", "UNAUTHENTICATED", "FORBIDDEN", "STALE_CHAIN_STATE",
       "CONFIGURATION_ERROR", "DATABASE_BUSY"];
@@ -112,7 +112,7 @@ export async function lookupGrant(fetcher: typeof fetch, config: GrantConfig, be
 /** A pinned read for display is followed by a latest-state simulation immediately before opening Core. */
 export async function preflightGrant(rpc: WalletRpc, config: GrantConfig, beneficiary: string, amount: bigint, signal?: AbortSignal) {
   check(isWalletAddress(beneficiary) && !same(beneficiary, config.merchant), "INVALID_ACCOUNT"); uintWord(amount);
-  check(quantity(await rpc("eth_chainId", [], signal)) === BigInt(20261), "WRONG_CHAIN");
+  check(quantity(await rpc("eth_chainId", [], signal)) === BigInt(CAMPUS_CHAIN_ID), "WRONG_CHAIN");
   const block = object(await rpc("eth_getBlockByNumber", ["latest", false], signal));
   quantity(block.number); check(hash(block.hash), "RPC_UNAVAILABLE");
   const call = (to: string, data: string, tag: unknown = block.number) => rpc("eth_call", [{ to, data }, tag], signal);
@@ -129,7 +129,7 @@ export async function preflightGrant(rpc: WalletRpc, config: GrantConfig, benefi
   try { check(await rpc("eth_call", [transaction, "latest"], signal) === "0x", "SIMULATION_FAILED"); }
   catch { throw new GrantUiError("SIMULATION_FAILED"); }
   const canonical = object(await rpc("eth_getBlockByNumber", [block.number, false], signal));
-  check(same(canonical.hash, String(block.hash)) && quantity(await rpc("eth_chainId", [], signal)) === BigInt(20261), "CHAIN_CHANGED");
+  check(same(canonical.hash, String(block.hash)) && quantity(await rpc("eth_chainId", [], signal)) === BigInt(CAMPUS_CHAIN_ID), "CHAIN_CHANGED");
   const afterBlock = Number(quantity(block.number)); check(integer(afterBlock), "RPC_UNAVAILABLE");
   return { transaction, afterBlock };
 }
@@ -143,7 +143,7 @@ export function grantMessage(code: string): string {
     INVALID_AMOUNT: "Nhập số CAMPUS lớn hơn 0, tối đa 18 chữ số thập phân; dùng dấu chấm cho phần lẻ.",
     INSUFFICIENT_GRANT_BALANCE: "Số tiền vượt ngân sách FOOD hiện tại. Đọc lại số dư hoặc giảm khoản chi.",
     MERCHANT_NOT_ALLOWED: "Căn-tin không còn được phép nhận FOOD. Chưa gửi giao dịch, số dư voucher giữ nguyên.",
-    WRONG_CHAIN: "Chuyển ví về IntraCampus L1, chain 20261, rồi thử đọc lại.",
+    WRONG_CHAIN: `Chuyển ví về IntraCampus L1, chain ${CAMPUS_CHAIN_ID}, rồi thử đọc lại.`,
     CHAIN_CHANGED: "Mạng thay đổi trong lúc kiểm tra. Đọc lại trước khi tiếp tục.",
     UNAUTHENTICATED: "Đăng nhập bằng ví sinh viên để xem học bổng của tài khoản này.",
     FORBIDDEN: "Tài khoản này chưa được phép xem học bổng.",
@@ -179,7 +179,7 @@ export type GrantState = { beneficiary: string | null; lookup: GrantLookup | nul
   message: string | null; errorCode: string | null; storageBlocked: boolean };
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Lock = (name: string, run: () => Promise<void>) => Promise<void>;
-export const grantJournalKey = (config: GrantConfig, beneficiary: string) => `intracampus.grant.spend.v1:20261:${config.deploymentHash.toLowerCase()}:${beneficiary.toLowerCase()}`;
+export const grantJournalKey = (config: GrantConfig, beneficiary: string) => `intracampus.grant.spend.v1:${CAMPUS_CHAIN_ID}:${config.deploymentHash.toLowerCase()}:${beneficiary.toLowerCase()}`;
 export const browserGrantLock: Lock = async (name, run) => {
   if (typeof navigator === "undefined" || !navigator.locks) throw new GrantUiError("LOCK_UNAVAILABLE");
   await navigator.locks.request(name, { ifAvailable: true }, async (lock) => { check(lock, "SPEND_IN_PROGRESS"); await run(); });
@@ -204,7 +204,7 @@ export class GrantController {
     try {
       const data = object(JSON.parse(raw)), c = this.options.config;
       check(data.schemaVersion === 1 && typeof data.id === "string" && /^[0-9a-f-]{36}$/i.test(data.id)
-        && data.chainId === 20261 && same(data.beneficiary, account) && same(data.vault, c.vault)
+        && data.chainId === CAMPUS_CHAIN_ID && same(data.beneficiary, account) && same(data.vault, c.vault)
         && same(data.deploymentHash, c.deploymentHash) && same(data.merchant, c.merchant) && same(data.category, c.category)
         && money(data.amountWei) && BigInt(data.amountWei) > BigInt(0) && integer(data.afterBlock) && typeof data.recoveredHash === "boolean"
         && ["prepared", "unknown", "pending", "confirmed", "reverted"].includes(String(data.phase))
@@ -219,7 +219,7 @@ export class GrantController {
   }
   private walletMatches(account: string) {
     const wallet = this.options.wallet.getSnapshot();
-    check(same(wallet.address, account) && wallet.chainId === BigInt(20261) && wallet.canProceed, "WALLET_CHANGED");
+    check(same(wallet.address, account) && wallet.chainId === BigInt(CAMPUS_CHAIN_ID) && wallet.canProceed, "WALLET_CHANGED");
   }
   private async settle(account: string, intent: GrantIntent) {
     await (this.options.lock ?? browserGrantLock)(grantJournalKey(this.options.config, account), async () => {
@@ -294,7 +294,7 @@ export class GrantController {
         const { transaction, afterBlock } = await preflightGrant(this.options.rpc, this.options.config, account, amount);
         check(this.active(generation), "WALLET_CHANGED"); this.walletMatches(account);
         const c = this.options.config;
-        let intent: GrantIntent = { orderId: this.options.orderId, schemaVersion: 1, id: crypto.randomUUID(), chainId: 20261, beneficiary: account, vault: c.vault, deploymentHash: c.deploymentHash,
+        let intent: GrantIntent = { orderId: this.options.orderId, schemaVersion: 1, id: crypto.randomUUID(), chainId: CAMPUS_CHAIN_ID, beneficiary: account, vault: c.vault, deploymentHash: c.deploymentHash,
           merchant: c.merchant, category: c.category, amountWei: amount.toString(), afterBlock, recoveredHash: false, phase: "prepared", hash: null };
         this.write(account, intent); this.set({ intent, lookup, stale: false });
         let guardError: unknown;

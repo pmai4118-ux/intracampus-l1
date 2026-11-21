@@ -1,3 +1,4 @@
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
 import { Router } from "express";
 import type { GrantsService } from "./grants.service.ts";
 import { grantAddress, grantHash } from "./grants.rpc.ts";
@@ -18,7 +19,7 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
       if (!service) throw new GrantError("DEPLOYMENT_NOT_CONFIGURED");
       if (authService || authConfig || libraryService) {
         if (!authService || !authConfig || !libraryService) {
-          res.status(503).json({ status: "unverified", chainId: 20261, balanceWei: null,
+          res.status(503).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null,
             error: { code: "CONFIGURATION_ERROR", retryable: false } });
           return;
         }
@@ -26,12 +27,12 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
           .filter((part) => part.startsWith(`${authConfig.cookieName}=`));
         const session = cookie?.length === 1 ? authService.session(cookie[0].slice(authConfig.cookieName.length + 1)) : null;
         if (!session) {
-          res.status(401).json({ status: "unverified", chainId: 20261, balanceWei: null,
+          res.status(401).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null,
             error: { code: "UNAUTHENTICATED", retryable: false } });
           return;
         }
-        if (session.account.wallet.toLowerCase() !== beneficiary.toLowerCase()) {
-          res.status(403).json({ status: "unverified", chainId: 20261, balanceWei: null,
+        if (session.account.role === "PARKING" || session.account.wallet.toLowerCase() !== beneficiary.toLowerCase()) {
+          res.status(403).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null,
             error: { code: "FORBIDDEN", retryable: false } });
           return;
         }
@@ -41,7 +42,7 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
         // Held students cannot start grant activity; their own transaction hash
         // remains readable so an already-sent spend can still be reconciled.
         if (accountStatus.held && hash === undefined) {
-          res.status(403).json({ status: "unverified", chainId: 20261, balanceWei: null,
+          res.status(403).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null,
             error: { code: "FORBIDDEN", retryable: false } });
           return;
         }
@@ -55,7 +56,7 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
         const retryAfterSeconds = "retryAfterSeconds" in error && typeof error.retryAfterSeconds === "number"
           ? error.retryAfterSeconds : 2;
         if (retryable) res.set("Retry-After", String(Math.ceil(retryAfterSeconds)));
-        res.status(status).json({ status: "unverified", chainId: 20261, balanceWei: null,
+        res.status(status).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null,
           error: { code: error.code, retryable } });
         return;
       }
@@ -63,7 +64,7 @@ export function createGrantsRouter(service?: GrantsService, authService?: AuthSe
       const status = code === "INVALID_REQUEST" ? 400 : ["RECEIPT_MISMATCH", "TX_REVERTED"].includes(code) ? 422 : 503;
       const retryable = ["RPC_UNAVAILABLE", "CHAIN_CHANGED"].includes(code);
       if (retryable) res.set("Retry-After", "2");
-      res.status(status).json({ status: "unverified", chainId: 20261, balanceWei: null, error: { code, retryable } });
+      res.status(status).json({ status: "unverified", chainId: CAMPUS_CHAIN_ID, balanceWei: null, error: { code, retryable } });
     }
   });
   return router;

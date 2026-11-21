@@ -1,4 +1,4 @@
-import { campusNetwork, type InvoiceApiError, type InvoiceLookupResponse, type VerifiedInvoiceReceipt } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, campusNetwork, type InvoiceApiError, type InvoiceLookupResponse, type VerifiedInvoiceReceipt } from "@intracampus/network";
 import type { InvoiceRecord, InvoiceRepository } from "./invoices.repository.ts";
 import { InvoiceRpcError, type InvoiceRpc } from "./invoices.rpc.ts";
 import { defaultInvoiceChainFreshness, isFreshInvoiceChainTimestamp, type InvoiceChainFreshness } from "./chain-freshness.ts";
@@ -15,7 +15,7 @@ export function invoiceError(code: InvoiceApiError["code"]): InvoiceApiError {
     INVALID_REQUEST: ["Dữ liệu yêu cầu không hợp lệ hoặc bị thiếu.", "Kiểm tra lại mã hóa đơn và mã giao dịch."],
     INVOICE_NOT_FOUND: ["Không tìm thấy hóa đơn cần tra cứu.", "Kiểm tra lại mã hóa đơn hoặc tạo hóa đơn mới trên POS."],
     RPC_UNAVAILABLE: ["Chưa đủ dữ liệu RPC để xác minh thanh toán.", "Giữ hash giao dịch cũ và thử tra cứu lại; không gửi lại thanh toán."],
-    WRONG_CHAIN: ["Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID 20261).", "Cấu hình RPC về IntraCampus L1 (20261) rồi thử lại."],
+    WRONG_CHAIN: [`Đang kết nối sai mạng (yêu cầu IntraCampus L1 — Chain ID ${CAMPUS_CHAIN_ID}).`, `Cấu hình RPC về IntraCampus L1 (${CAMPUS_CHAIN_ID}) rồi thử lại.`],
     STALE_CHAIN_STATE: ["Block mới nhất của IntraCampus L1 đã quá cũ để xác định trạng thái hóa đơn.", "Kiểm tra nút L1/RPC đang chạy và có block mới; sau đó tra cứu lại."],
     TX_REVERTED: ["Giao dịch trên chuỗi bị từ chối (revert), chưa thanh toán.", "Đối chiếu mã giao dịch và hóa đơn; không tự gửi lại."],
     RECEIPT_EVENT_MISMATCH: ["Giao dịch đã thực thi nhưng không chứa biên nhận thanh toán hợp lệ cho hóa đơn này.", "Giữ trạng thái hiện tại và kiểm tra đúng mã giao dịch thanh toán."],

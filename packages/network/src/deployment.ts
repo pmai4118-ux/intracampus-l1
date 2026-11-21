@@ -1,4 +1,4 @@
-import manifest from "../../../deployments/intracampus.json" with { type: "json" };
+import { selectedDeploymentManifest as manifest } from "./deployment-profile.ts";
 import { campusNetwork } from "./chain.ts";
 
 const names = ["StudentSBTIdentity", "CampusPaymentRegistry", "PurposeBoundGrantVault"] as const;

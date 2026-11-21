@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 
 import Link from "next/link";
 import { useState } from "react";
@@ -38,7 +40,7 @@ export default function PointOfSalePage() {
               className={`mode-status-dot ${mode === "live" ? "dot-live" : "dot-demo"}`}
               aria-hidden="true"
             />
-            {mode === "live" ? "Avalanche L1 · Chain 20261" : "Bản minh họa"}
+            {mode === "live" ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : "Bản minh họa"}
           </span>
           <div className="student-mode-switch" role="group" aria-label="Chế độ POS">
             <button

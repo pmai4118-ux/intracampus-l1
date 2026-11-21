@@ -1,4 +1,4 @@
-import manifest from "../../../deployments/intracampus.json" with { type: "json" };
+import { selectedDeploymentManifest as manifest } from "./deployment-profile.ts";
 import libraryFixture from "../../../docs/fixtures/library-v1.json" with { type: "json" };
 import { campusNetwork } from "./chain.ts";
 import { requireDeployment, type DeployedManifest, type PublicContract } from "./deployment.ts";

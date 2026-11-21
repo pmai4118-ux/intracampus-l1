@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { isParkingInvoice, requireDeployment } from "@intracampus/network";
+import { CAMPUS_CHAIN_ID, isParkingInvoice, requireDeployment } from "@intracampus/network";
 import { browserWalletConfig, formatWalletBalance } from "../../lib/chains";
 import { InvoicePreviewError, verifyInvoicePreview } from "../../lib/invoice";
 import { librarySessionMessage, LibrarySessionError, requireLibraryStudentNotHeld } from "../../lib/library-session";
@@ -98,7 +98,7 @@ export function PayInvoice({
   }, [payment?.receipt?.txHash, walletController]);
 
   const quote = payment?.preview.quote ?? preview.quote;
-  const locked = !wallet.canProceed || wallet.chainId !== BigInt(20261) || access?.status !== "ready";
+  const locked = !wallet.canProceed || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID) || access?.status !== "ready";
   const parking = isParkingInvoice(preview.envelope);
   const showSummary = !compact || payment?.status === "quote-changed";
   if (payment?.status === "paid" && payment.receipt) return <section className={`invoice-payment-panel${compact ? " invoice-payment-compact" : ""}`} aria-labelledby={`${id}-title`}>
@@ -140,7 +140,7 @@ export function PayInvoice({
       {access?.status === "held" ? <p>Mã khoản mượn đang chặn: {access.accountStatus.blockingLoanIds.join(", ") || "chưa có"}</p> : null}
       <div className="inline-actions">
         {access?.status === "sign-in-required" || access?.status === "error" ? <button type="button" className="secondary-btn"
-          disabled={!wallet.address || wallet.chainId !== BigInt(20261) || signingIn}
+          disabled={!wallet.address || wallet.chainId !== BigInt(CAMPUS_CHAIN_ID) || signingIn}
           onClick={() => void signIn()}>{signingIn ? "Đang chờ ký trong Core…" : "Đăng nhập bằng ví sinh viên"}</button> : null}
         <button type="button" className="secondary-btn" disabled={!wallet.address || signingIn} onClick={() => void refreshAccess()}>Kiểm tra session và hold</button>
       </div>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { CampusProfile, CampusPayout } from "@intracampus/network";
 import { WalletSession, useCampusWallet } from "../student/WalletPanel";
-import { formatWalletBalance } from "../../lib/chains";
+import { campusNetwork, formatWalletBalance } from "../../lib/chains";
 import { signInLibraryStudent } from "../../lib/library-session";
 import { campusApi, campusLogin, campusMe, campusMessage, campusStatus, releaseCampusPayout, sendCampusPayout, type CampusMe, type CampusPayoutRecovery } from "../../lib/campus";
 import PageHeading from "./PageHeading";
@@ -64,7 +64,7 @@ function Portal({ mode }: { mode: Mode }) {
     // The enclosing component remounts on every wallet/chain change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const ready = wallet.address && wallet.chainId === BigInt(20261);
+  const ready = wallet.address && wallet.chainId === BigInt(campusNetwork.chainId);
   const own = me?.profile;
   const welcome = own?.payouts.find(p => p.kind === "WELCOME");
   async function prepare(profile: CampusProfile, kind: CampusPayout["kind"]) {
@@ -102,9 +102,9 @@ function Portal({ mode }: { mode: Mode }) {
           <p>Đăng nhập lại bằng cùng ví ngay trên trang này, rồi mở lượt cấp để tiếp tục khôi phục.</p>
         ) : null}
         {wallet.address ? <code className="campus-wallet-address">{wallet.address}</code> : <span className="campus-wallet-address">Chưa kết nối ví</span>}
-        <span className="network-pill">{wallet.chainId === BigInt(20261) ? "IntraCampus L1 · 20261" : "Cần mạng IntraCampus L1 · 20261"}</span>
+        <span className="network-pill">{wallet.chainId === BigInt(campusNetwork.chainId) ? `${campusNetwork.name} · ${campusNetwork.chainId}` : `Cần mạng ${campusNetwork.name} · ${campusNetwork.chainId}`}</span>
         <div className="campus-login-actions">
-          {!wallet.address ? <button className="primary-cta-btn" disabled={busy || wallet.status === "no-wallet"} onClick={() => void run(() => controller.connect())}>Kết nối ví</button> : wallet.chainId !== BigInt(20261) ? <button className="primary-cta-btn" disabled={busy} onClick={() => void run(() => controller.switchNetwork())}>Chuyển sang IntraCampus L1</button> : null}
+          {!wallet.address ? <button className="primary-cta-btn" disabled={busy || wallet.status === "no-wallet"} onClick={() => void run(() => controller.connect())}>Kết nối ví</button> : wallet.chainId !== BigInt(campusNetwork.chainId) ? <button className="primary-cta-btn" disabled={busy} onClick={() => void run(() => controller.switchNetwork())}>Chuyển sang {campusNetwork.name}</button> : null}
           {!me ? <button className="primary-cta-btn" disabled={!ready || busy} onClick={() => void run(async () => {
             const result = await campusLogin(wallet.address!, (account, message) => controller.signMessage(account, message));
             if (active.current) setMe(result); await refresh();
@@ -150,7 +150,7 @@ function Portal({ mode }: { mode: Mode }) {
       })}</div>}
     </section> : null}
     {payout && mode === "school" && me?.school ? <section className="surface-panel campus-payout-review"><h2>Kiểm tra lượt cấp trước khi ký</h2>
-      <dl><dt>Loại</dt><dd>{payout.kind === "WELCOME" ? "Quà chào mừng" : "Học bổng FOOD"}</dd><dt>Số tiền</dt><dd>{formatWalletBalance(BigInt(payout.value))} + gas từ ví cấp</dd><dt>Mạng</dt><dd>IntraCampus L1 · 20261</dd><dt>Ví cấp</dt><dd><code>{payout.from}</code></dd><dt>Sinh viên nhận</dt><dd><code>{payout.wallet}</code></dd><dt>Đích giao dịch</dt><dd><code>{payout.to}</code></dd><dt>Trạng thái</dt><dd>{payout.status === "PENDING" ? "Đang chờ xác minh" : campusStatus[payout.status]}</dd></dl>
+      <dl><dt>Loại</dt><dd>{payout.kind === "WELCOME" ? "Quà chào mừng" : "Học bổng FOOD"}</dd><dt>Số tiền</dt><dd>{formatWalletBalance(BigInt(payout.value))} + gas từ ví cấp</dd><dt>Mạng</dt><dd>{campusNetwork.name} · {campusNetwork.chainId}</dd><dt>Ví cấp</dt><dd><code>{payout.from}</code></dd><dt>Sinh viên nhận</dt><dd><code>{payout.wallet}</code></dd><dt>Đích giao dịch</dt><dd><code>{payout.to}</code></dd><dt>Trạng thái</dt><dd>{payout.status === "PENDING" ? "Đang chờ xác minh" : campusStatus[payout.status]}</dd></dl>
       {payout.status === "PREPARED" ? <button className="primary-cta-btn" disabled={busy || !wallet.canProceed || payout.from.toLowerCase() !== wallet.address?.toLowerCase()} onClick={() => void run(async () => {
         await campusMe(wallet.address!);
         const result = await sendCampusPayout(payout, wallet.address!, (account, tx) => controller.sendTransaction(account, tx), {

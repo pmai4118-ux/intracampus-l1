@@ -1,4 +1,6 @@
 "use client";
+import { CAMPUS_CHAIN_ID } from "@intracampus/network";
+
 import { useState } from "react";
 import Link from "next/link";
 import StudentDemo from "./StudentDemo";
@@ -14,7 +16,7 @@ export default function StudentPage() {
         <div className="mode-switch-wrapper">
           <span className="mode-switch-kicker">
             <span className={`mode-status-dot ${mode === "live" ? "dot-live" : "dot-demo"}`} aria-hidden="true" />
-            {mode === "live" ? "Avalanche L1 · Chain 20261" : "Bản minh họa"}
+            {mode === "live" ? `Avalanche L1 · Chain ${CAMPUS_CHAIN_ID}` : "Bản minh họa"}
           </span>
           <div className="student-mode-switch" role="group" aria-label="Chế độ ví sinh viên">
             <button type="button" className="secondary-btn" aria-pressed={mode === "live"} onClick={() => setMode("live")}>Ví thật</button>
