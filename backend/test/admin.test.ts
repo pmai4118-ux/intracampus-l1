@@ -276,6 +276,22 @@ async function setupServer(t: TestContext, options: { legacyLibraryAbi?: boolean
   return { baseUrl: `http://127.0.0.1:${port}`, adminRepo, libraryRepo, campusRepo, rpc, service };
 }
 
+test("readAdminConfig ignores non-key legacy SEED_* values unless explicit ADMIN_* signer key is invalid", () => {
+  const cfg = readAdminConfig({
+    ADMIN_ACCESS_KEY: ACCESS_KEY,
+    ADMIN_AUTH_ORIGIN: ORIGIN,
+    SEED_FUNDER_PRIVATE_KEY: "0x1111111111111111111111111111111111111111",
+    SEED_GRANT_ISSUER_PRIVATE_KEY: grantSigner.privateKey,
+  });
+  assert.equal(cfg.signers.funder, undefined);
+  assert.equal(cfg.signers.grantIssuer, grantSigner.privateKey);
+  assert.throws(() => readAdminConfig({
+    ADMIN_ACCESS_KEY: ACCESS_KEY,
+    ADMIN_AUTH_ORIGIN: ORIGIN,
+    ADMIN_FUNDER_PRIVATE_KEY: "0x1111111111111111111111111111111111111111",
+  }), /INVALID_ADMIN_SIGNER_KEY/);
+});
+
 test("fixed-key login enforces Origin, wrong key, rate limits and supports multi-device sessions", async (t) => {
   const { baseUrl } = await setupServer(t, { maxLogin: 3 });
 

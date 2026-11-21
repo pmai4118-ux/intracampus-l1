@@ -43,6 +43,14 @@ function parseOptionalPrivateKey(raw: string | undefined): string | undefined {
   return trimmed;
 }
 
+function parseFallbackPrivateKey(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^0x[0-9a-fA-F]{64}$/.test(trimmed) || /^0x0{64}$/i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 function parseOptionalAddress(raw: string | undefined): string | undefined {
   const trimmed = raw?.trim();
   if (!trimmed) return undefined;
@@ -98,11 +106,11 @@ export function readAdminConfig(env: Record<string, string | undefined>): AdminC
   const registryKey = parseOptionalPrivateKey(env.ADMIN_REGISTRY_SIGNER_PRIVATE_KEY);
   const libraryKey = parseOptionalPrivateKey(env.ADMIN_LIBRARY_SIGNER_PRIVATE_KEY) ?? registryKey;
   const sbtIssuerKey = parseOptionalPrivateKey(env.ADMIN_SBT_ISSUER_PRIVATE_KEY)
-    ?? parseOptionalPrivateKey(env.SEED_ISSUER_PRIVATE_KEY);
+    ?? parseFallbackPrivateKey(env.SEED_ISSUER_PRIVATE_KEY);
   const grantIssuerKey = parseOptionalPrivateKey(env.ADMIN_GRANT_ISSUER_PRIVATE_KEY)
-    ?? parseOptionalPrivateKey(env.SEED_GRANT_ISSUER_PRIVATE_KEY);
+    ?? parseFallbackPrivateKey(env.SEED_GRANT_ISSUER_PRIVATE_KEY);
   const funderKey = parseOptionalPrivateKey(env.ADMIN_FUNDER_PRIVATE_KEY)
-    ?? parseOptionalPrivateKey(env.SEED_FUNDER_PRIVATE_KEY);
+    ?? parseFallbackPrivateKey(env.SEED_FUNDER_PRIVATE_KEY);
 
   return {
     accessKey,
