@@ -38,7 +38,7 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
 | `ADMIN_LIBRARY_SIGNER_PRIVATE_KEY` | Tùy nhu cầu | Key `administrator` của `LibraryDepositEscrow` (nếu bỏ trống sẽ tự fallback sang `ADMIN_REGISTRY_SIGNER_PRIVATE_KEY`). |
 | `ADMIN_SBT_ISSUER_PRIVATE_KEY` | Tùy nhu cầu | Key `sbtIssuer` (`0xC67497dCe89e3373f95aCe1a98b9270e8ab18329`) để cấp/cấp lại/thu hồi SBT (-10%). Có fallback sang `SEED_ISSUER_PRIVATE_KEY` nếu hợp lệ. |
 | `ADMIN_GRANT_ISSUER_PRIVATE_KEY` | Tùy nhu cầu | Key `grantIssuer` (`0xA1Cb7975324Be2590b3Ae773526fcFcde25f794e`) để giải ngân học bổng `FOOD` vào `PurposeBoundGrantVault`. Có fallback sang `SEED_GRANT_ISSUER_PRIVATE_KEY` nếu hợp lệ. |
-| `ADMIN_FUNDER_PRIVATE_KEY` | Tùy nhu cầu | Key ví cấp `CAMPUS` test & gas cho tài khoản thử nghiệm. Có fallback sang `SEED_FUNDER_PRIVATE_KEY` nếu hợp lệ. |
+| `ADMIN_FUNDER_PRIVATE_KEY` | Có, nếu dùng cấp CAMPUS test | Key ví funder trên VM. Nút **Bắn CAMPUS test** gửi native CAMPUS từ số dư ví này; cần đủ CAMPUS và gas. |
 
 > **Lưu ý khi thử trên máy local (`127.0.0.1`):**
 > - `.env` và `.env.*` bị `.gitignore` chặn đồng bộ lên Git, nên cài key ở máy local không tự cập nhật lên GCP VM (và ngược lại).
@@ -74,7 +74,8 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
 
 2. **Tab 2 · Tư cách sinh viên & SBT**
    - Dán địa chỉ ví test bất kỳ (hoặc chọn từ danh sách) để xem đồng thời trạng thái `campus_applications`, `library.sqlite` (enabled/held), số dư CAMPUS, số dư `FOOD` vault và thẻ `StudentSBTIdentity` on-chain.
-   - Thao tác nhanh 1 chạm: **Duyệt SV & Mở dịch vụ**, **Từ chối SV**, **Mở/Khóa dịch vụ**, **Gỡ Hold test**, **Cấp / Cấp lại SBT (-10%)** (tự động chờ xác nhận `revoke` trước khi `mint` thẻ mới), **Thu hồi SBT**, **Bắn CAMPUS test**.
+   - Thao tác nhanh: **Duyệt SV & Mở dịch vụ**, **Từ chối SV**, **Mở/Khóa dịch vụ**, **Gỡ Hold test**, **Cấp / Cấp lại SBT (-10%)** (tự động chờ xác nhận `revoke` trước khi `mint` thẻ mới), **Thu hồi SBT**, **Bắn CAMPUS test**.
+   - **Bắn CAMPUS test** gửi native CAMPUS từ signer funder trên VM tới ví đích. Đây là chuyển CAMPUS thật từ số dư sẵn có, không phải mint hoặc cộng số dư giả; ví funder cần đủ CAMPUS và gas.
 
 3. **Tab 3 · Học bổng FOOD**
    - Chỉ hỗ trợ danh mục `FOOD` (không mở danh mục khác).
@@ -82,7 +83,7 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
    - Trên trang `/login` và `/student/verification` ([CampusPortal.tsx](../frontend/app/components/CampusPortal.tsx)), giao diện đã bỏ dropdown chọn diện học bổng và chỉ giữ lại một nút **Gửi đăng ký học bổng**.
 
 4. **Tab 4 · Signers VM & Nhật ký**
-   - Kiểm tra xem từng signer trong `.env` trên VM đã nạp chưa, địa chỉ signer có khớp với vai trò trên manifest hay không, và cảnh báo nếu số dư gas dưới `1 CAMPUS`.
+   - Kiểm tra đủ năm signer trong `.env` trên VM đã nạp chưa, địa chỉ signer có khớp với vai trò trên manifest hay không, và cảnh báo nếu số dư gas dưới `1 CAMPUS`.
    - Theo dõi nhật ký thao tác lưu trong `admin_audit_log` và kiểm tra lại trạng thái `txHash` nếu giao dịch đang ở trạng thái `SUBMITTED`.
 
 ---

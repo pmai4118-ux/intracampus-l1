@@ -29,6 +29,8 @@ Dùng Node 24, `pnpm install --frozen-lockfile` và cấu hình web/API theo [ru
 | `INTRACAMPUS_RPC_URL` | RPC có head mới và đúng chain được chọn bởi `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` |
 | `CAMPUS_ALLOW_LOCAL_ANVIL` | Mặc định false. Chỉ bật cho manifest local và RPC loopback tường minh |
 
+Trên cloud, `CAMPUS_TREASURY_ADDRESS` phải là ví EOA đang giữ CAMPUS và cũng phải có trong `CAMPUS_SCHOOL_WALLETS`; nếu không, ví quỹ không thể tạo lượt cấp quà chào mừng. Ví `grantIssuer` chỉ cần nằm trong danh sách này nếu nó sẽ đăng nhập để duyệt hồ sơ hoặc chuẩn bị giải ngân FOOD. `ADMIN_FUNDER_PRIVATE_KEY` là signer khác cho thao tác **Bắn CAMPUS test** trong `/admin`; nó chuyển từ số dư đang có trên VM và không tự cấp quyền Native Minter. Quyền Native Minter được quản lý riêng trên chain.
+
 Campus dùng `CAMPUS_AUTH_ORIGIN`, dự phòng `LIBRARY_AUTH_ORIGIN`. Thiếu/sai origin làm endpoint Campus trả 503, không mở quyền tạm. Challenge có hạn 5 phút, phiên 1 giờ; giới hạn challenge 10 và verify 20 yêu cầu mỗi 60 giây theo cơ chế auth hiện có. Cookie Campus tách khỏi cookie dịch vụ cũ. Frontend proxy `/api/campus/*` theo `BACKEND_URL`; không có biến frontend nào chứa private key.
 
 Học bổng lấy địa chỉ, runtime code hash, grantIssuer và category căn-tin từ manifest được chọn theo chain: `20261` dùng `deployments/intracampus.json`, `20261120` dùng `deployments/intracampus-cloud.json`. Không lấy đích hợp đồng từ form. Chưa có deployment đã xác minh thì vẫn đăng nhập/duyệt được nhưng không giải ngân. Chạy `pnpm rpc:check` trước thao tác trên L1. Không dùng faucet Fuji hoặc nhầm AVAX với CAMPUS.

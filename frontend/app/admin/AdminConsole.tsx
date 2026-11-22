@@ -387,7 +387,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
     }
     await runAction(`fund:${wallet}`, async () => {
       const res = await adminApi.fundCampus(wallet, amountWei);
-      trackHash(res.txHash, `Đã gửi ${formatWeiSafe(res.amountWei)} tới ${res.wallet}.`);
+      trackHash(res.txHash, `Đã gửi ${formatWeiSafe(res.amountWei)} CAMPUS từ ví funder trên VM tới ${res.wallet}.`);
       await loadAll(true);
       await refreshInspectedIfMatching(wallet);
     });
@@ -439,7 +439,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
     [students],
   );
 
-  const configuredSignersCount = overview?.signers.filter((s) => s.configured).length ?? 0;
+  const configuredSignersCount = overview?.signers.filter((signer) => signer.configured).length ?? 0;
 
   return (
     <div className="admin-shell">
@@ -530,9 +530,9 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
             <span className="admin-kpi-note">{overview.counts.scholarshipsPending} đơn đang chờ</span>
           </button>
           <button type="button" className="admin-kpi-card" onClick={() => setTab("audit")}>
-            <span className="admin-kpi-label">VM Signers sẵn sàng</span>
+            <span className="admin-kpi-label">VM Signers đã cấu hình</span>
             <strong className="admin-kpi-value">{configuredSignersCount} / {overview.signers.length}</strong>
-            <span className="admin-kpi-note">Ký on-chain tự động từ GCP VM</span>
+            <span className="admin-kpi-note">Signer nghiệp vụ và ví funder trên GCP VM</span>
           </button>
         </section>
       ) : null}
@@ -1148,7 +1148,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
             <div className="admin-card-head">
               <div>
                 <h2>Trạng thái Operator Signers trên GCP VM</h2>
-                <p className="admin-card-desc">Các private key chỉ nằm trong biến môi trường backend trên VM để ký giao dịch on-chain thay mặt đội ngũ test.</p>
+                <p className="admin-card-desc">Các signer ký thao tác hợp đồng và ví funder chuyển CAMPUS test từ số dư có sẵn trên VM.</p>
               </div>
             </div>
             <div className="admin-signer-grid">
