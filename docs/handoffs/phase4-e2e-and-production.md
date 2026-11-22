@@ -6,6 +6,14 @@
 
 ---
 
+## Cập nhật signer và Campus cloud · 2026-11-23
+
+- Backend GCP `intracampus-phase3b-api.service` đã nạp đủ năm signer từ keystore Phase 3B có sẵn; API `/api/admin/overview` xác nhận `5/5` đã cấu hình. Registry, Library Escrow, SBT issuer và grant issuer khớp các địa chỉ role bất biến của manifest/contract. Private key và password vẫn chỉ nằm trên VM, ngoài Git/log.
+- `ADMIN_FUNDER_PRIVATE_KEY` trỏ tới ví funder VM `0x589618Fd93d8fEeAff54D65aC6ba266DFf158864`, có khoảng `96,988.7499 CAMPUS` để chuyển demo. Giao dịch này tiêu số dư có sẵn; không phải mint.
+- `CAMPUS_TREASURY_ADDRESS` đã đặt thành ví quỹ nhà trường `0x83907f9A2685efcbb2BeDa057Cb23a3809c8f750`; ví này và grant issuer nằm trong `CAMPUS_SCHOOL_WALLETS`. `/api/config/runtime` trả đúng ví quỹ cho luồng welcome 20 CAMPUS. Ví quỹ hiện có khoảng `1,002 CAMPUS`, đủ cho 50 lượt quà 20 CAMPUS trước gas.
+- Native Minter precompile đang hoạt động. Ví quỹ có role `Admin` (`2`), nhưng VM funder hiện có role `None` (`0`); do đó funder chưa thể mint thêm. Cần người giữ ví quỹ ký `setEnabled(0x589618Fd93d8fEeAff54D65aC6ba266DFf158864)` trên chain `20261120` trước khi dùng mint. Không có giao dịch cấp quyền nào được gửi trong lần cập nhật này.
+- Env cũ được sao lưu riêng trên VM trước từng lần sửa. `/api/network` trả `ready`, chain `20261120`; API service active sau restart. Không cần thay RPC hoặc CORS cho cấu hình signer/Campus này.
+
 ## 1. Tóm tắt hiện trạng đầu vào Phase 4
 
 ### Những gì đã hoàn tất ở Phase 3B & PR #41
@@ -40,7 +48,7 @@ Theo [2026-11-21-vercel-gcp-core-wallet.md](2026-11-21-vercel-gcp-core-wallet.md
      - `ADMIN_LIBRARY_SIGNER_PRIVATE_KEY` (mặc định dùng chung key trên nếu trùng `administrator`)
      - `ADMIN_SBT_ISSUER_PRIVATE_KEY` (khớp `0xC67497dCe89e3373f95aCe1a98b9270e8ab18329`)
      - `ADMIN_GRANT_ISSUER_PRIVATE_KEY` (khớp `0xA1Cb7975324Be2590b3Ae773526fcFcde25f794e`)
-     - `ADMIN_FUNDER_PRIVATE_KEY` (nếu dùng nút **Bắn CAMPUS** trên `/admin`)
+     - `ADMIN_FUNDER_PRIVATE_KEY` cho nút **Bắn CAMPUS** từ số dư native CAMPUS có sẵn trên ví funder VM.
    - Chuẩn hóa `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` thành `https://intracampus-l1.vercel.app` (hoặc URL đích duy nhất đang nghiệm thu).
 3. **Trên Vercel Dashboard**:
    - Kết nối Git repository vào project (hoặc deploy commit mới của `main`) với scope **Production** (`https://intracampus-l1.vercel.app`).
