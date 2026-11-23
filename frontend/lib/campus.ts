@@ -23,6 +23,7 @@ export async function campusLogin(wallet: string, sign: (wallet: string, message
   return campusMe(wallet);
 }
 export function validateCampusPayout(p: CampusPayout, account: string) {
+  if (p?.executionType === "NATIVE_MINT") throw Error("SERVER_SIGNED_PAYOUT");
   if (!p || !isWalletAddress(p.from) || p.from.toLowerCase() !== account.toLowerCase() || !isWalletAddress(p.to) || !isWalletAddress(p.wallet)
     || !["WELCOME", "SCHOLARSHIP"].includes(p.kind) || !/^0x(?:[0-9a-f]{2})+$/i.test(p.data) || !/^0x[1-9a-f][0-9a-f]*$/i.test(p.value)
     || BigInt(p.value) >= BigInt(2) ** BigInt(256)
@@ -90,6 +91,12 @@ export function campusMessage(code: string) {
     ALREADY_REVIEWED: "Hồ sơ đã được xử lý. Tải lại danh sách để xem kết quả.", APPLICATION_LOCKED: "Hồ sơ đang chờ hoặc đã được duyệt; không thể sửa lúc này.",
     TREASURY_ONLY: "Chuyển sang ví quỹ nhà trường để cấp CAMPUS.", GRANT_ISSUER_ONLY: "Chuyển sang ví có quyền cấp học bổng.", PAYOUT_LOCKED: "Lượt cấp đã bắt đầu. Đối chiếu hash cũ, không gửi thêm.",
     PAYOUT_ATTEMPT_RELEASED: "Lần gửi này đã được hủy. Làm mới trạng thái và kiểm tra lượt cấp trước khi thử lại.",
+    PAYOUT_IN_PROGRESS: "Lượt mint đang được xử lý. Làm mới trạng thái, không tạo yêu cầu mới.",
+    SERVER_SIGNED_PAYOUT: "Quà chào mừng được cấp qua Native Minter; không mở ví nhà trường để ký.",
+    ADMIN_BACKFILL_REQUIRED: "Quà của hồ sơ đã duyệt trước đây cần được cấp bù từ bảng quản trị.",
+    NATIVE_MINTER_ROLE_MISSING: "Signer mint chưa có quyền Native Minter. Cần cấp quyền một lần rồi thử lại.",
+    NATIVE_MINTER_NOT_CONFIGURED: "Native Minter chưa được cấu hình trên backend.",
+    NATIVE_MINT_UNAVAILABLE: "Chưa gửi được lệnh mint. Giữ nguyên lượt cấp và kiểm tra trạng thái trước khi thử lại.",
     RECEIPT_MISMATCH: "Giao dịch chưa khớp lượt cấp. Giữ hash và nhờ người vận hành đối chiếu; chưa cấp lại.", HASH_ALREADY_ATTACHED: "Lượt cấp đã gắn một hash. Tiếp tục đối chiếu hash đó.",
     WRONG_CHAIN: `Chuyển ví và RPC sang IntraCampus L1 (${CAMPUS_CHAIN_ID}).`, STALE_CHAIN_STATE: "Dữ liệu mạng chưa đủ mới. Chưa mở giao dịch.", INVALID_REQUEST: "Kiểm tra lại mã sinh viên và thông tin đã nhập.",
     RPC_UNAVAILABLE: "Chưa đọc được mạng. Giữ hash và thử đối chiếu lại.", RATE_LIMITED: "Bạn thao tác quá nhanh. Đợi một phút rồi thử lại." } as Record<string, string>)[code] ?? "Chưa hoàn tất thao tác. Kiểm tra kết nối, ví và thử lại; không gửi lại khoản cấp chưa rõ kết quả.";

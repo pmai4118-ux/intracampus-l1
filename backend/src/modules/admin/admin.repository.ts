@@ -15,6 +15,17 @@ export type AdminSessionRecord = {
   expiresAt: number;
 };
 
+export type NativeMintOperation = {
+  requestId: string;
+  target: string;
+  amountWei: string;
+  txHash: string | null;
+  status: "READY" | "IN_PROGRESS" | "SUBMITTED" | "CONFIRMED" | "FAILED";
+  errorCode: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export class AdminRepository {
   private readonly db: DatabaseSync;
   private closed = false;
@@ -57,6 +68,17 @@ export class AdminRepository {
       ) STRICT;
       CREATE INDEX IF NOT EXISTS ix_admin_audit_created ON admin_audit_log(created_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS ix_admin_audit_tx_hash ON admin_audit_log(tx_hash) WHERE tx_hash IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS admin_native_mint_operations (
+        request_id TEXT PRIMARY KEY,
+        target TEXT NOT NULL,
+        amount_wei TEXT NOT NULL,
+        tx_hash TEXT UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('READY', 'IN_PROGRESS', 'SUBMITTED', 'CONFIRMED', 'FAILED')),
+        error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      ) STRICT;
     `);
   }
 
@@ -175,6 +197,92 @@ export class AdminRepository {
   updateAuditByTxHash(txHash: string, status: "CONFIRMED" | "FAILED", errorCode: string | null = null): void {
     this.db.prepare("UPDATE admin_audit_log SET status = ?, error_code = ? WHERE tx_hash = ? COLLATE NOCASE")
       .run(status, errorCode, txHash.toLowerCase());
+  }
+
+  getAuditByTxHash(txHash: string): AdminAuditEntry | undefined {
+    const row = this.db.prepare(
+      "SELECT id, action, target, summary, tx_hash, status, error_code, created_at FROM admin_audit_log WHERE tx_hash = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1",
+    ).get(txHash.toLowerCase());
+    if (!row) return undefined;
+    return {
+      id: Number(row.id), action: String(row.action), target: String(row.target), summary: String(row.summary),
+      txHash: row.tx_hash === null ? null : String(row.tx_hash), status: String(row.status) as AdminAuditEntry["status"],
+      errorCode: row.error_code === null ? null : String(row.error_code), createdAt: Number(row.created_at),
+    };
+  }
+
+  getNativeMintOperation(requestId: string): NativeMintOperation | undefined {
+    const row = this.db.prepare(
+      "SELECT request_id, target, amount_wei, tx_hash, status, error_code, created_at, updated_at FROM admin_native_mint_operations WHERE request_id = ?",
+    ).get(requestId);
+    return row ? {
+      requestId: String(row.request_id), target: String(row.target), amountWei: String(row.amount_wei),
+      txHash: row.tx_hash === null ? null : String(row.tx_hash), status: String(row.status) as NativeMintOperation["status"],
+      errorCode: row.error_code === null ? null : String(row.error_code), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    } : undefined;
+  }
+
+  getNativeMintOperationByHash(txHash: string): NativeMintOperation | undefined {
+    const row = this.db.prepare(
+      "SELECT request_id, target, amount_wei, tx_hash, status, error_code, created_at, updated_at FROM admin_native_mint_operations WHERE tx_hash = ? COLLATE NOCASE",
+    ).get(txHash.toLowerCase());
+    return row ? {
+      requestId: String(row.request_id), target: String(row.target), amountWei: String(row.amount_wei),
+      txHash: row.tx_hash === null ? null : String(row.tx_hash), status: String(row.status) as NativeMintOperation["status"],
+      errorCode: row.error_code === null ? null : String(row.error_code), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    } : undefined;
+  }
+
+  prepareNativeMintOperation(input: { requestId: string; target: string; amountWei: string; now: number }): NativeMintOperation {
+    return this.atomic(() => {
+      const existing = this.getNativeMintOperation(input.requestId);
+      if (existing) {
+        if (existing.target.toLowerCase() !== input.target.toLowerCase() || existing.amountWei !== input.amountWei) throw Error("IDEMPOTENCY_KEY_CONFLICT");
+        return existing;
+      }
+      this.db.prepare(`INSERT INTO admin_native_mint_operations
+        (request_id,target,amount_wei,tx_hash,status,error_code,created_at,updated_at) VALUES (?,?,?,NULL,'READY',NULL,?,?)`)
+        .run(input.requestId, input.target.toLowerCase(), input.amountWei, input.now, input.now);
+      return this.getNativeMintOperation(input.requestId)!;
+    });
+  }
+
+  claimNativeMintOperation(requestId: string, now: number, staleAfterSeconds = 120): boolean {
+    const result = this.db.prepare(`UPDATE admin_native_mint_operations SET status='IN_PROGRESS',error_code=NULL,updated_at=?
+      WHERE request_id=? AND tx_hash IS NULL AND (status='READY' OR (status='IN_PROGRESS' AND updated_at<=?))`)
+      .run(now, requestId, now - staleAfterSeconds);
+    return result.changes > 0;
+  }
+
+  attachNativeMintHash(requestId: string, txHash: string, now: number): void {
+    this.atomic(() => {
+      const op = this.getNativeMintOperation(requestId);
+      if (!op) throw Error("NATIVE_MINT_OPERATION_NOT_FOUND");
+      if (op.txHash) {
+        if (op.txHash.toLowerCase() !== txHash.toLowerCase()) throw Error("NATIVE_MINT_HASH_CONFLICT");
+        return;
+      }
+      if (op.status !== "IN_PROGRESS") throw Error("NATIVE_MINT_OPERATION_LOCKED");
+      this.db.prepare("UPDATE admin_native_mint_operations SET tx_hash=?,status='SUBMITTED',error_code=NULL,updated_at=? WHERE request_id=?")
+        .run(txHash.toLowerCase(), now, requestId);
+      this.db.prepare(`INSERT INTO admin_audit_log(action,target,summary,tx_hash,status,error_code,created_at)
+        VALUES ('MINT_NATIVE_CAMPUS',?,?,?,'SUBMITTED',NULL,?)`)
+        .run(op.target, `Mint ${op.amountWei} wei CAMPUS tới ${op.target} bằng Native Minter`, txHash.toLowerCase(), now);
+    });
+  }
+
+  releaseNativeMintOperation(requestId: string, errorCode: string, now: number): void {
+    this.db.prepare(`UPDATE admin_native_mint_operations SET status='READY',error_code=?,updated_at=?
+      WHERE request_id=? AND tx_hash IS NULL AND status='IN_PROGRESS'`)
+      .run(errorCode, now, requestId);
+  }
+
+  finishNativeMintOperation(txHash: string, status: "CONFIRMED" | "FAILED", errorCode: string | null, now: number): void {
+    this.atomic(() => {
+      this.db.prepare(`UPDATE admin_native_mint_operations SET status=?,error_code=?,updated_at=? WHERE tx_hash=? COLLATE NOCASE`)
+        .run(status, errorCode, now, txHash.toLowerCase());
+      this.updateAuditByTxHash(txHash, status, errorCode);
+    });
   }
 
   listAudit(limit = 50): AdminAuditEntry[] {

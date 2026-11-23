@@ -38,7 +38,7 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
 | `ADMIN_LIBRARY_SIGNER_PRIVATE_KEY` | Tùy nhu cầu | Key `administrator` của `LibraryDepositEscrow` (nếu bỏ trống sẽ tự fallback sang `ADMIN_REGISTRY_SIGNER_PRIVATE_KEY`). |
 | `ADMIN_SBT_ISSUER_PRIVATE_KEY` | Tùy nhu cầu | Key `sbtIssuer` (`0xC67497dCe89e3373f95aCe1a98b9270e8ab18329`) để cấp/cấp lại/thu hồi SBT (-10%). Có fallback sang `SEED_ISSUER_PRIVATE_KEY` nếu hợp lệ. |
 | `ADMIN_GRANT_ISSUER_PRIVATE_KEY` | Tùy nhu cầu | Key `grantIssuer` (`0xA1Cb7975324Be2590b3Ae773526fcFcde25f794e`) để giải ngân học bổng `FOOD` vào `PurposeBoundGrantVault`. Có fallback sang `SEED_GRANT_ISSUER_PRIVATE_KEY` nếu hợp lệ. |
-| `ADMIN_FUNDER_PRIVATE_KEY` | Có, nếu dùng cấp CAMPUS test | Key ví funder trên VM. Nút **Bắn CAMPUS test** gửi native CAMPUS từ số dư ví này; cần đủ CAMPUS và gas. |
+| `ADMIN_FUNDER_PRIVATE_KEY` | Có, nếu dùng mint CAMPUS cloud | Key funder giữ riêng trên VM. Trên chain `20261120`, signer cần quyền Native Minter Enabled/Manager/Admin và CAMPUS native để trả gas; trên local giữ luồng chuyển từ balance funder hiện có. |
 
 > **Lưu ý khi thử trên máy local (`127.0.0.1`):**
 > - `.env` và `.env.*` bị `.gitignore` chặn đồng bộ lên Git, nên cài key ở máy local không tự cập nhật lên GCP VM (và ngược lại).
@@ -70,12 +70,13 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
    - **Ví Nhà ăn (`FOOD`)**: Nhập địa chỉ ví `0x...` mới → backend bật allowlist `FOOD` trên `CampusPaymentRegistry`, cập nhật resolver cho `CanteenService` & `GrantsService`. Các đơn đã `prepare` trước thời điểm đổi vẫn giữ nguyên `merchantAddress` đã ký lúc tạo đơn để không gãy đối chiếu ([canteen.ts](../packages/network/src/canteen.ts)).
    - **Ví nhận Thư viện (`treasury`)**: Gọi `LibraryDepositEscrow.setTreasury(newTreasury)`. Tiền phạt trễ, phí sửa chữa, cọc giữ lại và tiền bù mất sách sẽ về ví mới. Trang sinh viên khi gọi `payShortfall` và trang thủ thư quyết toán tự đọc ví `treasury` mới từ `/api/config/runtime`.
    - **Ví Thủ thư (`librarian`)**: Gọi `LibraryDepositEscrow.setLibrarian(newLibrarian)`, đồng bộ DB tài khoản thư viện (thu hồi session thủ thư cũ, mở quyền đăng nhập `LIBRARIAN` cho ví mới). Biên nhận/event lịch sử trước thời điểm đổi vẫn hợp lệ vì [library.verifier.ts](../backend/src/modules/library/library.verifier.ts) kiểm tra `librarian()` tại đúng `log.blockNumber`.
-   - **Tham số Campus Onboarding & Allowlist mở rộng**: Ghi đè địa chỉ `CAMPUS_TREASURY_ADDRESS` và `CAMPUS_SCHOLARSHIP_WEI` mặc định trên VM, hoặc bật/tắt trực tiếp allowlist merchant bất kỳ trên `CampusPaymentRegistry`.
+   - **Tham số Campus Onboarding & Allowlist mở rộng**: Ghi đè mức `CAMPUS_SCHOLARSHIP_WEI` mặc định và, trên local, địa chỉ `CAMPUS_TREASURY_ADDRESS`; cloud dùng Native Minter cho quà chào mừng. Có thể bật/tắt trực tiếp allowlist merchant bất kỳ trên `CampusPaymentRegistry`.
 
 2. **Tab 2 · Tư cách sinh viên & SBT**
    - Dán địa chỉ ví test bất kỳ (hoặc chọn từ danh sách) để xem đồng thời trạng thái `campus_applications`, `library.sqlite` (enabled/held), số dư CAMPUS, số dư `FOOD` vault và thẻ `StudentSBTIdentity` on-chain.
-   - Thao tác nhanh: **Duyệt SV & Mở dịch vụ**, **Từ chối SV**, **Mở/Khóa dịch vụ**, **Gỡ Hold test**, **Cấp / Cấp lại SBT (-10%)** (tự động chờ xác nhận `revoke` trước khi `mint` thẻ mới), **Thu hồi SBT**, **Bắn CAMPUS test**.
-   - **Bắn CAMPUS test** gửi native CAMPUS từ signer funder trên VM tới ví đích. Đây là chuyển CAMPUS thật từ số dư sẵn có, không phải mint hoặc cộng số dư giả; ví funder cần đủ CAMPUS và gas.
+   - Thao tác nhanh: **Duyệt SV & Mở dịch vụ**, **Từ chối SV**, **Mở/Khóa dịch vụ**, **Gỡ Hold test**, **Cấp / Cấp lại SBT (-10%)** (tự động chờ xác nhận `revoke` trước khi `mint` thẻ mới), **Thu hồi SBT**, và cấp/mint CAMPUS.
+   - Trên cloud `20261120`, **Mint CAMPUS** gọi Native Minter bằng signer funder VM, tối đa 100.000 CAMPUS mỗi yêu cầu. Mỗi request có idempotency key và hash được lưu trước broadcast; nếu mất phản hồi, gửi lại cùng request thay vì tạo mint mới. Trên local `20261`, nút giữ hành vi chuyển từ số dư funder hiện có.
+   - Khi duyệt hồ sơ sinh viên mới, backend tự mint đúng 20 CAMPUS một lần nếu signer có role Native Minter. Hồ sơ đã duyệt trước đây chỉ cấp qua thao tác **Cấp quà 20 CAMPUS (backfill)** trong phần tra cứu ví. Treasury cần tự ký một lần `setEnabled(funder)`; ứng dụng từ chối mint khi role chưa hoạt động. Không dùng giao dịch Core cho từng lượt.
 
 3. **Tab 3 · Học bổng FOOD**
    - Chỉ hỗ trợ danh mục `FOOD` (không mở danh mục khác).
@@ -83,7 +84,7 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
    - Trên trang `/login` và `/student/verification` ([CampusPortal.tsx](../frontend/app/components/CampusPortal.tsx)), giao diện đã bỏ dropdown chọn diện học bổng và chỉ giữ lại một nút **Gửi đăng ký học bổng**.
 
 4. **Tab 4 · Signers VM & Nhật ký**
-   - Kiểm tra đủ năm signer trong `.env` trên VM đã nạp chưa, địa chỉ signer có khớp với vai trò trên manifest hay không, và cảnh báo nếu số dư gas dưới `1 CAMPUS`.
+   - Kiểm tra đủ năm signer trong `.env` trên VM đã nạp chưa, địa chỉ signer có khớp với vai trò trên manifest hay không, và cảnh báo nếu số dư gas dưới `1 CAMPUS`. Thẻ Native Minter hiển thị chain, địa chỉ funder, role allowlist và lý do chưa sẵn sàng.
    - Theo dõi nhật ký thao tác lưu trong `admin_audit_log` và kiểm tra lại trạng thái `txHash` nếu giao dịch đang ở trạng thái `SUBMITTED`.
 
 ---
@@ -107,7 +108,8 @@ Trang `/admin` là bảng điều khiển nội bộ phục vụ đội ngũ tes
 | `PUT /api/admin/campus-settings` | Origin + Session | Cập nhật runtime override `welcomeTreasury` / `scholarshipWei` |
 | `GET /api/admin/students`, `GET /api/admin/students/:wallet` | Session | Liệt kê / kiểm tra chi tiết một ví |
 | `POST /api/admin/students/review`, `PATCH /api/admin/students/:wallet/access` | Origin + Session | Duyệt/từ chối SV, mở/khóa dịch vụ, gỡ Library hold |
-| `POST /api/admin/students/:wallet/sbt/mint`, `.../sbt/revoke`, `.../fund` | Origin + Session | Cấp/thu hồi SBT và cấp `CAMPUS` test |
+| `POST /api/admin/students/:wallet/welcome` | Origin + Session | Mint/đối chiếu quà chào mừng cho hồ sơ cloud đã duyệt trước đó; idempotent theo payout Campus |
+| `POST /api/admin/students/:wallet/sbt/mint`, `.../sbt/revoke`, `.../fund` | Origin + Session | Cấp/thu hồi SBT; mint Native Minter trên cloud (tối đa 100.000 CAMPUS) hoặc chuyển balance funder trên local. Cloud request cần `requestId` UUID. |
 | `POST /api/admin/scholarships/review`, `POST /api/admin/scholarships/grant` | Origin + Session | Duyệt hồ sơ và giải ngân học bổng `FOOD` |
 | `GET /api/admin/audit` | Session | Đọc nhật ký thao tác quản trị |
 

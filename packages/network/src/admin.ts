@@ -23,6 +23,15 @@ export type AdminSignerStatus = {
   balanceWei: string | null;
 };
 
+export type NativeMinterStatus = {
+  supported: boolean;
+  ready: boolean;
+  chainId: number | null;
+  signerAddress: string | null;
+  role: number | null;
+  reason: string | null;
+};
+
 export type AdminWalletSlot = {
   id: "parking" | "canteen" | "libraryTreasury" | "libraryLibrarian";
   label: string;
@@ -58,6 +67,7 @@ export type AdminOverview = {
     welcomeTreasury: string | null;
     scholarshipWei: string;
   };
+  nativeMinter: NativeMinterStatus;
   signers: AdminSignerStatus[];
   counts: {
     applicationsTotal: number;
@@ -105,4 +115,13 @@ export type AdminTxStatus = {
   status: "SUBMITTED" | "CONFIRMED" | "FAILED";
   blockNumber: number | null;
   blockHash: string | null;
+};
+
+export type NativeCampusMintOperation = {
+  requestId: string;
+  wallet: string;
+  amountWei: string;
+  txHash: string | null;
+  status: "READY" | "IN_PROGRESS" | "SUBMITTED" | "CONFIRMED" | "FAILED";
+  audit: AdminAuditEntry | null;
 };

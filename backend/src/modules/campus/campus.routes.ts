@@ -46,12 +46,12 @@ export function createCampusRouter(service?: CampusService, library?: LibraryRep
     library.enrollVerifiedStudent(wallet); res.json({ activated: true });
   } catch (e) { next(e); } });
   router.get("/api/campus/reviews", (req, res, next) => { try { school(req); res.json({ profiles: service!.repository.list() }); } catch (e) { next(e); } });
-  router.post("/api/campus/reviews", (req, res, next) => { try {
+  router.post("/api/campus/reviews", async (req, res, next) => { try {
     const reviewer = school(req); body(req.body, ["wallet", "kind", "approve", "reason"]);
     const { wallet, kind, approve, reason } = req.body;
     if (typeof wallet !== "string" || !["STUDENT", "SCHOLARSHIP"].includes(kind) || typeof approve !== "boolean" || !["VERIFIED", "INCOMPLETE", "IDENTITY_MISMATCH", "NOT_ELIGIBLE"].includes(reason)
       || (approve && reason !== "VERIFIED") || (!approve && reason === "VERIFIED")) throw new CampusError("INVALID_REQUEST", 400);
-    res.json(service!.repository.review(reviewer, walletAddress(wallet), kind, approve, reason));
+    res.json(await service!.review(reviewer, walletAddress(wallet), kind, approve, reason));
   } catch (e) { next(e); } });
   router.post("/api/campus/payouts", async (req, res, next) => { try {
     const issuer = school(req); body(req.body, ["wallet", "kind"]);
@@ -66,7 +66,9 @@ export function createCampusRouter(service?: CampusService, library?: LibraryRep
     res.json(service!.release(String(req.params.id), issuer, req.body.attemptToken, req.body.outcome));
   } catch (e) { next(e); } });
   router.post("/api/campus/payouts/:id/reconcile", async (req, res, next) => { try {
-    school(req); body(req.body, ["txHash"]); if (typeof req.body.txHash !== "string") throw new CampusError("INVALID_REQUEST", 400);
+    const wallet = actor(req); body(req.body, ["txHash"]); if (typeof req.body.txHash !== "string") throw new CampusError("INVALID_REQUEST", 400);
+    const payout = service!.repository.payout(String(req.params.id));
+    if (payout.executionType !== "NATIVE_MINT" || (payout.wallet !== wallet && !service!.schools.has(wallet))) school(req);
     res.json(await service!.reconcile(String(req.params.id), req.body.txHash));
   } catch (e) { next(e); } });
   const fail: ErrorRequestHandler = (error, req, res, next) => {

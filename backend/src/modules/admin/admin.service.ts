@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Interface, Wallet, getAddress, id, type InterfaceAbi } from "ethers";
 import {
   CAMPUS_CHAIN_ID,
+  CLOUD_CAMPUS_CHAIN_ID,
   campusNetwork,
   getDeployment,
   getLibraryDeployment,
@@ -22,6 +23,7 @@ import type { LibraryRepository } from "../library/library.repository.ts";
 import type { AdminConfig, AdminSignerRole } from "./admin.config.ts";
 import type { AdminRepository } from "./admin.repository.ts";
 import { AdminChainError, JsonRpcAdminClient, type AdminRpcClient } from "./admin.signer.ts";
+import { MAX_ADMIN_MINT_WEI, NativeMinterError, NativeMinterService } from "../native-minter/native-minter.service.ts";
 
 const PARKING_CATEGORY = id("PARKING");
 const FOOD_CATEGORY = id("FOOD");
@@ -119,6 +121,14 @@ export type AdminServiceDependencies = {
   allowLocal?: boolean;
   deployment?: unknown;
   now?: () => number;
+  nativeMinter?: NativeMinterService;
+  welcomeIssuer?: (wallet: string) => Promise<{ status: "CONFIRMED" | "PENDING" | "FAILED"; txHash: string | null }>;
+};
+
+export type WelcomeMintSummary = {
+  status: "CONFIRMED" | "PENDING" | "NOT_READY" | "FAILED";
+  txHash: string | null;
+  errorCode?: string;
 };
 
 export class AdminService {
@@ -132,6 +142,9 @@ export class AdminService {
   private readonly allowLocal: boolean;
   private readonly deploymentSource?: unknown;
   private readonly now: () => number;
+  readonly nativeMinter: NativeMinterService;
+  private ownsNativeMinter: boolean;
+  private welcomeIssuer?: AdminServiceDependencies["welcomeIssuer"];
 
   constructor(deps: AdminServiceDependencies) {
     this.config = deps.config;
@@ -143,13 +156,20 @@ export class AdminService {
     this.allowLocal = deps.config?.allowLocal ?? deps.allowLocal ?? false;
     this.deploymentSource = deps.deployment;
     this.now = deps.now ?? (() => Math.floor(Date.now() / 1000));
+    this.nativeMinter = deps.nativeMinter ?? new NativeMinterService({ rpc: deps.rpc, rpcUrl: deps.config?.rpcUrl ?? deps.rpcUrl,
+      signerPrivateKey: deps.config?.signers.funder, chainId: CAMPUS_CHAIN_ID });
+    this.ownsNativeMinter = !deps.nativeMinter;
+    this.welcomeIssuer = deps.welcomeIssuer;
   }
+
+  setWelcomeIssuer(issuer: NonNullable<AdminServiceDependencies["welcomeIssuer"]>) { this.welcomeIssuer = issuer; }
 
   close(): void {
     if (this.ownsRpc) {
       this.rpc?.close?.();
       this.rpc = undefined;
     }
+    if (this.ownsNativeMinter) this.nativeMinter.close();
   }
 
   private requireConfig(): AdminConfig {
@@ -381,6 +401,7 @@ export class AdminService {
       parkingAllowed,
       canteenAllowed,
       signers,
+      nativeMinter,
     ] = await Promise.all([
       this.safeBalance(parkingAddr),
       this.safeBalance(canteenAddr),
@@ -389,6 +410,7 @@ export class AdminService {
       this.isMerchantAllowedOnChain(parkingAddr, PARKING_CATEGORY),
       this.isMerchantAllowedOnChain(canteenAddr, FOOD_CATEGORY),
       this.readSignerStatuses(core, lib),
+      this.nativeMinter.readiness(),
     ]);
 
     const profiles = this.campusRepository?.list() ?? [];
@@ -469,6 +491,7 @@ export class AdminService {
         welcomeTreasury: overrides.welcomeTreasury,
         scholarshipWei: overrides.scholarshipWei,
       },
+      nativeMinter,
       signers,
       counts: {
         applicationsTotal: profiles.filter((p) => p.application).length,
@@ -497,6 +520,17 @@ export class AdminService {
     if (error instanceof AdminServiceError) throw error;
     if (error instanceof AdminChainError) throw new AdminServiceError(error.code, error.httpStatus);
     throw new AdminServiceError("INTERNAL_ERROR", 500);
+  }
+
+  private async tryWelcomeMint(wallet: string): Promise<WelcomeMintSummary | undefined> {
+    if (CAMPUS_CHAIN_ID !== CLOUD_CAMPUS_CHAIN_ID || !this.welcomeIssuer) return undefined;
+    try {
+      const result = await this.welcomeIssuer(wallet);
+      return { status: result.status, txHash: result.txHash };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "NATIVE_MINT_UNAVAILABLE";
+      return { status: "NOT_READY", txHash: null, errorCode: code };
+    }
   }
 
   // ---- Destination wallet mutations ----
@@ -823,9 +857,10 @@ export class AdminService {
     program?: string;
     reason?: string;
     autoEnrollLibrary?: boolean;
-  }): Promise<{ student: AdminStudentRecord; audit: AdminAuditEntry }> {
+  }): Promise<{ student: AdminStudentRecord; audit: AdminAuditEntry; welcomeMint?: WelcomeMintSummary }> {
     const wallet = normalizeAddress(input.wallet);
     if (!this.campusRepository) throw new AdminServiceError("CONFIGURATION_ERROR", 503);
+    const wasAlreadyApproved = this.campusRepository.profile(wallet).application?.status === "APPROVED";
     try {
       this.campusRepository.adminReviewStudent("admin-console", wallet, input.approve, {
         studentCode: input.studentCode,
@@ -845,6 +880,7 @@ export class AdminService {
         this.libraryRepository.setAccountEnabled(wallet, true, this.now());
       }
     }
+    const welcomeMint = input.approve && !wasAlreadyApproved ? await this.tryWelcomeMint(wallet) : undefined;
     const audit = this.repository.recordAudit({
       action: input.approve ? "APPROVE_STUDENT" : "REJECT_STUDENT",
       target: wallet,
@@ -854,7 +890,18 @@ export class AdminService {
       status: "DONE",
       createdAt: this.now(),
     });
-    return { student: await this.inspectStudent(wallet), audit };
+    return { student: await this.inspectStudent(wallet), audit, ...(welcomeMint ? { welcomeMint } : {}) };
+  }
+
+  async backfillWelcome(walletInput: string): Promise<{ student: AdminStudentRecord; welcomeMint: WelcomeMintSummary }> {
+    const wallet = normalizeAddress(walletInput);
+    if (!this.campusRepository || this.campusRepository.profile(wallet).application?.status !== "APPROVED") {
+      throw new AdminServiceError("STUDENT_NOT_VERIFIED", 403);
+    }
+    if (CAMPUS_CHAIN_ID !== CLOUD_CAMPUS_CHAIN_ID || !this.welcomeIssuer) throw new AdminServiceError("CLOUD_CHAIN_REQUIRED", 409);
+    const welcomeMint = await this.tryWelcomeMint(wallet);
+    if (!welcomeMint) throw new AdminServiceError("NATIVE_MINTER_NOT_CONFIGURED", 503);
+    return { student: await this.inspectStudent(wallet), welcomeMint };
   }
 
   async updateStudentAccess(input: {
@@ -976,9 +1023,53 @@ export class AdminService {
     return { wallet, tokenId: onChain.sbtTokenId, txHash, audit };
   }
 
-  async fundTestCampus(input: { wallet: string; amountWei: string }): Promise<{ wallet: string; amountWei: string; txHash: string; audit: AdminAuditEntry }> {
+  async fundTestCampus(input: { wallet: string; amountWei: string; requestId?: string }): Promise<{
+    wallet: string; amountWei: string; txHash: string; status: AdminTxStatus["status"]; audit: AdminAuditEntry;
+  }> {
     const wallet = normalizeAddress(input.wallet);
     const amountWei = normalizePositiveWei(input.amountWei);
+    if (CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID) {
+      if (amountWei > MAX_ADMIN_MINT_WEI) throw new AdminServiceError("AMOUNT_LIMIT", 400);
+      if (typeof input.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.requestId)) {
+        throw new AdminServiceError("INVALID_REQUEST_ID", 400);
+      }
+      const now = this.now();
+      let operation;
+      try {
+        operation = this.repository.prepareNativeMintOperation({ requestId: input.requestId, target: wallet, amountWei: amountWei.toString(), now });
+      } catch (error) {
+        if (error instanceof Error && error.message === "IDEMPOTENCY_KEY_CONFLICT") throw new AdminServiceError("IDEMPOTENCY_KEY_CONFLICT", 409);
+        throw new AdminServiceError("INTERNAL_ERROR", 500);
+      }
+      if (operation.txHash) {
+        const status = operation.status === "CONFIRMED" || operation.status === "FAILED" ? operation.status : "SUBMITTED";
+        const audit = this.repository.getAuditByTxHash(operation.txHash);
+        if (!audit) throw new AdminServiceError("INTERNAL_ERROR", 500);
+        return { wallet, amountWei: operation.amountWei, txHash: operation.txHash, status, audit };
+      }
+      if (!this.repository.claimNativeMintOperation(input.requestId, now)) {
+        throw new AdminServiceError("MINT_IN_PROGRESS", 409);
+      }
+      try {
+        const minted = await this.nativeMinter.mint({
+          recipient: wallet,
+          amountWei,
+          maxAmountWei: MAX_ADMIN_MINT_WEI,
+          beforeBroadcast: (txHash) => this.repository.attachNativeMintHash(input.requestId!, txHash, this.now()),
+        });
+        const audit = this.repository.getAuditByTxHash(minted.txHash);
+        if (!audit) throw new AdminServiceError("INTERNAL_ERROR", 500);
+        return { wallet, amountWei: amountWei.toString(), txHash: minted.txHash, status: "SUBMITTED", audit };
+      } catch (error) {
+        if (!this.repository.getNativeMintOperation(input.requestId)?.txHash) {
+          const code = error && typeof error === "object" && "code" in error ? String(error.code) : "MINT_FAILED";
+          this.repository.releaseNativeMintOperation(input.requestId, code, this.now());
+        }
+        if (error instanceof NativeMinterError) throw new AdminServiceError(error.code, error.httpStatus);
+        if (error instanceof AdminServiceError) throw error;
+        this.normalizeChainError(error);
+      }
+    }
     const key = this.requireSignerKey("funder");
     const rpc = this.requireRpc();
     let txHash: string;
@@ -1001,7 +1092,7 @@ export class AdminService {
       status: "SUBMITTED",
       createdAt: this.now(),
     });
-    return { wallet, amountWei: amountWei.toString(), txHash, audit };
+    return { wallet, amountWei: amountWei.toString(), txHash, status: "SUBMITTED", audit };
   }
 
   async reviewScholarship(input: {
@@ -1010,13 +1101,15 @@ export class AdminService {
     category?: "MERIT" | "SUPPORT";
     reason?: string;
     autoApproveStudent?: boolean;
-  }): Promise<{ student: AdminStudentRecord; audit: AdminAuditEntry }> {
+  }): Promise<{ student: AdminStudentRecord; audit: AdminAuditEntry; welcomeMint?: WelcomeMintSummary }> {
     const wallet = normalizeAddress(input.wallet);
     if (!this.campusRepository) throw new AdminServiceError("CONFIGURATION_ERROR", 503);
+    let newlyApprovedStudent = false;
     if (input.approve && input.autoApproveStudent) {
       const profile = this.campusRepository.profile(wallet);
       if (profile.application?.status !== "APPROVED") {
         this.campusRepository.adminReviewStudent("admin-console", wallet, true, {});
+        newlyApprovedStudent = true;
         if (this.libraryRepository) {
           const existing = this.libraryRepository.accountForWallet(wallet);
           if (!existing) this.libraryRepository.enrollVerifiedStudent(wallet);
@@ -1043,7 +1136,8 @@ export class AdminService {
       status: "DONE",
       createdAt: this.now(),
     });
-    return { student: await this.inspectStudent(wallet), audit };
+    const welcomeMint = newlyApprovedStudent ? await this.tryWelcomeMint(wallet) : undefined;
+    return { student: await this.inspectStudent(wallet), audit, ...(welcomeMint ? { welcomeMint } : {}) };
   }
 
   async issueFoodGrant(input: {
@@ -1093,11 +1187,19 @@ export class AdminService {
     if (!HASH_RE.test(txHash) || /^0x0{64}$/i.test(txHash)) {
       throw new AdminServiceError("INVALID_HASH", 400);
     }
-    const rpc = this.requireRpc();
     let status: AdminTxStatus;
+    const nativeMint = this.repository.getNativeMintOperationByHash(txHash);
     try {
-      status = await rpc.getTransactionStatus(txHash);
+      if (nativeMint && CAMPUS_CHAIN_ID === CLOUD_CAMPUS_CHAIN_ID) {
+        status = await this.nativeMinter.verifyMint(txHash, { recipient: nativeMint.target, amountWei: BigInt(nativeMint.amountWei) });
+        if (status.status === "CONFIRMED" || status.status === "FAILED") {
+          this.repository.finishNativeMintOperation(txHash, status.status, status.status === "FAILED" ? "TX_REVERTED" : null, this.now());
+        }
+        return status;
+      }
+      status = await this.requireRpc().getTransactionStatus(txHash);
     } catch (error) {
+      if (error instanceof NativeMinterError) throw new AdminServiceError(error.code, error.httpStatus);
       this.normalizeChainError(error);
     }
     if (status.status === "CONFIRMED" || status.status === "FAILED") {

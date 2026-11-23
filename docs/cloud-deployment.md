@@ -65,8 +65,12 @@ vào repo. Dùng `backend/.env.example` để đối chiếu tên biến:
   `INVOICES_DB_PATH`, `LIBRARY_DB_PATH`, `CANTEEN_DB_PATH`, `CAMPUS_DB_PATH`.
   (Tùy chọn thêm `ADMIN_DB_PATH` cho trang quản trị test `/admin`; nếu để trống
   trên cloud demo, backend tự tạo `admin.sqlite` cùng thư mục với `CAMPUS_DB_PATH`.)
-  Vercel không lưu các database này. Demo hiện không yêu cầu bản sao lưu riêng;
-  nếu xóa/tạo lại VM hoặc đĩa thì dữ liệu demo có thể mất.
+  Vercel không lưu các database này. Trước khi triển khai thay đổi cấp CAMPUS
+  hoặc bật quyền Native Minter, hãy tạo snapshot đĩa VM và sao lưu nhất quán
+  các SQLite database (bao gồm Campus/Admin) bằng SQLite backup API/CLI, rồi
+  kiểm tra khả năng mở bản sao lưu. Không sao chép riêng file `.db` khi WAL
+  đang hoạt động. Bản sao lưu giữ dữ liệu ứng dụng; nó không thể hoàn tác CAMPUS
+  đã mint trên chain.
 - Cấu hình trang quản trị test nội bộ `/admin` (ẩn khỏi thanh điều hướng công khai,
   không cần nối ví để vào): đặt `ADMIN_ACCESS_KEY` (key cố định dùng chung cả nhóm
   trên mọi máy) và `ADMIN_AUTH_ORIGIN` (origin Vercel HTTPS, hỗ trợ danh sách cách

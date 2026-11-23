@@ -1,4 +1,4 @@
-import { FetchRequest, JsonRpcProvider, Wallet } from "ethers";
+import { FetchRequest, JsonRpcProvider, Wallet, keccak256 } from "ethers";
 import { CAMPUS_CHAIN_ID, type AdminTxStatus } from "@intracampus/network";
 
 export type AdminRpcClient = {
@@ -11,8 +11,12 @@ export type AdminRpcClient = {
     to: string;
     data: string;
     valueWei?: bigint;
+    beforeBroadcast?: (txHash: string) => Promise<void> | void;
   }): Promise<{ txHash: string; from: string }>;
   getTransactionStatus(txHash: string): Promise<AdminTxStatus>;
+  getTransactionReceipt?(txHash: string): Promise<unknown | null>;
+  getTransaction?(txHash: string): Promise<unknown | null>;
+  getBlock?(blockNumber: string): Promise<unknown | null>;
   waitForReceipt?(txHash: string, timeoutMs?: number): Promise<AdminTxStatus>;
   close?(): void;
 };
@@ -95,6 +99,7 @@ export class JsonRpcAdminClient implements AdminRpcClient {
     to: string;
     data: string;
     valueWei?: bigint;
+    beforeBroadcast?: (txHash: string) => Promise<void> | void;
   }): Promise<{ txHash: string; from: string }> {
     const wallet = new Wallet(input.privateKey);
     const key = wallet.address.toLowerCase();
@@ -137,8 +142,15 @@ export class JsonRpcAdminClient implements AdminRpcClient {
         gasLimit,
         gasPrice,
       });
+      const expectedHash = keccak256(signed).toLowerCase();
+      try {
+        await input.beforeBroadcast?.(expectedHash);
+      } catch {
+        throw new AdminChainError("TX_PERSIST_FAILED", 503);
+      }
       try {
         const hash = String(await this.provider.send("eth_sendRawTransaction", [signed])).toLowerCase();
+        if (hash !== expectedHash) throw new AdminChainError("TX_HASH_MISMATCH", 503);
         return { txHash: hash, from: wallet.address };
       } catch {
         throw new AdminChainError("TX_BROADCAST_FAILED", 503);
@@ -172,6 +184,30 @@ export class JsonRpcAdminClient implements AdminRpcClient {
       blockNumber,
       blockHash,
     };
+  }
+
+  async getTransactionReceipt(txHash: string): Promise<unknown | null> {
+    try {
+      return await this.provider.send("eth_getTransactionReceipt", [txHash]) as unknown | null;
+    } catch {
+      throw new AdminChainError("RPC_UNAVAILABLE", 503);
+    }
+  }
+
+  async getTransaction(txHash: string): Promise<unknown | null> {
+    try {
+      return await this.provider.send("eth_getTransactionByHash", [txHash]) as unknown | null;
+    } catch {
+      throw new AdminChainError("RPC_UNAVAILABLE", 503);
+    }
+  }
+
+  async getBlock(blockNumber: string): Promise<unknown | null> {
+    try {
+      return await this.provider.send("eth_getBlockByNumber", [blockNumber, false]) as unknown | null;
+    } catch {
+      throw new AdminChainError("RPC_UNAVAILABLE", 503);
+    }
   }
 
   async waitForReceipt(txHash: string, timeoutMs = 8_000): Promise<AdminTxStatus> {

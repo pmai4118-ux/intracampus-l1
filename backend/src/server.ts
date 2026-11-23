@@ -100,7 +100,14 @@ canteenRepository.syncCatalogPrices(demoDishes);
 const canteenService = new CanteenService(canteenRepository, { rpc, invoices: creationService, receipts: receiptService,
   grants: grantsService, resolveCanteenMerchant: () => adminService.activeCanteenMerchant() });
 let campusService: CampusService | undefined;
-try { campusService = new CampusService(campusRepository, process.env, rpc, undefined, () => adminService.campusOverrides()); }
+try {
+  campusService = new CampusService(campusRepository, process.env, rpc, undefined,
+    () => adminService.campusOverrides(), adminService.nativeMinter);
+  adminService.setWelcomeIssuer(async (wallet) => {
+    const payout = await campusService!.issueWelcome(wallet);
+    return { status: payout.status === "CONFIRMED" ? "CONFIRMED" : payout.status === "FAILED" ? "FAILED" : "PENDING", txHash: payout.txHash };
+  });
+}
 catch { /* Campus endpoints fail closed until origin and authority configuration are valid. */ }
 const server = createApp(process.env.INTRACAMPUS_RPC_URL, receiptService, creationService, grantsService,
   authService, libraryAuthConfig, libraryService, canteenService, repository,

@@ -106,7 +106,7 @@ export const adminApi = {
     reason?: string;
     autoEnrollLibrary?: boolean;
   }) =>
-    request<{ student: AdminStudentRecord; audit: AdminAuditEntry }>("/api/admin/students/review", {
+    request<{ student: AdminStudentRecord; audit: AdminAuditEntry; welcomeMint?: { status: "CONFIRMED" | "PENDING" | "NOT_READY" | "FAILED"; txHash: string | null; errorCode?: string } }>("/api/admin/students/review", {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -125,10 +125,14 @@ export const adminApi = {
       `/api/admin/students/${encodeURIComponent(wallet)}/sbt/revoke`,
       { method: "POST" },
     ),
-  fundCampus: (wallet: string, amountWei: string) =>
-    request<{ wallet: string; amountWei: string; txHash: string; audit: AdminAuditEntry }>(
+  backfillWelcome: (wallet: string) =>
+    request<{ student: AdminStudentRecord; welcomeMint: { status: "CONFIRMED" | "PENDING" | "NOT_READY" | "FAILED"; txHash: string | null; errorCode?: string } }>(
+      `/api/admin/students/${encodeURIComponent(wallet)}/welcome`, { method: "POST" },
+    ),
+  fundCampus: (wallet: string, amountWei: string, requestId: string) =>
+    request<{ wallet: string; amountWei: string; txHash: string; status: AdminTxStatus["status"]; audit: AdminAuditEntry }>(
       `/api/admin/students/${encodeURIComponent(wallet)}/fund`,
-      { method: "POST", body: JSON.stringify({ amountWei }) },
+      { method: "POST", body: JSON.stringify({ amountWei, requestId }) },
     ),
   reviewScholarship: (input: {
     wallet: string;
@@ -137,7 +141,7 @@ export const adminApi = {
     reason?: string;
     autoApproveStudent?: boolean;
   }) =>
-    request<{ student: AdminStudentRecord; audit: AdminAuditEntry }>("/api/admin/scholarships/review", {
+    request<{ student: AdminStudentRecord; audit: AdminAuditEntry; welcomeMint?: { status: "CONFIRMED" | "PENDING" | "NOT_READY" | "FAILED"; txHash: string | null; errorCode?: string } }>("/api/admin/scholarships/review", {
       method: "POST",
       body: JSON.stringify(input),
     }),

@@ -13,6 +13,14 @@ test("welcome transaction preview binds exact 20 CAMPUS, signer and recipient", 
   assert.throws(() => validateCampusPayout({ ...p, data: "javascript:alert(1)" }, from));
 });
 
+test("Native Minter payout is never sent through the school wallet", async () => {
+  let walletCalls = 0;
+  const native: CampusPayout = { ...p, id: "native-welcome", status: "PENDING", to: "0x0200000000000000000000000000000000000001", value: "0x0",
+    executionType: "NATIVE_MINT", mintAmountWei: (BigInt(20) * BigInt(10) ** BigInt(18)).toString() };
+  await assert.rejects(sendCampusPayout(native, from, async () => { walletCalls++; return "0x"; }), /SERVER_SIGNED_PAYOUT/);
+  assert.equal(walletCalls, 0);
+});
+
 test("logout accepts an empty 204 response", async t => {
   t.mock.method(globalThis, "fetch", async () => new Response(null, { status: 204 }));
   assert.equal(await campusApi("auth/logout", {}), undefined);

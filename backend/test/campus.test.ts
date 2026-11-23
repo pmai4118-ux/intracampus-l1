@@ -62,17 +62,15 @@ test("wallet authentication does not approve a student; nonce replay, wrong sign
     assert.throws(() => s.auth.createChallenge({ wallet: student.address, remoteAddress: "127.0.0.1" }), /RATE_LIMITED/);
   } finally { r.close(); }
 });
-test("Campus auth, payout preflight and receipt reconciliation use the configured cloud chain", async () => {
-  const { repository, service, approve, proof } = setup(20261120);
+test("cloud welcome payout requires the Native Minter backfill path instead of a school wallet transfer", async () => {
+  const { repository, service, approve } = setup(20261120);
   try {
     assert.equal(service.authConfig.chainId, 20261120);
     const challenge = service.auth.createChallenge({ wallet: school.address, remoteAddress: "127.0.0.1" });
     assert.match(challenge.message, /Chain ID: 20261120/);
     approve();
-    const payout = await service.prepare(school.address, student.address, "WELCOME");
-    await begin(service, payout.id);
-    proof(payout);
-    assert.equal((await service.reconcile(payout.id, hash)).status, "CONFIRMED");
+    await assert.rejects(service.prepare(school.address, student.address, "WELCOME"), /ADMIN_BACKFILL_REQUIRED/);
+    assert.equal(repository.profile(lower(student)).payouts.length, 0);
   } finally { repository.close(); }
 });
 test("manual review, immutable approvals and unique student identity prevent multiple wallet rewards", () => {
