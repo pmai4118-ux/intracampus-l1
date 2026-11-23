@@ -23,13 +23,13 @@ Dùng Node 24, `pnpm install --frozen-lockfile` và cấu hình web/API theo [ru
 | `LIBRARY_AUTH_ORIGIN` | Origin chính xác cho đăng nhập dịch vụ sinh viên; cấu hình cùng origin với Campus |
 | `LIBRARY_ALLOW_INSECURE_LOCALHOST=true` | Chỉ cho HTTP loopback local; môi trường khác bắt buộc HTTPS |
 | `CAMPUS_SCHOOL_WALLETS` | Danh sách địa chỉ ví duyệt, ngăn bằng dấu phẩy. Có cả ví quỹ và grantIssuer nếu họ cần cấp tiền |
-| `CAMPUS_TREASURY_ADDRESS` | Ví EOA được phép trả quà chào mừng; phải có ít nhất 20 CAMPUS và gas mỗi lượt |
+| `CAMPUS_TREASURY_ADDRESS` | Chỉ dùng cho luồng chuyển quà chào mừng trên local chain; cloud mint qua Native Minter |
 | `CAMPUS_DB_PATH` | Đường dẫn SQLite bền vững; cloud bắt buộc đường dẫn tuyệt đối, khác ba DB còn lại và nằm trên volume persistent |
 | `CAMPUS_SCHOLARSHIP_WEI` | Số tiền một học bổng, số nguyên wei dương; mặc định `1000000000000000000000` (1000 CAMPUS) |
 | `INTRACAMPUS_RPC_URL` | RPC có head mới và đúng chain được chọn bởi `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID` |
 | `CAMPUS_ALLOW_LOCAL_ANVIL` | Mặc định false. Chỉ bật cho manifest local và RPC loopback tường minh |
 
-Trên cloud, `CAMPUS_TREASURY_ADDRESS` phải là ví EOA đang giữ CAMPUS và cũng phải có trong `CAMPUS_SCHOOL_WALLETS`; nếu không, ví quỹ không thể tạo lượt cấp quà chào mừng. Ví `grantIssuer` chỉ cần nằm trong danh sách này nếu nó sẽ đăng nhập để duyệt hồ sơ hoặc chuẩn bị giải ngân FOOD. `ADMIN_FUNDER_PRIVATE_KEY` là signer khác cho thao tác **Bắn CAMPUS test** trong `/admin`; nó chuyển từ số dư đang có trên VM và không tự cấp quyền Native Minter. Quyền Native Minter được quản lý riêng trên chain.
+Trên cloud, quà chào mừng không cần `CAMPUS_TREASURY_ADDRESS`. `ADMIN_FUNDER_PRIVATE_KEY` nằm riêng trên VM và ký Native Minter sau khi kiểm tra chain ID cùng `readAllowList`. Treasury tự ký một lần `setEnabled(funder)` để cấp role; các thao tác sau không yêu cầu ví quỹ mở Core. Ví `grantIssuer` chỉ cần nằm trong danh sách `CAMPUS_SCHOOL_WALLETS` nếu nó sẽ đăng nhập để duyệt hồ sơ hoặc chuẩn bị giải ngân FOOD.
 
 Campus dùng `CAMPUS_AUTH_ORIGIN`, dự phòng `LIBRARY_AUTH_ORIGIN`. Thiếu/sai origin làm endpoint Campus trả 503, không mở quyền tạm. Challenge có hạn 5 phút, phiên 1 giờ; giới hạn challenge 10 và verify 20 yêu cầu mỗi 60 giây theo cơ chế auth hiện có. Cookie Campus tách khỏi cookie dịch vụ cũ. Frontend proxy `/api/campus/*` theo `BACKEND_URL`; không có biến frontend nào chứa private key.
 
@@ -45,16 +45,16 @@ Trên Vercel, cấu hình ở đúng scope Preview/Production rồi redeploy vì
 - `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120` và `NEXT_PUBLIC_INTRACAMPUS_RPC_URL`: RPC HTTPS công khai của gateway mà trình duyệt/Core truy cập được. Gateway cần allowlist CORS đúng origin web và origin extension Core; RPC nội bộ backend cấu hình riêng qua `INTRACAMPUS_RPC_URL`.
 - Các địa chỉ public `NEXT_PUBLIC_STUDENT_SBT_ADDRESS`, `NEXT_PUBLIC_CAMPUS_PAYMENT_REGISTRY_ADDRESS` và `NEXT_PUBLIC_CAMPUS_POS_SIGNER_ADDRESS` phải khớp manifest cloud. Giữ `NEXT_PUBLIC_ALLOW_LOCAL_ANVIL=false`; không đưa khóa hoặc RPC token bí mật vào `NEXT_PUBLIC_*`.
 
-Trên backend GCP, đặt `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120`, `INTRACAMPUS_RPC_URL` nội bộ của cloud, manifest cloud, `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` khớp origin Vercel, cùng các ví public trong `CAMPUS_SCHOOL_WALLETS`, `CAMPUS_TREASURY_ADDRESS` và `PARKING_MERCHANT_ADDRESS`. `CAMPUS_ALLOW_LOCAL_ANVIL` phải là `false`. Một backend chỉ chấp nhận origin được cấu hình; URL Preview ngẫu nhiên có thể không đăng nhập được nếu khác origin đó, nên dùng alias ổn định hoặc cấu hình đúng origin cho môi trường đang nghiệm thu.
+Trên backend GCP, đặt `NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID=20261120`, `INTRACAMPUS_RPC_URL` nội bộ của cloud, manifest cloud, `CAMPUS_AUTH_ORIGIN` và `LIBRARY_AUTH_ORIGIN` khớp origin Vercel, cùng các ví public trong `CAMPUS_SCHOOL_WALLETS` và `PARKING_MERCHANT_ADDRESS`. Cấu hình `ADMIN_FUNDER_PRIVATE_KEY` trong secret env của backend VM, không đưa lên Vercel. Kiểm tra Native Minter hiển thị đúng signer, chain `20261120` và role lớn hơn 0 trước khi cấp; `CAMPUS_ALLOW_LOCAL_ANVIL` phải là `false`. Một backend chỉ chấp nhận origin được cấu hình; URL Preview ngẫu nhiên có thể không đăng nhập được nếu khác origin đó, nên dùng alias ổn định hoặc cấu hình đúng origin cho môi trường đang nghiệm thu.
 
-Cloud yêu cầu bốn SQLite path tuyệt đối, khác nhau và bền vững: invoices, library, canteen và `CAMPUS_DB_PATH`. Đặt chúng trên persistent disk của VM; nếu thiếu hoặc trùng, backend dừng thay vì chạy Campus với DB tạm. Demo không yêu cầu bật backup riêng; tạo lại VM/đĩa có thể làm mất dữ liệu. Trước khi dùng Production, kiểm tra `/api/network`, `/api/deployment`, `/api/campus/me`, đăng nhập, cấp tiền và các route POS trên cùng origin HTTPS.
+Cloud yêu cầu bốn SQLite path tuyệt đối, khác nhau và bền vững: invoices, library, canteen và `CAMPUS_DB_PATH`. Đặt chúng trên persistent disk của VM; nếu thiếu hoặc trùng, backend dừng thay vì chạy Campus với DB tạm. Trước khi triển khai Native Minter hoặc cấp role cho signer, tạo snapshot đĩa VM và backup nhất quán mọi SQLite database, gồm cả `CAMPUS_DB_PATH` và `ADMIN_DB_PATH`, rồi kiểm tra mở được bản sao lưu. Không sao chép riêng file `.db` khi WAL đang hoạt động. Backup khôi phục dữ liệu ứng dụng nhưng không thể hoàn tác CAMPUS đã mint trên chain. Trước khi dùng Production, kiểm tra `/api/network`, `/api/deployment`, `/api/campus/me`, đăng nhập, cấp tiền và các route POS trên cùng origin HTTPS.
 
 ## Quy trình
 
 1. Sinh viên mở `/login`, kết nối ví và ký thông điệp. Ví chưa có CAMPUS vẫn ký đăng nhập được. Chữ ký chỉ chứng minh quyền sở hữu ví, không duyệt hồ sơ.
 2. Ở `/student/verification`, gửi mã sinh viên (4–32 ký tự chữ/số/gạch nối) và khoa/chương trình. Không tải căn cước, bảng điểm hay khóa ví lên hệ thống.
 3. Nhà trường dùng ví nằm trong allowlist mở `/staff/students`. Đối chiếu mã với dữ liệu chính thức, xác nhận ví được đúng sinh viên ủy quyền, đánh dấu đã kiểm tra rồi duyệt. Có thể yêu cầu bổ sung để sinh viên gửi lại. Một mã chỉ duyệt cho một ví; hồ sơ đã duyệt không tự chỉnh sửa.
-4. Ví quỹ chọn **Xem lượt cấp 20 CAMPUS**, kiểm tra ví nhận/số tiền/chain và bấm **Xác nhận và mở ví cấp**. API kiểm tra chain, head mới và mô phỏng gas trước khi khóa lượt cấp. Người giữ ví quỹ tự ký giao dịch. UI chỉ báo đã nhận sau receipt thành công và giao dịch khớp đầy đủ. Quà này vào số dư native của sinh viên.
+4. Khi nhà trường duyệt hồ sơ mới trên cloud, backend tự mint đúng 20 CAMPUS một lần qua Native Minter. Cán bộ không cần mở Core cho lượt cấp và sinh viên không ký để nhận. UI chỉ báo đã nhận sau receipt canonical cùng event `NativeCoinMinted` khớp signer, ví nhận và số tiền. Hồ sơ đã duyệt trước khi có Native Minter không tự nhận khi deploy; quản trị viên tra ví trong `/admin` và bấm **Cấp quà 20 CAMPUS (backfill)** sau khi role sẵn sàng. Trên local chain `20261`, luồng chuyển quà hiện có vẫn dùng ví nhà trường và cần chữ ký như trước.
 5. Sinh viên đã duyệt có thể đăng ký diện khuyến khích học tập hoặc hỗ trợ. Nhà trường xét hồ sơ theo quy định riêng rồi duyệt học bổng. Người giữ ví grantIssuer mở lượt giải ngân, xem số tiền và ký `grant()` có đủ tài sản cấp vào FOOD vault. Chỉ event `GrantIssued` khớp ví/category/issuer/amount mới xác nhận giải ngân. Duyệt học bổng chưa có nghĩa đã chuyển tiền.
 6. Sinh viên đã duyệt bấm **Kích hoạt dịch vụ sinh viên** để thêm tài khoản STUDENT vào dịch vụ hiện có và ký phiên dịch vụ. Cấu hình Library/auth hiện có vẫn phải đầy đủ theo [library-backend.md](library-backend.md). Tài khoản bị tắt hoặc role khác không được bật lại/đổi role. Phê duyệt này không mint SBT hoặc tự cấp mức giảm giá on-chain.
 
@@ -89,10 +89,10 @@ Tất cả endpoint dưới `/api/campus`, trả `Cache-Control: no-store`. POST
 | `POST /activate` | `{}`; thêm STUDENT đã xác minh, không thay quyền có sẵn |
 | `GET /reviews` | Chỉ ví nhà trường; danh sách hồ sơ |
 | `POST /reviews` | Chỉ nhà trường; `{wallet, kind: "STUDENT" | "SCHOLARSHIP", approve, reason}` |
-| `POST /payouts` | Chỉ nhà trường; `{wallet, kind: "WELCOME" | "SCHOLARSHIP"}`; trả lượt cũ nếu đã có |
+| `POST /payouts` | Chỉ nhà trường; `{wallet, kind: "WELCOME" | "SCHOLARSHIP"}`; cloud không cho cấp quà welcome thủ công qua endpoint này, local giữ luồng hiện có |
 | `POST /payouts/:id/begin` | Chỉ đúng ví cấp; `{attemptToken}` do client tạo/giữ trước request; mô phỏng và khóa một lần; retry cùng token idempotent; trả `{payout, attemptToken}` |
 | `POST /payouts/:id/release` | Chỉ đúng ví cấp; `{attemptToken, outcome: "REJECTED" | "NOT_SENT"}`; khôi phục cùng lượt chưa gửi, không mở lượt đã có hash |
-| `POST /payouts/:id/reconcile` | Chỉ nhà trường; `{txHash}`; đối chiếu giao dịch cũ |
+| `POST /payouts/:id/reconcile` | Nhà trường; với Native Minter, sinh viên nhận cũng được đối chiếu payout của chính mình; `{txHash}` |
 
 Lỗi có dạng `{error:{code}}`, gồm 401 chưa đăng nhập, 403 sai quyền/điều kiện, 409 trùng danh tính hoặc lượt cấp đã khóa, 429 rate limit và 503 cấu hình/RPC chưa sẵn sàng. Không có endpoint mint CAMPUS hoặc giữ private key nhà trường.
 

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { CampusApplication, CampusScholarship, CampusPayout, CampusProfile } from "@intracampus/network";
@@ -25,10 +25,12 @@ export class CampusRepository implements AuthStore {
       CREATE UNIQUE INDEX IF NOT EXISTS campus_verified_identity ON campus_applications(code) WHERE status='APPROVED';
       CREATE TABLE IF NOT EXISTS campus_scholarships(wallet TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS campus_payouts(id TEXT PRIMARY KEY, wallet TEXT NOT NULL, kind TEXT NOT NULL, hash TEXT UNIQUE, data TEXT NOT NULL, UNIQUE(wallet,kind));
-      CREATE TABLE IF NOT EXISTS campus_payout_attempts(payout_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, released INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS campus_payout_attempts(payout_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, released INTEGER NOT NULL, claimed_at INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS campus_released_attempts(payout_id TEXT NOT NULL, token_hash TEXT NOT NULL, PRIMARY KEY(payout_id,token_hash));
       INSERT OR IGNORE INTO campus_released_attempts SELECT payout_id,token_hash FROM campus_payout_attempts WHERE released=1;
       CREATE TABLE IF NOT EXISTS campus_audit(id INTEGER PRIMARY KEY, actor TEXT NOT NULL, wallet TEXT NOT NULL, action TEXT NOT NULL, created INTEGER NOT NULL);`);
+    const attemptColumns = this.db.prepare("PRAGMA table_info(campus_payout_attempts)").all().map((row) => String(row.name));
+    if (!attemptColumns.includes("claimed_at")) this.db.exec("ALTER TABLE campus_payout_attempts ADD COLUMN claimed_at INTEGER NOT NULL DEFAULT 0");
   }
   close() { this.db.close(); }
   private atomic<T>(work: () => T): T {
@@ -166,9 +168,26 @@ export class CampusRepository implements AuthStore {
       // A lost response can be retried by the same caller without changing the durable lock.
       if (p.status === "UNKNOWN" && attempt?.token_hash === tokenHash && Number(attempt.released) === 0) return { payout: p, attemptToken };
       if (p.status !== "PREPARED") throw new CampusError("PAYOUT_LOCKED");
-      this.db.prepare("INSERT INTO campus_payout_attempts VALUES (?,?,0) ON CONFLICT(payout_id) DO UPDATE SET token_hash=excluded.token_hash,released=0")
-        .run(id, tokenHash);
+      this.db.prepare("INSERT INTO campus_payout_attempts(payout_id,token_hash,released,claimed_at) VALUES (?,?,0,?) ON CONFLICT(payout_id) DO UPDATE SET token_hash=excluded.token_hash,released=0,claimed_at=excluded.claimed_at")
+        .run(id, tokenHash, Date.now());
       p.status = "UNKNOWN"; this.savePayout(p);
+      return { payout: p, attemptToken };
+    });
+  }
+  beginSystemPayout(id: string, now = Date.now(), staleAfterMs = 120_000) {
+    return this.atomic(() => {
+      const p = this.payout(id);
+      if (p.txHash) return { payout: p, attemptToken: null as string | null };
+      if (p.status !== "PREPARED" && p.status !== "UNKNOWN") throw new CampusError("PAYOUT_LOCKED");
+      const previous = this.db.prepare("SELECT released,claimed_at FROM campus_payout_attempts WHERE payout_id=?").get(id);
+      if (p.status === "UNKNOWN" && previous && Number(previous.released) === 0 && Number(previous.claimed_at) > now - staleAfterMs) {
+        throw new CampusError("PAYOUT_IN_PROGRESS", 409);
+      }
+      const attemptToken = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(attemptToken).digest("hex");
+      this.db.prepare(`INSERT INTO campus_payout_attempts(payout_id,token_hash,released,claimed_at) VALUES (?,?,0,?)
+        ON CONFLICT(payout_id) DO UPDATE SET token_hash=excluded.token_hash,released=0,claimed_at=excluded.claimed_at`).run(id, tokenHash, now);
+      if (p.status !== "UNKNOWN") { p.status = "UNKNOWN"; this.savePayout(p); }
       return { payout: p, attemptToken };
     });
   }

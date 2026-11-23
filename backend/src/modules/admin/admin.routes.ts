@@ -21,6 +21,16 @@ const errorMessages: Record<string, string> = {
   SIGNER_NOT_CONFIGURED: "Backend trên VM chưa cấu hình khóa signer cho quyền này.",
   SIGNER_ROLE_MISMATCH: "Khóa signer trong .env trên VM không khớp địa chỉ quyền trên hợp đồng.",
   SIGNER_INSUFFICIENT_FUNDS: "Ví signer trên VM không đủ CAMPUS để trả giá trị giao dịch và phí gas.",
+  NATIVE_MINTER_ROLE_MISSING: "Ví funder chưa có quyền mint trên Native Minter. Ví Treasury cần ký setEnabled(funder) một lần trên chain 20261120.",
+  NATIVE_MINTER_NOT_CONFIGURED: "Native Minter chưa được cấu hình cho mạng hiện tại.",
+  ADMIN_BACKFILL_REQUIRED: "Hồ sơ đã duyệt trước đây cần được cấp quà bằng thao tác backfill trong bảng quản trị.",
+  PAYOUT_IN_PROGRESS: "Lượt mint đang được xử lý. Hãy làm mới trạng thái, không tạo yêu cầu mới.",
+  CLOUD_CHAIN_REQUIRED: "Native Minter chỉ được dùng trên chain cloud 20261120.",
+  AMOUNT_LIMIT: "Số CAMPUS vượt giới hạn 100.000 CAMPUS mỗi lần cấp.",
+  INVALID_REQUEST_ID: "Mã yêu cầu mint không hợp lệ. Hãy tải lại trang và thử lại.",
+  IDEMPOTENCY_KEY_CONFLICT: "Mã yêu cầu mint đã được dùng cho ví hoặc số tiền khác.",
+  MINT_IN_PROGRESS: "Yêu cầu mint này đang được xử lý. Hãy chờ và kiểm tra trạng thái, không tạo yêu cầu mới.",
+  MINT_RECEIPT_MISMATCH: "Receipt Native Minter không khớp số tiền, ví nhận hoặc sự kiện mint mong đợi.",
   TX_SIMULATION_FAILED: "Mô phỏng giao dịch trên chain thất bại. Kiểm tra lại trạng thái hợp đồng và tham số.",
   TX_BROADCAST_FAILED: "Không gửi được giao dịch tới RPC nội bộ.",
   RPC_UNAVAILABLE: "Không kết nối được tới RPC nội bộ trên VM.",
@@ -289,12 +299,20 @@ export function createAdminRouter(service?: AdminService) {
   router.post("/api/admin/students/:wallet/fund", requireConfigured, requireOrigin, requireSession, json, async (req, res) => {
     try {
       const body = req.body as Record<string, unknown> | undefined;
-      if (!body || typeof body.amountWei !== "string") throw new AdminServiceError("VALIDATION_ERROR", 400);
+      if (!body || typeof body.amountWei !== "string" || (body.requestId !== undefined && typeof body.requestId !== "string")) {
+        throw new AdminServiceError("VALIDATION_ERROR", 400);
+      }
       res.status(202).json(await service!.fundTestCampus({
         wallet: String(req.params.wallet),
         amountWei: body.amountWei,
+        requestId: typeof body.requestId === "string" ? body.requestId : undefined,
       }));
     } catch (error) { sendError(res, error); }
+  });
+
+  router.post("/api/admin/students/:wallet/welcome", requireConfigured, requireOrigin, requireSession, async (req, res) => {
+    try { res.status(202).json(await service!.backfillWelcome(String(req.params.wallet))); }
+    catch (error) { sendError(res, error); }
   });
 
   router.post("/api/admin/scholarships/review", requireConfigured, requireOrigin, requireSession, json, async (req, res) => {

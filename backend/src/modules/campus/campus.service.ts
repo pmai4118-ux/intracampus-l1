@@ -1,13 +1,15 @@
 import { getAddress, hexlify, toUtf8Bytes, Interface, keccak256 } from "ethers";
-import { requireDeployment, resolveCampusChainId, type CampusChainId, type CampusPayout } from "@intracampus/network";
+import { CLOUD_CAMPUS_CHAIN_ID, requireDeployment, resolveCampusChainId, type CampusChainId, type CampusPayout } from "@intracampus/network";
 import { AuthService } from "../auth/auth.service.ts";
 import { readLibraryAuthConfig, type LibraryAuthConfig } from "../auth/auth.config.ts";
 import { HttpInvoiceRpc, type InvoiceRpc } from "../invoices/invoices.rpc.ts";
 import { isFreshInvoiceChainTimestamp, defaultInvoiceChainFreshness } from "../invoices/chain-freshness.ts";
 import { CampusError, CampusRepository } from "./campus.repository.ts";
+import { NativeMinterError, NativeMinterService, NATIVE_MINTER_ADDRESS, WELCOME_MINT_WEI } from "../native-minter/native-minter.service.ts";
 
 export const welcomeWei = 20n * 10n ** 18n;
 const grantAbi = new Interface(["function issuer() view returns(address)", "function grant(address,bytes32) payable", "event GrantIssued(address indexed beneficiary,bytes32 indexed category,address indexed issuer,uint256 amount,uint256 balance)"]);
+const nativeMinterAbi = new Interface(["function mintNativeCoin(address addr,uint256 amount)"]);
 function address(value: string) { const result = getAddress(value).toLowerCase(); if (/^0x0{40}$/.test(result)) throw Error("Invalid address"); return result; }
 function hex(value: unknown): bigint { if (typeof value !== "string" || !/^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(value)) throw new CampusError("RPC_UNAVAILABLE", 503); return BigInt(value); }
 function object(value: unknown): Record<string, any> { if (!value || typeof value !== "object" || Array.isArray(value)) throw new CampusError("RPC_UNAVAILABLE", 503); return value as Record<string, any>; }
@@ -23,10 +25,12 @@ export class CampusService {
   repository: CampusRepository;
   private env: Record<string, string | undefined>;
   private deployment?: unknown;
+  private nativeMinter?: NativeMinterService;
   constructor(repository: CampusRepository, env: Record<string, string | undefined>, rpc?: InvoiceRpc, deployment?: unknown,
-    resolveOverrides?: () => { welcomeTreasury?: string | null; scholarshipWei?: string | null }) {
+    resolveOverrides?: () => { welcomeTreasury?: string | null; scholarshipWei?: string | null }, nativeMinter?: NativeMinterService) {
     this.repository = repository; this.env = env; this.deployment = deployment;
     this.resolveOverrides = resolveOverrides;
+    this.nativeMinter = nativeMinter;
     this.chainId = resolveCampusChainId(env.NEXT_PUBLIC_INTRACAMPUS_CHAIN_ID);
     this.authConfig = { ...readLibraryAuthConfig({ ...env,
       LIBRARY_AUTH_ORIGIN: env.CAMPUS_AUTH_ORIGIN ?? env.LIBRARY_AUTH_ORIGIN,
@@ -55,6 +59,7 @@ export class CampusService {
     const profile = this.repository.profile(wallet);
     if (profile.application?.status !== "APPROVED") throw new CampusError("STUDENT_NOT_VERIFIED", 403);
     if (kind === "SCHOLARSHIP" && profile.scholarship?.status !== "APPROVED") throw new CampusError("SCHOLARSHIP_NOT_APPROVED", 403);
+    if (kind === "WELCOME" && this.chainId === CLOUD_CAMPUS_CHAIN_ID) throw new CampusError("ADMIN_BACKFILL_REQUIRED", 403);
     const prior = profile.payouts.find(p => p.kind === kind); if (prior) return prior;
     const block = await this.freshBlock();
     const overrides = this.resolveOverrides?.();
@@ -84,6 +89,74 @@ export class CampusService {
     if (String(current.hash).toLowerCase() !== block.hash) throw new CampusError("STALE_CHAIN_STATE", 503);
     return this.repository.prepare({ wallet, kind, from: actor, to, value: `0x${value.toString(16)}`, afterBlock: block.number, data });
   }
+
+  async issueWelcome(walletInput: string): Promise<CampusPayout> {
+    const wallet = address(walletInput);
+    if (this.chainId !== CLOUD_CAMPUS_CHAIN_ID) throw new CampusError("CLOUD_CHAIN_REQUIRED", 409);
+    if (!this.nativeMinter) throw new CampusError("NATIVE_MINTER_NOT_CONFIGURED", 503);
+    if (this.repository.profile(wallet).application?.status !== "APPROVED") throw new CampusError("STUDENT_NOT_VERIFIED", 403);
+    const prior = this.repository.profile(wallet).payouts.find(p => p.kind === "WELCOME");
+    if (prior) {
+      if (prior.status === "CONFIRMED" || prior.status === "FAILED") return prior;
+      if (prior.txHash) return this.reconcile(prior.id, prior.txHash);
+      if (prior.executionType !== "NATIVE_MINT") throw new CampusError("WELCOME_PAYOUT_EXISTS", 409);
+    }
+    const readiness = await this.nativeMinter.readiness();
+    if (!readiness.ready || !readiness.signerAddress) {
+      const code = readiness.reason ?? "NATIVE_MINTER_ROLE_MISSING";
+      throw new CampusError(code, ["NATIVE_MINTER_ROLE_MISSING", "WRONG_CHAIN"].includes(code) ? 409 : 503);
+    }
+    const block = await this.freshBlock();
+    const data = nativeMinterAbi.encodeFunctionData("mintNativeCoin", [wallet, WELCOME_MINT_WEI]);
+    const current = object(await this.rpc.call("eth_getBlockByNumber", [block.tag, false]));
+    if (String(current.hash).toLowerCase() !== block.hash) throw new CampusError("STALE_CHAIN_STATE", 503);
+    const payout = this.repository.prepare({
+      wallet,
+      kind: "WELCOME",
+      from: address(readiness.signerAddress),
+      to: NATIVE_MINTER_ADDRESS,
+      value: "0x0",
+      afterBlock: block.number,
+      executionType: "NATIVE_MINT",
+      mintAmountWei: WELCOME_MINT_WEI.toString(),
+      data: () => data,
+    });
+    if (payout.status === "CONFIRMED" || payout.status === "FAILED") return payout;
+    if (payout.txHash) return this.reconcile(payout.id, payout.txHash);
+    const attempt = this.repository.beginSystemPayout(payout.id);
+    if (!attempt.attemptToken) return attempt.payout;
+    try {
+      const sent = await this.nativeMinter.mint({
+        recipient: wallet,
+        amountWei: WELCOME_MINT_WEI,
+        maxAmountWei: WELCOME_MINT_WEI,
+        beforeBroadcast: txHash => { this.repository.attach(payout.id, txHash); },
+      });
+      return this.reconcile(payout.id, sent.txHash);
+    } catch (error) {
+      const latest = this.repository.payout(payout.id);
+      if (!latest.txHash) this.repository.release(payout.id, payout.from, attempt.attemptToken, "NOT_SENT");
+      if (error instanceof NativeMinterError) throw new CampusError(error.code, error.httpStatus);
+      if (error instanceof CampusError) throw error;
+      throw new CampusError("NATIVE_MINT_UNAVAILABLE", 503);
+    }
+  }
+
+  async review(actor: string, wallet: string, kind: "STUDENT" | "SCHOLARSHIP", approve: boolean, reason: string) {
+    this.requireSchool(actor);
+    const profile = this.repository.review(actor, address(wallet), kind, approve, reason);
+    let welcomeMint: { status: "CONFIRMED" | "PENDING" | "NOT_READY" | "FAILED"; txHash: string | null; errorCode?: string } | undefined;
+    if (approve && kind === "STUDENT" && this.chainId === CLOUD_CAMPUS_CHAIN_ID) {
+      try {
+        const payout = await this.issueWelcome(wallet);
+        welcomeMint = { status: payout.status === "CONFIRMED" ? "CONFIRMED" : payout.status === "FAILED" ? "FAILED" : "PENDING", txHash: payout.txHash };
+      } catch (error) {
+        const errorCode = error && typeof error === "object" && "code" in error ? String(error.code) : "NATIVE_MINT_UNAVAILABLE";
+        welcomeMint = { status: "NOT_READY", txHash: null, errorCode };
+      }
+    }
+    return { profile: this.repository.profile(profile.application?.wallet ?? wallet), ...(welcomeMint ? { welcomeMint } : {}) };
+  }
   async reconcile(id: string, hash: string) {
     const p = this.repository.payout(id);
     if (!/^0x[0-9a-f]{64}$/i.test(hash) || /^0x0{64}$/i.test(hash)) throw new CampusError("INVALID_HASH", 400);
@@ -110,6 +183,20 @@ export class CampusService {
       });
       if (!found) throw new CampusError("RECEIPT_MISMATCH");
     }
+    if (receipt.status === "0x1" && p.executionType === "NATIVE_MINT") {
+      const call = nativeMinterAbi.decodeFunctionData("mintNativeCoin", p.data);
+      const found = Array.isArray(receipt.logs) && receipt.logs.some((log: any) => {
+        if (String(log.address).toLowerCase() !== NATIVE_MINTER_ADDRESS.toLowerCase()
+          || String(log.transactionHash).toLowerCase() !== hash || log.removed
+          || String(log.blockHash).toLowerCase() !== String(receipt.blockHash).toLowerCase()
+          || String(log.blockNumber).toLowerCase() !== String(receipt.blockNumber).toLowerCase()) return false;
+        const event = NativeMinterService.decodeMintEvent(log);
+        return event?.sender.toLowerCase() === p.from && event.recipient.toLowerCase() === p.wallet
+          && event.amountWei === BigInt(p.mintAmountWei ?? "0")
+          && event.recipient.toLowerCase() === String(call[0]).toLowerCase() && event.amountWei === BigInt(call[1]);
+      });
+      if (!found) throw new CampusError("RECEIPT_MISMATCH");
+    }
     const finalBlock = object(await this.rpc.call("eth_getBlockByNumber", [receipt.blockNumber, false]));
     if (hex(finalBlock.number) !== hex(receipt.blockNumber) || String(finalBlock.hash).toLowerCase() !== String(receipt.blockHash).toLowerCase()) throw new CampusError("STALE_CHAIN_STATE", 503);
     return this.repository.finish(id, hash, receipt.status === "0x1" ? "CONFIRMED" : "FAILED");
@@ -118,6 +205,7 @@ export class CampusService {
     this.requireSchool(actor);
     if (typeof attemptToken !== "string" || !/^[0-9a-f]{64}$/.test(attemptToken)) throw new CampusError("INVALID_REQUEST", 400);
     const p = this.repository.payout(id);
+    if (p.executionType === "NATIVE_MINT") throw new CampusError("SERVER_SIGNED_PAYOUT", 409);
     if (!["PREPARED", "UNKNOWN"].includes(p.status) || p.from !== actor.toLowerCase() || p.txHash) throw new CampusError("PAYOUT_LOCKED");
     const block = await this.freshBlock();
     const gas = hex(await this.rpc.call("eth_estimateGas", [{ from: p.from, to: p.to, data: p.data, value: p.value }]));

@@ -35,7 +35,14 @@ function Portal({ mode }: { mode: Mode }) {
   const active = useRef(true), running = useRef(false);
   async function refresh() {
     if (!wallet.address) return;
-    const result = await campusMe(wallet.address);
+    let result = await campusMe(wallet.address);
+    const ownWelcome = result.profile.payouts.find(item => item.kind === "WELCOME" && item.executionType === "NATIVE_MINT");
+    if (mode !== "school" && ownWelcome?.txHash && !["CONFIRMED", "FAILED"].includes(ownWelcome.status)) {
+      try {
+        await campusApi(`payouts/${ownWelcome.id}/reconcile`, { txHash: ownWelcome.txHash });
+        result = await campusMe(wallet.address);
+      } catch { /* Keep the last verified payout state; the owner can retry on refresh. */ }
+    }
     if (!active.current) return;
     setMe(result);
     if (mode === "school" && result.school) {
@@ -92,7 +99,7 @@ function Portal({ mode }: { mode: Mode }) {
       <div className="campus-login-actions"><button className="secondary-btn" disabled={busy} onClick={() => void run(refresh)}>Làm mới trạng thái</button><button className="secondary-btn" disabled={busy} onClick={() => void run(logout)}>Đăng xuất</button><button className="text-action-btn" onClick={() => controller.disconnect()}>Ngắt kết nối ví</button></div>
     </section> : <div className="campus-onboarding-grid">
       <aside className="campus-welcome-card"><Icon name="graduation" /><p className="eyebrow">MỘT KẾT NỐI. NHIỀU KHỞI ĐẦU.</p><h2>Ví của bạn.<br />Quyền lợi của bạn.</h2>
-        <ol><li><strong>01 · Ký đăng nhập</strong><span>Chứng minh bạn sở hữu ví; không chuyển tiền, không tốn gas.</span></li><li><strong>02 · Nhà trường xác nhận</strong><span>Hồ sơ được đối chiếu với dữ liệu sinh viên của trường.</span></li><li><strong>03 · Bắt đầu với 20 CAMPUS</strong><span>Quà chào mừng một lần, sau khi hồ sơ đã được duyệt và ví quỹ xác nhận cấp.</span></li></ol>
+        <ol><li><strong>01 · Ký đăng nhập</strong><span>Chứng minh bạn sở hữu ví; không chuyển tiền, không tốn gas.</span></li><li><strong>02 · Nhà trường xác nhận</strong><span>Hồ sơ được đối chiếu với dữ liệu sinh viên của trường.</span></li><li><strong>03 · Bắt đầu với 20 CAMPUS</strong><span>Trên mạng cloud, hệ thống tự mint một lần sau khi hồ sơ được duyệt; bạn không cần ký giao dịch nhận quà.</span></li></ol>
         <p>Học bổng FOOD được xét riêng và chỉ dùng theo phạm vi căn-tin đã cấp.</p>
       </aside>
       <section className="surface-panel campus-login-card" aria-busy={busy}>
@@ -128,8 +135,8 @@ function Portal({ mode }: { mode: Mode }) {
           <button className="primary-cta-btn" disabled={busy} type="submit">Gửi hồ sơ xác minh</button></form> : null}
         {own?.application?.status === "APPROVED" ? <button className="secondary-btn" disabled={busy || !wallet.canProceed} onClick={() => void run(async () => { await campusMe(wallet.address!); await campusApi("activate", {}); const result = await signInLibraryStudent(wallet.address!, (a, m) => controller.signMessage(a, m)); if (result.status !== "ready" && result.status !== "held") throw Error("SERVICE_UNAVAILABLE"); if (active.current) setNotice("Đã kích hoạt đăng nhập dịch vụ sinh viên. Bạn có thể mở ví, nhà ăn và thư viện."); })}>Kích hoạt dịch vụ sinh viên</button> : null}
       </section>
-      <section className="surface-panel"><span className="panel-eyebrow">02 · QUÀ CHÀO MỪNG</span><h2>20 CAMPUS khởi đầu</h2><p>Được nhà trường cấp một lần cho mỗi sinh viên đã xác minh. Tiền vào ví chỉ sau khi giao dịch thành công.</p>
-        <p className="network-pill">{welcome?.status === "CONFIRMED" ? "Đã nhận · receipt đã xác minh" : welcome?.status === "FAILED" ? campusStatus.FAILED : welcome?.status === "PENDING" ? "Chờ đối chiếu giao dịch" : welcome?.status === "UNKNOWN" ? "Cần nhà trường đối chiếu kết quả" : own?.application?.status === "APPROVED" ? "Đủ điều kiện · chờ nhà trường cấp" : "Cần xác minh sinh viên trước"}</p>
+      <section className="surface-panel"><span className="panel-eyebrow">02 · QUÀ CHÀO MỪNG</span><h2>20 CAMPUS khởi đầu</h2><p>Mạng cloud tự mint một lần cho mỗi sinh viên sau khi hồ sơ được duyệt. Không cần ví quỹ ký từng lượt.</p>
+        <p className="network-pill">{welcome?.status === "CONFIRMED" ? "Đã nhận · receipt đã xác minh" : welcome?.status === "FAILED" ? campusStatus.FAILED : welcome?.status === "PENDING" ? "Mint đã gửi · đang chờ xác nhận" : welcome?.status === "UNKNOWN" ? "Cần đối chiếu kết quả" : own?.application?.status === "APPROVED" ? "Hồ sơ đã duyệt · quà đang chờ hệ thống xử lý" : "Cần xác minh sinh viên trước"}</p>
         {own?.payouts.filter(p => p.kind === "WELCOME").map(p => <code className="tx-hash-code" key={p.id}>{p.txHash ?? "Chưa có giao dịch được xác nhận"}</code>)}
       </section>
       <section className="surface-panel"><span className="panel-eyebrow">03 · HỌC BỔNG FOOD</span><h2>Đăng ký xét học bổng</h2><p>Nhà trường xét điều kiện, sau đó ví có quyền cấp học bổng giải ngân vào vault FOOD.</p>
@@ -141,17 +148,26 @@ function Portal({ mode }: { mode: Mode }) {
       {!profiles.length ? <p>Chưa có hồ sơ sinh viên.</p> : <div className="campus-review-list">{profiles.map(profile => {
         const application = profile.application!;
         return <article className="campus-review-item" key={application.wallet}><h3>{application.studentCode} · {application.program}</h3><code className="tx-hash-code">{application.wallet}</code><p>{campusStatus[application.status]}</p>
-          {application.status === "PENDING" ? <ReviewControls kind="STUDENT" wallet={application.wallet} busy={busy} review={(approve, reason) => void run(async () => { await campusMe(wallet.address!); await campusApi("reviews", { wallet: application.wallet, kind: "STUDENT", approve, reason }); await refresh(); })} /> : null}
-          {application.status === "APPROVED" ? <button className="secondary-btn" disabled={busy} onClick={() => void run(() => prepare(profile, "WELCOME"))}>Xem lượt cấp 20 CAMPUS</button> : null}
+          {application.status === "PENDING" ? <ReviewControls kind="STUDENT" wallet={application.wallet} busy={busy} review={(approve, reason) => void run(async () => {
+            await campusMe(wallet.address!);
+            const result = await campusApi("reviews", { wallet: application.wallet, kind: "STUDENT", approve, reason });
+            const mint = result?.welcomeMint;
+            if (approve && mint?.status === "CONFIRMED") setNotice("Đã duyệt hồ sơ và xác nhận mint quà chào mừng 20 CAMPUS.");
+            else if (approve && mint?.status === "PENDING") setNotice("Đã duyệt hồ sơ; quà 20 CAMPUS đang chờ xác nhận trên chain.");
+            else if (approve && mint?.status === "NOT_READY") setNotice("Đã duyệt hồ sơ. Native Minter chưa sẵn sàng; quản trị viên có thể cấp bù sau khi cấu hình quyền.");
+            await refresh();
+          })} /> : null}
+          {application.status === "APPROVED" ? <p className="network-pill">{profile.payouts.some(p => p.kind === "WELCOME" && p.status === "CONFIRMED") ? "Quà chào mừng đã được xác nhận." : "Hồ sơ đã duyệt. Quà chào mừng được xử lý tự động; hồ sơ cũ được cấp bù từ bảng quản trị."}</p> : null}
           {profile.scholarship ? <div><h3>Học bổng · {profile.scholarship.category === "MERIT" ? "Khuyến khích học tập" : "Hỗ trợ sinh viên"}</h3><p>{campusStatus[profile.scholarship.status]}</p>
             {profile.scholarship.status === "PENDING" ? <ReviewControls kind="SCHOLARSHIP" wallet={application.wallet} busy={busy} review={(approve, reason) => void run(async () => { await campusMe(wallet.address!); await campusApi("reviews", { wallet: application.wallet, kind: "SCHOLARSHIP", approve, reason }); await refresh(); })} /> : null}
             {profile.scholarship.status === "APPROVED" ? <button className="secondary-btn" disabled={busy} onClick={() => void run(() => prepare(profile, "SCHOLARSHIP"))}>Xem lượt giải ngân FOOD</button> : null}</div> : null}
         </article>;
       })}</div>}
     </section> : null}
-    {payout && mode === "school" && me?.school ? <section className="surface-panel campus-payout-review"><h2>Kiểm tra lượt cấp trước khi ký</h2>
-      <dl><dt>Loại</dt><dd>{payout.kind === "WELCOME" ? "Quà chào mừng" : "Học bổng FOOD"}</dd><dt>Số tiền</dt><dd>{formatWalletBalance(BigInt(payout.value))} + gas từ ví cấp</dd><dt>Mạng</dt><dd>{campusNetwork.name} · {campusNetwork.chainId}</dd><dt>Ví cấp</dt><dd><code>{payout.from}</code></dd><dt>Sinh viên nhận</dt><dd><code>{payout.wallet}</code></dd><dt>Đích giao dịch</dt><dd><code>{payout.to}</code></dd><dt>Trạng thái</dt><dd>{payout.status === "PENDING" ? "Đang chờ xác minh" : campusStatus[payout.status]}</dd></dl>
-      {payout.status === "PREPARED" ? <button className="primary-cta-btn" disabled={busy || !wallet.canProceed || payout.from.toLowerCase() !== wallet.address?.toLowerCase()} onClick={() => void run(async () => {
+    {payout && mode === "school" && me?.school ? <section className="surface-panel campus-payout-review"><h2>{payout.executionType === "NATIVE_MINT" ? "Đối chiếu quà chào mừng" : "Kiểm tra lượt cấp trước khi ký"}</h2>
+      <dl><dt>Loại</dt><dd>{payout.kind === "WELCOME" ? "Quà chào mừng" : "Học bổng FOOD"}</dd><dt>Số tiền</dt><dd>{formatWalletBalance(BigInt(payout.mintAmountWei ?? payout.value))}{payout.executionType === "NATIVE_MINT" ? " CAMPUS · Native Minter" : " + gas từ ví cấp"}</dd><dt>Mạng</dt><dd>{campusNetwork.name} · {campusNetwork.chainId}</dd><dt>Ví cấp</dt><dd><code>{payout.from}</code></dd><dt>Sinh viên nhận</dt><dd><code>{payout.wallet}</code></dd><dt>Đích giao dịch</dt><dd><code>{payout.to}</code></dd><dt>Trạng thái</dt><dd>{payout.status === "PENDING" ? "Đang chờ xác minh" : campusStatus[payout.status]}</dd></dl>
+      {payout.executionType === "NATIVE_MINT" ? <p>Backend ký lệnh Native Minter. Ví nhà trường không cần mở Core hay ký giao dịch này.</p> : null}
+      {payout.executionType !== "NATIVE_MINT" && payout.status === "PREPARED" ? <button className="primary-cta-btn" disabled={busy || !wallet.canProceed || payout.from.toLowerCase() !== wallet.address?.toLowerCase()} onClick={() => void run(async () => {
         await campusMe(wallet.address!);
         const result = await sendCampusPayout(payout, wallet.address!, (account, tx) => controller.sendTransaction(account, tx), {
           onPayout: value => { if (active.current) setPayout(value); },
@@ -160,14 +176,14 @@ function Portal({ mode }: { mode: Mode }) {
         if (result.hash === null) { if (active.current) setNotice("Ví đã hủy hoặc chưa gửi giao dịch. Lượt cấp đã sẵn sàng để thử lại."); await refresh(); return; }
         if (active.current) setRecoveryHash(result.hash);
         await reconcile(result.payout, result.hash);
-      })}>Xác nhận và mở ví cấp</button> : payout.status === "UNKNOWN" && !payout.txHash && recoveries[payout.id] ? <div>
+      })}>Xác nhận và mở ví cấp</button> : payout.executionType !== "NATIVE_MINT" && payout.status === "UNKNOWN" && !payout.txHash && recoveries[payout.id] ? <div>
         <p>Chưa gọi gửi giao dịch hoặc ví đã xác nhận hủy. Chưa nhận được xác nhận khôi phục từ máy chủ; bạn có thể thử lại bước khôi phục mà không gửi tiền.</p>
         <button className="secondary-btn" disabled={busy} onClick={() => void run(async () => {
           await campusMe(wallet.address!); const restored = await releaseCampusPayout(recoveries[payout.id]);
           if (active.current) { setPayout(restored); setRecoveries(current => { const next = { ...current }; delete next[payout.id]; return next; }); setNotice("Đã khôi phục lượt chưa gửi. Bạn có thể kiểm tra và mở ví lại."); }
           await refresh();
         })}>Khôi phục lượt chưa gửi</button>
-      </div> : payout.status !== "CONFIRMED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await reconcile(payout, recoveryHash.trim()); }); }}>
+      </div> : payout.executionType !== "NATIVE_MINT" && payout.status !== "CONFIRMED" ? <form onSubmit={e => { e.preventDefault(); void run(async () => { await campusMe(wallet.address!); await reconcile(payout, recoveryHash.trim()); }); }}>
         <p>Lượt cấp đã khóa để tránh gửi trùng. Nếu mất kết nối hoặc tải lại trang, mở lại lượt cấp này và tra hash từ lịch sử ví. Không tạo lượt cấp mới.</p><label htmlFor="campus-payout-hash">Hash giao dịch đã gửi</label><input id="campus-payout-hash" value={recoveryHash} onChange={e => setRecoveryHash(e.target.value)} required pattern="0x[0-9a-fA-F]{64}" /><button className="secondary-btn" disabled={busy}>Đối chiếu giao dịch</button></form> : <p className="verified-badge">Đã xác minh chuyển tiền thành công.</p>}
       {payout.txHash ? <code className="tx-hash-code">{payout.txHash}</code> : null}
     </section> : null}

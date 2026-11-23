@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { CLOUD_CAMPUS_CHAIN_ID } from "@intracampus/network";
 import type {
   AdminAuditEntry,
   AdminOverview,
@@ -40,6 +41,19 @@ function statusPillClass(status: string | null | undefined): string {
   if (status === "PENDING" || status === "SUBMITTED") return "admin-pill admin-pill-warn";
   if (status === "REJECTED" || status === "FAILED") return "admin-pill admin-pill-danger";
   return "admin-pill";
+}
+
+function nativeMinterReason(reason: string | null): string {
+  switch (reason) {
+    case null: return "Signer VM có quyền mint.";
+    case "CLOUD_CHAIN_REQUIRED": return "Chỉ hỗ trợ Native Minter trên chain cloud.";
+    case "RPC_NOT_CONFIGURED": return "Chưa cấu hình RPC backend.";
+    case "SIGNER_NOT_CONFIGURED": return "Chưa cấu hình signer funder trên VM.";
+    case "WRONG_CHAIN": return "RPC backend đang trả sai chain ID.";
+    case "RPC_UNAVAILABLE": return "Chưa đọc được quyền Native Minter từ RPC.";
+    case "NATIVE_MINTER_ROLE_MISSING": return "Treasury cần cấp quyền một lần bằng setEnabled(funder).";
+    default: return "Native Minter chưa sẵn sàng.";
+  }
 }
 
 export default function AdminConsole() {
@@ -195,6 +209,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
   const [fundAmount, setFundAmount] = useState("50");
   const [studentQuery, setStudentQuery] = useState("");
   const [studentFilter, setStudentFilter] = useState<StudentFilter>("all");
+  const fundRequestIds = useRef(new Map<string, string>());
 
   // FOOD scholarship direct form
   const [grantWallet, setGrantWallet] = useState("");
@@ -339,7 +354,13 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
         program: program?.trim() || undefined,
         autoEnrollLibrary: approve,
       });
-      setNotice(approve ? `Đã duyệt sinh viên & mở dịch vụ cho ${res.student.wallet}.` : `Đã từ chối hồ sơ ${res.student.wallet}.`);
+      const mint = res.welcomeMint;
+      const welcomeNote = mint?.status === "CONFIRMED" ? " Quà chào mừng 20 CAMPUS đã được xác minh."
+        : mint?.status === "PENDING" ? " Đã gửi mint quà 20 CAMPUS; đang chờ xác nhận block."
+          : mint?.status === "NOT_READY" ? " Chưa mint được quà 20 CAMPUS; kiểm tra trạng thái Native Minter rồi dùng nút backfill sau khi sẵn sàng."
+            : mint?.status === "FAILED" ? " Giao dịch mint quà chào mừng thất bại; cần đối chiếu trước khi xử lý tiếp."
+              : "";
+      setNotice((approve ? `Đã duyệt sinh viên & mở dịch vụ cho ${res.student.wallet}.` : `Đã từ chối hồ sơ ${res.student.wallet}.`) + (approve ? welcomeNote : ""));
       if (inspected && inspected.wallet.toLowerCase() === wallet.toLowerCase()) setInspected(res.student);
       await loadAll(true);
     });
@@ -386,17 +407,48 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
       return;
     }
     await runAction(`fund:${wallet}`, async () => {
-      const res = await adminApi.fundCampus(wallet, amountWei);
-      trackHash(res.txHash, `Đã gửi ${formatWeiSafe(res.amountWei)} CAMPUS từ ví funder trên VM tới ${res.wallet}.`);
+      const requestKey = `${wallet.toLowerCase()}:${amountWei}`;
+      let requestId = fundRequestIds.current.get(requestKey);
+      if (!requestId) {
+        requestId = crypto.randomUUID();
+        fundRequestIds.current.set(requestKey, requestId);
+      }
+      const res = await adminApi.fundCampus(wallet, amountWei, requestId);
+      fundRequestIds.current.delete(requestKey);
+      trackHash(res.txHash, `Đã gửi mint ${formatWeiSafe(res.amountWei)} CAMPUS qua Native Minter tới ${res.wallet}.`);
       await loadAll(true);
       await refreshInspectedIfMatching(wallet);
+    });
+  }
+
+  async function handleBackfillWelcome(wallet: string) {
+    await runAction(`welcome:${wallet}`, async () => {
+      const res = await adminApi.backfillWelcome(wallet);
+      const mint = res.welcomeMint;
+      if (mint.txHash) {
+        trackHash(mint.txHash, mint.status === "CONFIRMED" ? `Quà 20 CAMPUS của ${wallet} đã được xác minh.`
+          : `Đang đối chiếu mint quà 20 CAMPUS cho ${wallet}.`);
+      } else if (mint.status === "NOT_READY") {
+        setError(`Chưa cấp được quà chào mừng: ${nativeMinterReason(mint.errorCode ?? null)}`);
+      } else if (mint.status === "FAILED") {
+        setError("Mint quà chào mừng đã thất bại; cần đối chiếu receipt trước khi cấp lại.");
+      } else {
+        setNotice(`Quà chào mừng của ${wallet} chưa có giao dịch; làm mới để kiểm tra trạng thái.`);
+      }
+      setInspected(res.student);
+      await loadAll(true);
     });
   }
 
   async function handleReviewScholarship(wallet: string, approve: boolean, autoApproveStudent = false) {
     await runAction(`review-sch:${wallet}`, async () => {
       const res = await adminApi.reviewScholarship({ wallet, approve, category: "SUPPORT", autoApproveStudent });
-      setNotice(approve ? `Đã duyệt hồ sơ học bổng FOOD cho ${wallet}.` : `Đã từ chối hồ sơ học bổng cho ${wallet}.`);
+      const mint = res.welcomeMint;
+      const welcomeNote = mint?.status === "CONFIRMED" ? " Quà chào mừng 20 CAMPUS đã được xác minh."
+        : mint?.status === "PENDING" ? " Đã gửi mint quà 20 CAMPUS; đang chờ xác nhận block."
+          : mint?.status === "NOT_READY" ? " Chưa mint được quà 20 CAMPUS; kiểm tra Native Minter và dùng backfill sau."
+            : "";
+      setNotice((approve ? `Đã duyệt hồ sơ học bổng FOOD cho ${wallet}.` : `Đã từ chối hồ sơ học bổng cho ${wallet}.`) + (autoApproveStudent ? welcomeNote : ""));
       if (inspected && inspected.wallet.toLowerCase() === wallet.toLowerCase()) setInspected(res.student);
       await loadAll(true);
     });
@@ -661,7 +713,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
               <div className="admin-card-head">
                 <div>
                   <h3>Tham số Campus Onboarding (Override test)</h3>
-                  <p className="admin-card-desc">Tùy chỉnh ví quỹ chào mừng 20 CAMPUS và mức học bổng FOOD mặc định.</p>
+                <p className="admin-card-desc">Thiết lập mức học bổng FOOD mặc định. Quà 20 CAMPUS trên cloud được mint qua Native Minter.</p>
                 </div>
               </div>
               <form
@@ -679,7 +731,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                   });
                 }}
               >
-                <div className="admin-field">
+                {overview.chainId !== CLOUD_CAMPUS_CHAIN_ID ? <div className="admin-field">
                   <label htmlFor="welcome-treasury-input">Ví quỹ chào mừng (CAMPUS_TREASURY_ADDRESS override)</label>
                   <input
                     id="welcome-treasury-input"
@@ -689,7 +741,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                     onChange={(e) => setWelcomeTreasuryDraft(e.target.value)}
                     disabled={busyKey !== null}
                   />
-                </div>
+                </div> : <p className="admin-card-desc">Cloud chain tự mint quà chào mừng sau khi duyệt; không cần Treasury ký từng lượt.</p>}
                 <div className="admin-field">
                   <label htmlFor="scholarship-default-input">Mức học bổng FOOD mặc định (CAMPUS)</label>
                   <input
@@ -776,7 +828,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
             <div className="admin-card-head">
               <div>
                 <h2>Tra cứu & thao tác nhanh theo địa chỉ ví bất kỳ</h2>
-                <p className="admin-card-desc">Dán ví test mới để duyệt sinh viên, cấp thẻ SBT (-10%), mở khóa dịch vụ hoặc cấp CAMPUS gas ngay mà không cần sinh viên nộp form trước.</p>
+                <p className="admin-card-desc">Dán ví test mới để duyệt sinh viên, cấp thẻ SBT (-10%), mở khóa dịch vụ hoặc mint CAMPUS bằng Native Minter mà không cần sinh viên nộp form trước.</p>
               </div>
             </div>
             <form
@@ -839,6 +891,18 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                   </div>
                 </div>
 
+                {overview?.chainId === CLOUD_CAMPUS_CHAIN_ID && inspected.application?.status === "APPROVED" ? (() => {
+                  const welcome = inspected.payouts.find((item) => item.kind === "WELCOME");
+                  return <div className="admin-inline-row" style={{ justifyContent: "space-between" }}>
+                    <span className={statusPillClass(welcome?.status)}>
+                      Quà chào mừng: {welcome ? (welcome.status === "CONFIRMED" ? "20 CAMPUS xác nhận" : welcome.status === "FAILED" ? "Mint thất bại · đối chiếu" : `${welcome.status}`) : "Chưa cấp · hồ sơ cũ"}
+                    </span>
+                    {welcome?.status !== "CONFIRMED" ? <button type="button" className="secondary-btn" disabled={busyKey !== null || !overview?.nativeMinter.ready} onClick={() => void handleBackfillWelcome(inspected.wallet)}>
+                      {welcome?.txHash ? "Đối chiếu quà chào mừng" : "Cấp quà 20 CAMPUS (backfill)"}
+                    </button> : null}
+                  </div>;
+                })() : null}
+
                 <div className="admin-grid-2">
                   <div className="admin-form">
                     <div className="admin-inline-row">
@@ -895,11 +959,15 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                       ) : null}
                     </div>
                     <div className="admin-inline-row">
-                      <label htmlFor="fund-campus-amount" style={{ fontSize: "0.83rem", fontWeight: 600 }}>Cấp CAMPUS test:</label>
+                      <label htmlFor="fund-campus-amount" style={{ fontSize: "0.83rem", fontWeight: 600 }}>{overview?.chainId === CLOUD_CAMPUS_CHAIN_ID ? "Mint CAMPUS test (tối đa 100.000):" : "Cấp CAMPUS test:"}</label>
                       <input
                         id="fund-campus-amount"
                         className="admin-input admin-input-mono"
                         style={{ width: "6.5rem" }}
+                        type="number"
+                        min="0.000000000000000001"
+                        {...(overview?.chainId === CLOUD_CAMPUS_CHAIN_ID ? { max: "100000" } : {})}
+                        step="any"
                         value={fundAmount}
                         onChange={(e) => setFundAmount(e.target.value)}
                       />
@@ -910,9 +978,10 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                           </button>
                         ))}
                       </div>
-                      <button type="button" className="secondary-btn" disabled={busyKey !== null} onClick={() => void handleFundCampus(inspected.wallet, fundAmount)}>
-                        Bắn CAMPUS
+                      <button type="button" className="secondary-btn" disabled={busyKey !== null || (overview?.chainId === CLOUD_CAMPUS_CHAIN_ID && !overview?.nativeMinter.ready)} onClick={() => void handleFundCampus(inspected.wallet, fundAmount)}>
+                        {overview?.chainId === CLOUD_CAMPUS_CHAIN_ID ? "Mint CAMPUS" : "Bắn CAMPUS"}
                       </button>
+                      {overview?.chainId === CLOUD_CAMPUS_CHAIN_ID && !overview.nativeMinter.ready ? <small>{nativeMinterReason(overview.nativeMinter.reason)}</small> : null}
                     </div>
                   </div>
                 </div>
@@ -1148,7 +1217,7 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
             <div className="admin-card-head">
               <div>
                 <h2>Trạng thái Operator Signers trên GCP VM</h2>
-                <p className="admin-card-desc">Các signer ký thao tác hợp đồng và ví funder chuyển CAMPUS test từ số dư có sẵn trên VM.</p>
+                <p className="admin-card-desc">Các signer ký thao tác hợp đồng; Native Minter mint CAMPUS test bằng signer funder trên VM.</p>
               </div>
             </div>
             <div className="admin-signer-grid">
@@ -1190,6 +1259,23 @@ function AdminDashboard({ onLock }: { onLock: () => void }) {
                 );
               })}
             </div>
+          </article>
+
+          <article className="admin-card">
+            <div className="admin-card-head">
+              <div>
+                <h2>Native Minter · mint CAMPUS</h2>
+                <p className="admin-card-desc">Quà chào mừng 20 CAMPUS được mint tự động khi duyệt hồ sơ mới. Hồ sơ cũ chỉ được cấp qua backfill trong mục tra cứu sinh viên.</p>
+              </div>
+              <span className={overview.nativeMinter.ready ? "admin-pill admin-pill-ok" : "admin-pill admin-pill-warn"}>
+                {overview.nativeMinter.ready ? "Sẵn sàng" : overview.nativeMinter.supported ? "Chưa sẵn sàng" : "Không áp dụng"}
+              </span>
+            </div>
+            <div className="admin-kv-row"><span>Chain được kiểm tra</span><strong>{overview.nativeMinter.chainId ?? "—"}</strong></div>
+            <div className="admin-kv-row"><span>Signer funder VM</span><span>{overview.nativeMinter.signerAddress ? <HashChip value={overview.nativeMinter.signerAddress} start={8} end={6} copyLabel="Sao chép địa chỉ signer" /> : "—"}</span></div>
+            <div className="admin-kv-row"><span>Role Native Minter</span><strong>{overview.nativeMinter.role ?? "—"}</strong></div>
+            <p className="admin-card-desc">{nativeMinterReason(overview.nativeMinter.reason)}</p>
+            <p className="admin-card-desc">Mỗi yêu cầu mint thủ công tối đa 100.000 CAMPUS. Đây là giới hạn ứng dụng, không phải giới hạn cung on-chain.</p>
           </article>
 
           <article className="admin-card">

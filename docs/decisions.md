@@ -250,3 +250,11 @@ PR #38 review P1: ví từ chối rõ ràng (`4001`) hoặc WalletController xá
 PR #38 review P2: lượt cấp chỉ chuyển sang PENDING khi gắn hash lần đầu. Đối soát lại cùng hash giữ kết quả đã lưu nếu RPC lỗi, biên nhận chưa có hoặc dữ liệu không khớp. Kết quả chỉ thay đổi sau khi backend xác minh biên nhận và block chính tắc.
 
 Trạng thái hồ sơ là phê duyệt trong ứng dụng, không mint SBT và không thay đổi ưu đãi on-chain. Chủ ví đã duyệt có thể chủ động kích hoạt tài khoản STUDENT của dịch vụ hiện có, sau đó ký phiên dịch vụ; không bật lại tài khoản bị vô hiệu hóa hoặc đổi role có sẵn. Giữ DB campus trên volume bền vững để bảo toàn khóa danh tính/lượt cấp. Xem [runbook](student-onboarding.md) cho cấu hình và giới hạn khôi phục.
+
+## D021 · Mint CAMPUS qua Native Minter cho demo cloud · 2026-11-23
+
+Trên chain cloud `20261120`, `/admin` mint CAMPUS native bằng Native Minter thay vì chuyển từ số dư funder hiện có. Khi hồ sơ sinh viên được duyệt qua `/staff/students` hoặc `/admin`, backend tự mint đúng 20 CAMPUS cho ví đó một lần. Hồ sơ đã duyệt trước thay đổi chỉ được cấp qua nút backfill riêng; deploy không tự mint hàng loạt. Mỗi lần Bắn CAMPUS thủ công bị giới hạn 100.000 CAMPUS ở tầng ứng dụng.
+
+Backend dùng `ADMIN_FUNDER_PRIVATE_KEY` hiện có trên VM. Treasury giữ quyền Native Minter Admin và ký một lần `setEnabled(funder)` để cấp quyền Enabled. Backend kiểm tra chain ID và `readAllowList` trước khi mint. Khoản cấp được ghi vào Campus SQLite trước broadcast; chỉ hash giao dịch đã gắn mới được đối soát, receipt canonical cùng event `NativeCoinMinted` mới xác nhận. Giao dịch không rõ kết quả không được phát lại bằng hash mới. Không yêu cầu Treasury ký từng lượt.
+
+Đây không phải giới hạn cung on-chain: địa chỉ Enabled có thể mint tùy ý nếu khóa VM bị lạm dụng. Giới hạn 100.000 chỉ bảo vệ đường `/admin` đã xác thực; có thể thu hồi quyền bằng `setNone(funder)`. Chỉ áp dụng cho cloud `20261120`; giữ quy trình chain local `20261`, POS, FOOD, và contract hiện có. Thiết kế chi tiết ở [docs/native-campus-minting.md](native-campus-minting.md).
